@@ -1,15 +1,52 @@
 import { chromium } from "playwright";
 import path from "path";
+import { FILTERS } from "../config";
 
 const FEED_URL = "https://jobright.ai/jobs/recommend?from=homepage";
 const AUTH_PATH = path.resolve(process.cwd(), "auth.json");
 const SCROLL_PASSES = 8;
+
+const BADGE_PATTERNS = [
+  /^\d+ (school alumni|new applicants)/i,
+  /^be an early applicant$/i,
+  /^reposted/i,
+  /^\d+ (hour|day|minute|second)s? ago$/i,
+  /^just now$/i,
+];
 
 export interface JobListing {
   title: string;
   company: string;
   location: string;
   url: string;
+}
+
+function parseCard(rawText: string): { title: string; company: string; location: string } {
+  const lines = rawText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 1)
+    .filter((l) => !BADGE_PATTERNS.some((p) => p.test(l)));
+
+  let title = "Unknown";
+  let company = "Unknown";
+  let location = "Unknown";
+
+  if (lines[0]) {
+    // Cards sometimes render as "Title — Company" or "Badge — Title"
+    const parts = lines[0].split(" — "); // em dash
+    if (parts.length === 2) {
+      title = parts[0].trim();
+      company = parts[1].trim();
+    } else {
+      title = lines[0];
+      company = lines[1] ?? "Unknown";
+    }
+  }
+
+  location = lines[2] ?? lines[1] ?? "Unknown";
+
+  return { title, company, location };
 }
 
 export async function scrapeJobright(): Promise<JobListing[]> {
@@ -19,15 +56,15 @@ export async function scrapeJobright(): Promise<JobListing[]> {
 
   await page.goto(FEED_URL, { waitUntil: "load", timeout: 30000 });
 
-  // Confirm we're logged in — jobright redirects to /login if session expired
   if (page.url().includes("/login")) {
     await browser.close();
-    throw new Error("Jobright session expired — re-run: npx playwright open https://jobright.ai --save-storage=packages/agent/auth.json");
+    throw new Error(
+      "Jobright session expired — re-run: npx playwright open https://jobright.ai --save-storage=packages/agent/auth.json"
+    );
   }
 
   await page.waitForSelector('[data-tut="jobs-card-match-score"]', { timeout: 15000 });
 
-  // Scroll the virtual list to load more cards
   for (let i = 0; i < SCROLL_PASSES; i++) {
     await page.evaluate(() => {
       const el = document.getElementById("jobs-page-main-content");
@@ -36,28 +73,17 @@ export async function scrapeJobright(): Promise<JobListing[]> {
     await page.waitForTimeout(600);
   }
 
-  const jobs = await page.evaluate(() => {
+  const raw = await page.evaluate(() => {
     const cards = document.querySelectorAll('[data-tut="jobs-card-match-score"]');
-    const results: { title: string; company: string; location: string; url: string }[] = [];
+    const results: { text: string; url: string }[] = [];
 
     cards.forEach((card) => {
       const link = card.querySelector('a[href^="/jobs/info/"]');
       if (!link) return;
-
       const href = link.getAttribute("href") ?? "";
-      const url = `https://jobright.ai${href}`;
-
-      // innerText preserves line breaks so we can split on them
-      const lines = (card as HTMLElement).innerText
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
-
       results.push({
-        title: lines[0] ?? "Unknown",
-        company: lines[1] ?? "Unknown",
-        location: lines[2] ?? "Unknown",
-        url,
+        text: (card as HTMLElement).innerText,
+        url: `https://jobright.ai${href}`,
       });
     });
 
@@ -66,11 +92,31 @@ export async function scrapeJobright(): Promise<JobListing[]> {
 
   await browser.close();
 
-  // Deduplicate by URL (virtual scroll can yield duplicates)
+  // Deduplicate by URL
   const seen = new Set<string>();
-  return jobs.filter((j) => {
-    if (seen.has(j.url)) return false;
-    seen.add(j.url);
-    return true;
-  });
+  const jobs: JobListing[] = [];
+
+  for (const { text, url } of raw) {
+    if (seen.has(url)) continue;
+    seen.add(url);
+
+    const { title, company, location } = parseCard(text);
+
+    // Must be an internship
+    if (!/intern/i.test(title)) continue;
+
+    // Must match at least one keyword from config
+    const titleLower = title.toLowerCase();
+    const matchesKeyword = FILTERS.titleKeywords.some((kw) =>
+      titleLower.includes(kw.toLowerCase())
+    );
+    if (!matchesKeyword) continue;
+
+    // Optional term filter
+    if (FILTERS.termFilter && !title.includes(FILTERS.termFilter)) continue;
+
+    jobs.push({ title, company, location, url });
+  }
+
+  return jobs;
 }
