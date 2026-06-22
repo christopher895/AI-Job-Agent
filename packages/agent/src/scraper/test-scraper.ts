@@ -1,14 +1,21 @@
-import { scrapeJobright } from "./playwright";
+import { initSchema } from "../db/schema";
+import { runJobrightScrape } from "./index";
 
 async function main() {
-  console.log("Scraping Jobright...");
-  const jobs = await scrapeJobright();
-  console.log(`Found ${jobs.length} jobs:\n`);
-  jobs.slice(0, 10).forEach((j, i) => {
-    console.log(`${i + 1}. ${j.title}`);
-    console.log(`   ${j.company} — ${j.location}`);
-    console.log(`   ${j.url}\n`);
-  });
+  await initSchema();
+  console.log("Running scrape + diff...");
+  const newJobs = await runJobrightScrape();
+
+  if (newJobs.length === 0) {
+    console.log("No new jobs since last scrape.");
+  } else {
+    console.log(`${newJobs.length} new job(s) detected:\n`);
+    newJobs.forEach((j, i) => {
+      console.log(`${i + 1}. ${j.title}`);
+      console.log(`   ${j.company}`);
+      console.log(`   ${j.url}\n`);
+    });
+  }
 }
 
 main().catch(console.error);
