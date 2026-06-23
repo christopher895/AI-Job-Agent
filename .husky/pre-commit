@@ -1,0 +1,25 @@
+#!/bin/sh
+export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+
+# Block .env files from being committed
+STAGED_ENV=$(git diff --cached --name-only | grep -E '(^|/)\.env$' || true)
+if [ -n "$STAGED_ENV" ]; then
+  echo ""
+  echo "ERROR: Attempted to commit a .env file with real secrets."
+  echo "Run: git rm --cached .env"
+  echo ""
+  exit 1
+fi
+
+# Block OpenAI and Resend keys in staged content (skip lockfiles)
+STAGED_DIFF=$(git diff --cached -- ':!package-lock.json' ':!node_modules' 2>/dev/null || true)
+SECRETS=$(echo "$STAGED_DIFF" | grep -E "(sk-[a-zA-Z0-9]{20,}|re_[a-zA-Z0-9]{20,})" || true)
+if [ -n "$SECRETS" ]; then
+  echo ""
+  echo "ERROR: Staged files appear to contain API keys or secrets."
+  echo "Review your changes with: git diff --cached"
+  echo ""
+  exit 1
+fi
+
+echo "Security checks passed."
