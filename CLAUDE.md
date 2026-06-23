@@ -71,18 +71,23 @@ web/
 ## Tech Stack
 
 ### Frontend
+
 - Next.js 14 (App Router), TypeScript, Tailwind CSS, Shadcn/ui
 
 ### Backend
+
 - Node.js + Express, PostgreSQL, pgvector (RAG embeddings), Redis + BullMQ (queue), node-cron
 
 ### Scraping
+
 - Playwright (JS-rendered pages), Cheerio (static HTML), custom snapshot diffing via hash sets
 
 ### AI / RAG
+
 - OpenAI API (GPT-4o for scoring/tailoring), OpenAI text-embedding-3-small, LangChain JS, Zod (LLM output validation)
 
 ### Notifications + Auth + Infra
+
 - Twilio (SMS), Resend (email + PDF), Clerk (auth), Railway (deployment), Supabase (managed Postgres option)
 
 ## Database Schema
@@ -115,10 +120,6 @@ cron (every 15 min)
 DATABASE_URL
 REDIS_URL
 OPENAI_API_KEY
-TWILIO_ACCOUNT_SID
-TWILIO_AUTH_TOKEN
-TWILIO_PHONE_NUMBER
-YOUR_PHONE_NUMBER
 RESEND_API_KEY
 YOUR_EMAIL
 CLERK_SECRET_KEY
@@ -135,6 +136,27 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 - SMS alert via Twilio + email via Resend
 - Next.js dashboard for detected jobs
 - Deployed on Railway running 24/7
+
+## Security
+
+- `.env` is gitignored — never commit it. `.env.example` has placeholder values only.
+- Husky pre-commit hook blocks `.env` files and common API key patterns from being staged.
+- If keys are ever exposed: rotate them immediately in the provider dashboard, then run `git filter-repo --invert-paths --path .env --force` + force push.
+- `auth.json` (Playwright session cookies) is also gitignored.
+
+## Available Claude Code Skills
+
+Use these proactively — don't wait to be asked:
+
+- `/code-review` — run before any PR or push to catch bugs and simplification opportunities
+- `/security-review` — run when touching auth, env vars, API integrations, or scraping logic
+- `/verify` — run after any feature to confirm it works end-to-end in the real app
+- `/run` — launch the agent or dashboard to test changes live
+
+Automate with hooks (via `/update-config`):
+
+- Pre-commit: Husky already handles `.env` blocking and TypeScript checks
+- Pre-push: good candidate for `/security-review` on branches touching credentials
 
 ## Dev Notes
 

@@ -26,15 +26,15 @@ Twilio SMS  +  Resend email (PDF resume attached)
 
 ## Tech Stack
 
-| Layer | Tools |
-|---|---|
-| Frontend | Next.js 14, TypeScript, Tailwind CSS, Shadcn/ui |
-| Backend | Node.js, Express, PostgreSQL, pgvector, Redis, BullMQ, node-cron |
-| Scraping | Playwright (dynamic pages), Cheerio (static pages), custom diff algorithm |
-| AI / RAG | OpenAI GPT-4o, text-embedding-3-small, LangChain JS, Zod |
-| Notifications | Twilio (SMS), Resend (email + PDF) |
-| Auth | Clerk |
-| Infra | Railway (24/7 deployment), Docker Compose (local dev) |
+| Layer         | Tools                                                                     |
+| ------------- | ------------------------------------------------------------------------- |
+| Frontend      | Next.js 14, TypeScript, Tailwind CSS, Shadcn/ui                           |
+| Backend       | Node.js, Express, PostgreSQL, pgvector, Redis, BullMQ, node-cron          |
+| Scraping      | Playwright (dynamic pages), Cheerio (static pages), custom diff algorithm |
+| AI / RAG      | OpenAI GPT-4o, text-embedding-3-small, LangChain JS, Zod                  |
+| Notifications | Twilio (SMS), Resend (email + PDF)                                        |
+| Auth          | Clerk                                                                     |
+| Infra         | Railway (24/7 deployment), Docker Compose (local dev)                     |
 
 ---
 
@@ -173,6 +173,5 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
 ## Deployment
 
 The app runs on Railway with both the `web` and `agent` packages deployed as separate services. Railway natively supports cron jobs and background workers, so node-cron keeps running without any extra configuration.
-
 
 **Stack:** Next.js · TypeScript · PostgreSQL · pgvector · Playwright · LangChain · OpenAI · Redis · Twilio
