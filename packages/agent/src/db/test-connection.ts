@@ -11,10 +11,11 @@ async function main() {
   // Seed a test company if the table is empty
   const { rows: existing } = await pool.query("SELECT COUNT(*) FROM companies");
   if (existing[0].count === "0") {
-    await pool.query(
-      `INSERT INTO companies (name, careers_url, scrape_type) VALUES ($1, $2, $3)`,
-      ["Stripe", "https://stripe.com/jobs", "playwright"]
-    );
+    await pool.query(`INSERT INTO companies (name, careers_url, scrape_type) VALUES ($1, $2, $3)`, [
+      "Stripe",
+      "https://stripe.com/jobs",
+      "playwright",
+    ]);
     console.log("Seeded test company: Stripe");
   }
 

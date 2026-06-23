@@ -12,9 +12,7 @@ export async function getOrCreateCompany(name: string, careersUrl: string, scrap
 }
 
 export async function getActiveCompanies() {
-  const { rows } = await pool.query(
-    "SELECT * FROM companies WHERE active = true ORDER BY name"
-  );
+  const { rows } = await pool.query("SELECT * FROM companies WHERE active = true ORDER BY name");
   return rows;
 }
 
@@ -43,8 +41,8 @@ export async function getLatestSnapshot(companyId: number) {
 }
 
 export async function saveSnapshot(companyId: number, jobHashes: string[]) {
-  await pool.query(
-    "INSERT INTO snapshots (company_id, job_hashes) VALUES ($1, $2)",
-    [companyId, jobHashes]
-  );
+  await pool.query("INSERT INTO snapshots (company_id, job_hashes) VALUES ($1, $2)", [
+    companyId,
+    jobHashes,
+  ]);
 }

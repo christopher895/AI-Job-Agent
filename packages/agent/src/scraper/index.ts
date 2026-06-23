@@ -19,9 +19,7 @@ export async function runJobrightScrape(): Promise<JobListing[]> {
   const newHashSet = new Set(diffSnapshots(prevHashes, currentHashes));
 
   const hashToJob = new Map(currentJobs.map((j, i) => [currentHashes[i], j]));
-  const newJobs = [...newHashSet]
-    .map((h) => hashToJob.get(h)!)
-    .filter(Boolean);
+  const newJobs = [...newHashSet].map((h) => hashToJob.get(h)!).filter(Boolean);
 
   for (const job of newJobs) {
     await upsertJob(source.id, job.title, job.company, job.url);
