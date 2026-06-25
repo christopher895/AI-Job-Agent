@@ -1,9 +1,9 @@
 import { MasterResume, TailoredResume } from "./types";
 import {
   WEAK_PHRASES,
-  STRONG_ACTION_VERBS,
   ACRONYM_EXPANSIONS,
   BULLET_GUIDELINES,
+  KEYWORD_REPEAT_CAP,
 } from "./knowledge/best-practices";
 
 /**
@@ -100,21 +100,26 @@ export function lintFormat(master: MasterResume, tailored: TailoredResume): Form
 
   let bulletCount = 0;
   for (const s of sections) {
+    let sectionHasMetric = false;
     for (const { text } of s.bullets) {
       bulletCount++;
       const lower = text.toLowerCase();
-      const first = text.trim().split(/\s+/)[0] ?? "";
 
+      // Duty-language openers are an unambiguous anti-pattern → deterministic.
+      // Verb *strength* beyond this is a quality judgment left to the LLM critic.
       const weak = WEAK_PHRASES.find((p) => lower.startsWith(p));
       if (weak) issues.push({ level: "error", rule: "weak-opener", detail: `bullet starts with "${weak}": "${text}"` });
-      else if (!STRONG_ACTION_VERBS.some((v) => v.toLowerCase() === first.toLowerCase()))
-        issues.push({ level: "warning", rule: "weak-verb", detail: `bullet doesn't open with a strong action verb: "${first}…"` });
 
       const words = wordCount(text);
       if (words > 45) issues.push({ level: "error", rule: "bullet-too-long", detail: `${words} words (>2 lines): "${text}"` });
       else if (words > BULLET_GUIDELINES.idealWordRange[1] + 14)
         issues.push({ level: "warning", rule: "bullet-long", detail: `${words} words: "${text}"` });
+
+      if (/\d/.test(text)) sectionHasMetric = true;
     }
+    // XYZ formula: a whole role/project with no quantified result anywhere reads as duty-list.
+    if (s.bullets.length && !sectionHasMetric)
+      issues.push({ level: "warning", rule: "no-metric", detail: `section "${s.id}" has no quantified result in any bullet (add a number where one truthfully exists)` });
   }
 
   // Acronyms used should appear spelled-out somewhere at least once.
@@ -128,6 +133,15 @@ export function lintFormat(master: MasterResume, tailored: TailoredResume): Form
   for (const p of tailored.projects) {
     if (!meta.get(p.id)?.link)
       issues.push({ level: "warning", rule: "project-no-link", detail: `project "${p.id}" has no link (hiring-agent −30–50%)` });
+  }
+
+  // Keyword-stuffing guard: no single tech term should appear more than the cap.
+  const haystack = allText.toLowerCase();
+  for (const term of masterVocabulary(master)) {
+    if (term.length < 3) continue; // skip noisy short tokens (e.g. "go", "ai")
+    const count = haystack.split(term).length - 1;
+    if (count > KEYWORD_REPEAT_CAP)
+      issues.push({ level: "warning", rule: "keyword-overuse", detail: `"${term}" repeated ${count}× (cap ${KEYWORD_REPEAT_CAP}) — reads as stuffing, not signal` });
   }
 
   // One-page budget heuristic.
