@@ -49,6 +49,15 @@ export const BULLET_GUIDELINES = {
   olderRoleBulletCount: [2, 3] as const,
 };
 
+/**
+ * Keyword repetition ceiling. The hiring-agent doesn't count keywords at all,
+ * and generic ATS ranking benefit flattens after ~3 contextual mentions while
+ * Greenhouse/Lever AI layers PENALIZE unnatural repetition. So a JD term should
+ * appear at most this many times across the whole résumé. (Source: ATS keyword
+ * research — frequency caps at ~3–4 with diminishing/negative returns after.)
+ */
+export const KEYWORD_REPEAT_CAP = 3;
+
 /** ATS-safe formatting invariants the rendered résumé must respect. */
 export const ATS_FORMATTING_RULES = [
   "Single column, top-to-bottom; no tables, text boxes, columns, or icons.",
@@ -78,17 +87,30 @@ export const HIRING_AGENT_RUBRIC = {
   ignored: ["name", "gender", "college/university", "GPA", "city/location"],
 } as const;
 
-/** Renders the rules into a prompt block the tailorer/critic can consume. */
+/**
+ * Renders the rules into a prompt block the tailorer/critic can consume.
+ *
+ * This is GUIDANCE for the writing agent, not a rigid gate — phrased as
+ * principles, with the lists above given only as ILLUSTRATIVE examples. Use your
+ * judgment: the examples show the shape of good/bad writing, they are not an
+ * exhaustive allow/deny list. (The non-negotiable, countable guarantees — no
+ * fabrication, every role/project quantified, no keyword stuffing, ATS-safe
+ * layout — are enforced deterministically in format.ts / grounding.ts, so you
+ * can focus here on writing well.)
+ */
 export function bestPracticesPromptBlock(): string {
   return [
-    "BULLET FORMULA (XYZ): action verb + what you built (with named tech) + quantified impact.",
-    `Length ${BULLET_GUIDELINES.idealWordRange[0]}–${BULLET_GUIDELINES.idealWordRange[1]} words, ≤${BULLET_GUIDELINES.maxLines} lines, one accomplishment each.`,
-    `Recent roles: ${BULLET_GUIDELINES.recentRoleBulletCount.join("–")} bullets; older roles: ${BULLET_GUIDELINES.olderRoleBulletCount.join("–")}.`,
-    `Start every bullet with a strong action verb (e.g. ${STRONG_ACTION_VERBS.slice(0, 8).join(", ")}).`,
-    `Never use weak duty-language openers: ${WEAK_PHRASES.map((p) => `"${p}"`).join(", ")}.`,
-    "Lead with before→after deltas and absolute scale. If no metric exists in the source, keep concrete scope — never invent a number.",
-    `Include both acronym and spelled-out form once for: ${Object.keys(ACRONYM_EXPANSIONS).join(", ")} (only when truthful).`,
-    "Reorder bullets and skills so the JD-most-relevant lead. Cut what's irrelevant.",
+    "PRINCIPLES (apply judgment; the lists are examples, not exhaustive rules):",
+    "",
+    "Write every bullet as XYZ: a strong past-tense action verb + what you built (name the tech) + a quantified result. Lead with before→after deltas and absolute scale.",
+    `  e.g. strong verbs: ${STRONG_ACTION_VERBS.slice(0, 8).join(", ")}, … — any vivid ownership verb works, not only these.`,
+    `  Avoid duty-language that signals no ownership (e.g. ${WEAK_PHRASES.slice(0, 4).map((p) => `"${p}"`).join(", ")}, …).`,
+    "Quantify wherever a number truthfully exists in the source — latency, %, users, scale, time saved, $. If the source has no number, keep concrete scope; NEVER invent one.",
+    `Keep bullets ${BULLET_GUIDELINES.idealWordRange[0]}–${BULLET_GUIDELINES.idealWordRange[1]} words, ≤${BULLET_GUIDELINES.maxLines} lines, one accomplishment each; ~${BULLET_GUIDELINES.recentRoleBulletCount.join("–")} bullets for recent roles, ${BULLET_GUIDELINES.olderRoleBulletCount.join("–")} for older.`,
+    "Frame each project by what it actually does and its real-world impact — complexity, architecture, scale, users. Don't describe real work in trivial/tutorial terms; don't bolt impressive-sounding framing onto work that lacks it.",
+    "Reorder bullets and skills so the JD-most-relevant lead; cut what's irrelevant. Mirror the JD's exact terminology where the underlying fact supports it — but a keyword earns nothing past a few honest mentions, so don't stuff.",
+    `When truthful, spell out acronyms once (e.g. ${Object.keys(ACRONYM_EXPANSIONS).slice(0, 5).join(", ")}) so exact-string matchers connect them.`,
+    "",
     `Target grader weights: ${HIRING_AGENT_RUBRIC.buckets.map((b) => `${b.name} ${b.weight}`).join(", ")}. It ignores ${HIRING_AGENT_RUBRIC.ignored.join("/")}.`,
     "ATS formatting: " + ATS_FORMATTING_RULES.join(" "),
   ].join("\n");

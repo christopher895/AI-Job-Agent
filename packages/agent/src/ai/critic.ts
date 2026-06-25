@@ -112,10 +112,14 @@ export async function evaluate(
   });
 
   // Merge actionable fixes: deterministic gaps first (they're certain), then the LLM's.
+  // Errors always; plus a curated set of warnings the tailorer can act on truthfully.
+  const ACTIONABLE_WARNINGS = new Set(["no-metric", "keyword-overuse"]);
   const fixes = [
     ...signals.grounding.violations.map((v) => `Remove fabrication: ${v.detail}`),
     ...signals.coverage.missing.map((k) => `Surface JD-relevant skill you have: ${k}`),
-    ...signals.format.issues.filter((i) => i.level === "error").map((i) => `Fix ${i.rule}: ${i.detail}`),
+    ...signals.format.issues
+      .filter((i) => i.level === "error" || ACTIONABLE_WARNINGS.has(i.rule))
+      .map((i) => `Fix ${i.rule}: ${i.detail}`),
     ...critique.topFixes,
   ];
 
