@@ -1,5 +1,5 @@
 export const FILTERS = {
-  // Job title must contain at least one of these (case-insensitive)
+  // Title must contain at least one of these (case-insensitive)
   titleKeywords: [
     "engineer",
     "software",
@@ -12,8 +12,13 @@ export const FILTERS = {
     "ai",
     "ml",
     "machine learning",
+    "data",
+    "research",
   ],
 
-  // Set to e.g. "Summer 2027" to only match that term, or null for all
+  // Title must contain ALL of these (use for role type — e.g. "intern")
+  requiredKeywords: ["intern"] as string[],
+
+  // Set to e.g. "Summer 2027" to narrow by term, or null for any
   termFilter: null as string | null,
 };

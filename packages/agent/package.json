@@ -7,7 +7,12 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test:db": "tsx src/db/test-connection.ts",
-    "test:scraper": "tsx src/scraper/test-scraper.ts"
+    "test:scraper": "tsx src/scraper/test-scraper.ts",
+    "scrape:companies": "tsx src/scraper/run-companies.ts",
+    "test:grounding": "tsx src/ai/test-grounding.ts",
+    "test:format": "tsx src/ai/test-format.ts",
+    "test:critic": "tsx src/ai/test-critic.ts",
+    "tailor": "tsx src/ai/run-tailor.ts"
   },
   "dependencies": {
     "bullmq": "^5.4.2",
