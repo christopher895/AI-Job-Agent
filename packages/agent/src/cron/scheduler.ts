@@ -1,15 +1,14 @@
 import cron from "node-cron";
-import { getActiveCompanies } from "../db/queries";
-import { enqueueScrape } from "../queue/producer";
+import { runAllCompanyScrapes } from "../scraper/index";
 
 export function startScheduler() {
-  cron.schedule("*/15 * * * *", async () => {
-    console.log("Cron tick — enqueuing scrapes");
-    const companies = await getActiveCompanies();
-    for (const company of companies) {
-      await enqueueScrape(company.id);
-    }
+  // Run immediately on startup, then every 15 minutes
+  runAllCompanyScrapes().catch((err) => console.error("[scheduler] Initial run failed:", err));
+
+  cron.schedule("*/15 * * * *", () => {
+    console.log(`[scheduler] Tick — ${new Date().toLocaleTimeString()}`);
+    runAllCompanyScrapes().catch((err) => console.error("[scheduler] Run failed:", err));
   });
 
-  console.log("Scheduler started — scrapes run every 15 minutes");
+  console.log("[scheduler] Started — scanning companies every 15 minutes");
 }
