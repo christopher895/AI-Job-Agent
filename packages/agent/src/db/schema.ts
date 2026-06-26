@@ -67,5 +67,53 @@ export async function initSchema() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tailored_resumes (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      job_title    TEXT,
+      company      TEXT,
+      job_url      TEXT,
+      jd_text      TEXT,
+      markdown     TEXT NOT NULL DEFAULT '',
+      pdf          BYTEA,
+      critic_score INT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS master_resume (
+      id         INT PRIMARY KEY DEFAULT 1,
+      data       JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS applied_jobs (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      company    TEXT NOT NULL,
+      job_title  TEXT NOT NULL,
+      location   TEXT,
+      job_url    TEXT,
+      status     TEXT NOT NULL DEFAULT 'applied'
+                   CHECK (status IN ('applied','interviewing','rejected','offer')),
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      resume_id  UUID REFERENCES tailored_resumes(id) ON DELETE SET NULL,
+      sheets_row INT
+    )
+  `);
+
+  await seedMasterResume();
+
   console.log("Schema initialized.");
+}
+
+async function seedMasterResume() {
+  const { MASTER_RESUME } = await import("../ai/master-resume");
+  await pool.query(
+    `INSERT INTO master_resume (id, data) VALUES (1, $1) ON CONFLICT (id) DO NOTHING`,
+    [JSON.stringify(MASTER_RESUME)]
+  );
 }
