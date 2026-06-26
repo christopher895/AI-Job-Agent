@@ -1,3 +1,4 @@
+import "./polyfills";
 import "./db/pool"; // load dotenv first
 import express from "express";
 import { initSchema } from "./db/schema";
