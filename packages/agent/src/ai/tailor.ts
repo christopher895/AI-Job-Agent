@@ -1,5 +1,5 @@
 import { completeJSON } from "./llm";
-import { MASTER_RESUME } from "./master-resume";
+import { getMasterResume } from "../db/queries";
 import { MasterResume, TailoredResume, TailoredResumeSchema } from "./types";
 import { bestPracticesPromptBlock } from "./knowledge/best-practices";
 import { checkGrounding, GroundingReport } from "./grounding";
@@ -80,7 +80,7 @@ function buildUserPrompt(master: MasterResume, jd: string, opts: TailorOptions):
  * low score) is the critic loop's job, built next.
  */
 export async function tailorResume(jd: string, opts: TailorOptions = {}): Promise<TailorResult> {
-  const master = opts.master ?? MASTER_RESUME;
+  const master = opts.master ?? await getMasterResume();
 
   const tailored = await completeJSON(TailoredResumeSchema, {
     system: SYSTEM_PROMPT,

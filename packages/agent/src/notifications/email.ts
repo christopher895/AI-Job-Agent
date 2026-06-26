@@ -4,21 +4,29 @@ import { JobListing } from "../scraper/playwright";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 function buildEmailHtml(jobs: JobListing[]): string {
+  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+
   const rows = jobs
-    .map(
-      (j) => `
+    .map((j) => {
+      const tailorUrl = `${appUrl}/tailor?jobUrl=${encodeURIComponent(j.url)}&title=${encodeURIComponent(j.title)}&company=${encodeURIComponent(j.company)}`;
+      return `
       <tr>
         <td style="padding:12px 0; border-bottom:1px solid #eee;">
           <a href="${j.url}" style="font-size:15px; font-weight:600; color:#1a1a1a; text-decoration:none;">
             ${j.title}
           </a>
           <div style="font-size:13px; color:#555; margin-top:4px;">${j.company}</div>
-          <a href="${j.url}" style="font-size:12px; color:#0066cc; margin-top:6px; display:inline-block;">
-            View on Jobright →
-          </a>
+          <div style="margin-top:8px;">
+            <a href="${j.url}" style="font-size:12px; color:#0066cc; margin-right:16px;">
+              View job →
+            </a>
+            <a href="${tailorUrl}" style="font-size:12px; color:#ffffff; background:#0066cc; padding:4px 10px; border-radius:4px; text-decoration:none;">
+              Tailor resume →
+            </a>
+          </div>
         </td>
-      </tr>`
-    )
+      </tr>`;
+    })
     .join("");
 
   return `
