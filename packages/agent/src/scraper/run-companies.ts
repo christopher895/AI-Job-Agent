@@ -1,3 +1,4 @@
+import "../polyfills";
 import "../db/pool"; // ensure dotenv is loaded
 import { runAllCompanyScrapes } from "./index";
 

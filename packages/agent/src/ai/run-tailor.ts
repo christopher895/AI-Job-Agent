@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "../polyfills";
 import { generateBestResume } from "./chain";
 
 /**
