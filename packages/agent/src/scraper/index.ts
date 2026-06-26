@@ -6,12 +6,16 @@ import { COMPANIES, Company } from "./companies";
 import { scrapeGreenhouse } from "./adapters/greenhouse";
 import { scrapeAshby } from "./adapters/ashby";
 import { scrapeLever } from "./adapters/lever";
+import { scrapeAmazon } from "./adapters/amazon";
+import { matchesLocation, scoreJob } from "./filters";
+import { FILTERS } from "../config";
 
 async function scrapeCompany(company: Company): Promise<JobListing[]> {
   switch (company.platform) {
     case "greenhouse": return scrapeGreenhouse(company.name, company.slug);
     case "ashby":      return scrapeAshby(company.name, company.slug);
     case "lever":      return scrapeLever(company.name, company.slug);
+    case "amazon":     return scrapeAmazon();
     default:
       console.warn(`[scraper] No adapter for platform "${company.platform}" (${company.name})`);
       return [];
@@ -22,13 +26,16 @@ async function processCompany(company: Company): Promise<JobListing[]> {
   const record = await getOrCreateCompany(company.name, `https://${company.platform}/${company.slug}`, company.platform);
 
   const currentJobs = await scrapeCompany(company);
-  const currentHashes = currentJobs.map((j) => hashJob(j.url));
+
+  // Filter by location before hashing/diffing
+  const locationFiltered = currentJobs.filter((j) => matchesLocation(j.location));
+  const currentHashes = locationFiltered.map((j) => hashJob(j.url));
 
   const prevSnapshot = await getLatestSnapshot(record.id);
   const prevHashes: string[] = prevSnapshot?.job_hashes ?? [];
 
   const newHashSet = new Set(diffSnapshots(prevHashes, currentHashes));
-  const hashToJob = new Map(currentJobs.map((j, i) => [currentHashes[i], j]));
+  const hashToJob = new Map(locationFiltered.map((j, i) => [currentHashes[i], j]));
   const newJobs = [...newHashSet].map((h) => hashToJob.get(h)!).filter(Boolean);
 
   for (const job of newJobs) {
@@ -54,25 +61,39 @@ export async function runAllCompanyScrapes(): Promise<void> {
     else console.error("[scraper] Company failed:", result.reason);
   }
 
-  if (allNewJobs.length > 0) {
-    await sendJobEmail(allNewJobs);
-    console.log(`[scraper] Emailed ${allNewJobs.length} new job(s) across all companies.`);
-  } else {
-    console.log("[scraper] No new jobs found across all companies.");
+  if (allNewJobs.length === 0) {
+    console.log("[scraper] No new jobs found.");
+    return;
   }
+
+  // Score, sort, and cap
+  const scored = allNewJobs
+    .map((job) => ({ job, score: scoreJob(job) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, FILTERS.maxPerEmail);
+
+  const topJobs = scored.map((s) => s.job);
+
+  console.log(
+    `[scraper] ${allNewJobs.length} new job(s) found — emailing top ${topJobs.length}:\n` +
+    scored.map((s) => `  [${s.score}] ${s.job.title} @ ${s.job.company}`).join("\n")
+  );
+
+  await sendJobEmail(topJobs);
 }
 
 export async function runJobrightScrape(): Promise<JobListing[]> {
   const source = await getOrCreateCompany("Jobright", "https://jobright.ai/jobs/recommend", "playwright");
 
   const currentJobs = await scrapeJobright();
-  const currentHashes = currentJobs.map((j) => hashJob(j.url));
+  const locationFiltered = currentJobs.filter((j) => matchesLocation(j.location));
+  const currentHashes = locationFiltered.map((j) => hashJob(j.url));
 
   const prevSnapshot = await getLatestSnapshot(source.id);
   const prevHashes: string[] = prevSnapshot?.job_hashes ?? [];
 
   const newHashSet = new Set(diffSnapshots(prevHashes, currentHashes));
-  const hashToJob = new Map(currentJobs.map((j, i) => [currentHashes[i], j]));
+  const hashToJob = new Map(locationFiltered.map((j, i) => [currentHashes[i], j]));
   const newJobs = [...newHashSet].map((h) => hashToJob.get(h)!).filter(Boolean);
 
   for (const job of newJobs) {
