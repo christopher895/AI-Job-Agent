@@ -1,6 +1,6 @@
 import { tailorResume, TailorOptions } from "./tailor";
 import { evaluate, CriticResult } from "./critic";
-import { MASTER_RESUME } from "./master-resume";
+import { getMasterResume } from "../db/queries";
 import { TailoredResume } from "./types";
 import { renderMarkdown } from "./format";
 
@@ -28,7 +28,7 @@ export type GenerateResult = {
 };
 
 export async function generateBestResume(jd: string, opts: GenerateOptions = {}): Promise<GenerateResult> {
-  const master = opts.master ?? MASTER_RESUME;
+  const master = opts.master ?? await getMasterResume();
   const maxIterations = opts.maxIterations ?? 3;
   const targetScore = opts.targetScore ?? 80;
 
