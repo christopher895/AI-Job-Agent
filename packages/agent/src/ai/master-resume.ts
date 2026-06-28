@@ -14,11 +14,11 @@ const master: MasterResume = {
   basics: {
     name: "Christopher Zhang",
     location: "Providence, RI",
-    email: "",
-    phone: "",
-    github: "",
+    email: "christopher_zhang@brown.edu",
+    phone: "(704) 877-1460",
+    github: "https://github.com/christopherzhangbrown",
     linkedin: "",
-    portfolio: "",
+    portfolio: "https://christopherzhang.dev",
     summary: "",
   },
 

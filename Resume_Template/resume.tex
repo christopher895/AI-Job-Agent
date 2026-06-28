@@ -1,83 +1,122 @@
-%-------------------------
-% Resume in Latex
-% Author : Audric Serador
-% Inspired by: https://github.com/sb2nov/resume
-% License : MIT
-%------------------------
+\documentclass[10pt]{resume}
+\usepackage[left=0.4in,top=0.4in,right=0.4in,bottom=0.4in]{geometry}
 
-\documentclass[letterpaper,11pt]{article}
+\name{Christopher Zhang}
+\address{christopher\_zhang@brown.edu \\ (704) 877-1460 \\ \href{https://github.com/christopherzhangbrown}{github.com/christopherzhangbrown} \\ \href{https://christopherzhang.dev}{christopherzhang.dev}}
 
-% \usepackage{fontawesome5}  % removed: crashes Tectonic, and icons are no longer used in the heading
-\usepackage{latexsym}
-\usepackage[empty]{fullpage}
-\usepackage{titlesec}
-\usepackage{marvosym}
-\usepackage[usenames,dvipsnames]{color}
-\usepackage{verbatim}
-\usepackage{enumitem}
-\usepackage[hidelinks]{hyperref}
-\usepackage{fancyhdr}
-\usepackage[english]{babel}
-\usepackage{tabularx}
-% \input{glyphtounicode}  % pdfTeX-only; unsupported by Tectonic's XeTeX engine
-
-
-
-% Custom font
-\usepackage[default]{lato}
-
-\pagestyle{fancy}
-\fancyhf{} % clear all header and footer fields
-\fancyfoot{}
-\renewcommand{\headrulewidth}{0pt}
-\renewcommand{\footrulewidth}{0pt}
-
-% Adjust margins
-\addtolength{\oddsidemargin}{-0.5in}
-\addtolength{\evensidemargin}{-0.5in}
-\addtolength{\textwidth}{1in}
-\addtolength{\topmargin}{-.5in}
-\addtolength{\textheight}{1.0in}
-
-\urlstyle{same}
-
-\raggedbottom
-\raggedright
-\setlength{\tabcolsep}{0in}
-
-% Sections formatting
-\titleformat{\section}{
-  \vspace{-4pt}\scshape\raggedright\large
-}{}{0em}{}[\color{black}\titlerule\vspace{-5pt}]
-
-% Ensure that generate pdf is machine readable/ATS parsable
-% \pdfgentounicode=1  % pdfTeX-only; unsupported by Tectonic's XeTeX engine
-
-%-------------------------%
-% Custom commands
 \begin{document}
-\include{custom-commands}
 
-%-------------------------------------------%
-%%%%%%  RESUME STARTS HERE  %%%%%
+%----------------------------------------------------------------------------------------
+%	EDUCATION
+%----------------------------------------------------------------------------------------
+\begin{rSection}{Education}
 
-%----------HEADING----------%
-\input{src/heading}
+{\bf Brown University,} {\em Sc.B. Computer Science \& A.B. Business Economics} \hfill {Providence, RI}\\
+\textbf{GPA:} 4.00/4.00, Varsity Student-Athlete \hfill {\em Expected Graduation May 2028}\\
+\textbf{Relevant Coursework:} SWE, Data Structures and Algorithms, AI, Deep Learning, Computer Systems, Discrete Math
 
-%-----------EDUCATION-----------%
-\input{src/education.tex}
+\end{rSection}
 
-%-----------EXPERIENCE-----------%
-\input{src/experience}
+%----------------------------------------------------------------------------------------
+%	EXPERIENCE
+%----------------------------------------------------------------------------------------
+\begin{rSection}{Experience}
 
-%-----------PROJECTS-----------%
-\input{src/projects}
+\textbf{Scout Motors} \hfill {Charlotte, NC}\\
+\textbf{AI Engineer} \hfill {\em May 2026 -- Present}
+\begin{itemize}
+    \item Launched an AI security assistant with Copilot Studio and Jira, reducing projected support costs by \$800K annually
+    \item Architected an AI developer platform using MCP and LLM orchestration, cutting Scout app deployment time by 75\%
+    \item Automated infrastructure provisioning using AWS EKS, Argo CD, Kargo, and Crossplane, saving \textasciitilde5 hrs/week of manual DevOps work with full observability via Datadog
+\end{itemize}
+\vspace{0.5em}
 
-%-----------EXTRACURRICULAR-----------%
-\input{src/extracurricular}
+\textbf{Mandy} \hfill {Remote}\\
+\textbf{Software Engineer} \hfill {\em June 2025 -- August 2025}
+\begin{itemize}
+    \item Built an AI-powered room redesign tool, transforming user photos into styled layouts with curated Amazon product recs
+    \item Shipped a full-stack app for 1,000+ image uploads and layout generation using Next.js, TypeScript, IMGBB, and Vercel
+    \item Integrated Clerk authentication to track preferences and deliver tailored product recommendations and chatbot responses
+\end{itemize}
+\vspace{0.5em}
 
-%-----------SKILLS-----------%
-\input{src/skills.tex}
+\textbf{Full Stack @Brown} \hfill {Providence, RI}\\
+\textbf{Developer} \hfill {\em September 2025 -- Present}
+\begin{itemize}
+    \item Built a production Next.js platform for the Brown Brain Bee, integrating a CMS API and implementing full-text search
+    \item Developing a full-stack publishing system for Brown Music Review with article management and automated email notifications
+\end{itemize}
+\vspace{0.5em}
 
-%-------------------------------------------%
+\textbf{Waves Swim Team} \hfill {Charlotte, NC}\\
+\textbf{Head Coach} \hfill {\em April 2025 -- July 2025}
+\begin{itemize}
+    \item Led and managed training for over 150 swimmers of all age levels, designing effective practice plans to maximize performance
+\end{itemize}
+
+\end{rSection}
+
+%----------------------------------------------------------------------------------------
+%	PROJECTS
+%----------------------------------------------------------------------------------------
+\begin{rSection}{Projects}
+\vspace{-1em}
+
+\item \textbf{Dating Profile Analyzer,} {\em React, TypeScript, Node.js, Firebase, Google Gemini API} \hfill {\em October 2025 -- January 2026}
+\begin{itemize}
+    \item Built a full-stack React and Node.js application that analyzes dating profiles using image scoring and AI-generated feedback
+    \item Designed image-ranking algorithms using blur variance, brightness normalization, and smile detection--based weighted scoring
+    \item Implemented prompt-driven Gemini AI feedback using stored personality quiz data to generate personalized profile bio recs
+\end{itemize}
+
+\item \textbf{Travel Planner,} {\em React, TypeScript, Node.js, Firebase, OpenStreetMap API} \hfill {\em September 2025 -- December 2025}
+\begin{itemize}
+    \item Engineered an A* pathfinding system with lazy tile loading and LRU caching for 200+ mile routing across OpenStreetMap data
+    \item Architected backend routing and trip APIs with Firebase-backed persistence to save and reload multi-day itineraries in real-time
+    \item Implemented GDPR-compliant, consent-aware ad targeting, integrating external ad server APIs based on destination and itinerary
+\end{itemize}
+
+\item \textbf{AI Swim Start Coach,} {\em React, TypeScript, OpenCV, MediaPipe} \hfill {\em June 2025 -- June 2026}
+\begin{itemize}
+    \item Integrated MediaPipe and OpenCV for pose detection to extract joint coordinates and movement data from video input
+    \item Delivered AI-powered real-time feedback, helping 100+ swimmers improve their start technique with personalized insights
+\end{itemize}
+
+\end{rSection}
+
+%----------------------------------------------------------------------------------------
+%	EXTRACURRICULAR
+%----------------------------------------------------------------------------------------
+\begin{rSection}{Extracurricular Activities}
+
+\textbf{Brown University Men's Swimming and Diving} \hfill {Providence, RI}\\
+\textbf{NCAA Division 1 Student-Athlete} \hfill {\em September 2024 -- Present}
+\begin{itemize}
+    \item Balanced 25-hour training weeks, competitions, and travel while managing a full academic workload
+    \item Set school records in the 400 Medley and 800 Free relays; ranked top 5 all-time in 50 Free, 100 Free, 200 Free, and 100 Fly
+\end{itemize}
+\vspace{0.5em}
+
+\textbf{Social Media Content Creator} \hfill {Remote}\\
+\textbf{Founder (@chris\_swimzz)} \hfill {\em April 2024 -- Present}
+\begin{itemize}
+    \item Produced engaging and educational swim-related content, reaching an audience of over 28,000 followers on different platforms
+    \item Partnered with 8+ brands, including notable names such as Nike and Arena, to create authentic promotional campaigns
+    \item Achieved over 10 million views across content, inspiring swimmers globally and fostering a supportive online community
+\end{itemize}
+
+\end{rSection}
+
+%----------------------------------------------------------------------------------------
+%	SKILLS
+%----------------------------------------------------------------------------------------
+\begin{rSection}{Skills \& Interests}
+\begin{itemize}
+    \item \textbf{Languages:} Java, Python, JavaScript, TypeScript, C++
+    \item \textbf{Frameworks and Libraries:} React, Node.js, Express.js, FastAPI, Flask, NumPy, PyTorch, TensorFlow
+    \item \textbf{Tools \& Technologies:} Docker, AWS EKS, Kubernetes, PostgreSQL, Git, Argo CD, Crossplane, Datadog
+    \item \textbf{Interests:} Piano (currently learning Liebestr\"{a}ume), Ping-Pong, Journaling, Beli, Skiing, Video Editing
+\end{itemize}
+\end{rSection}
+
 \end{document}
