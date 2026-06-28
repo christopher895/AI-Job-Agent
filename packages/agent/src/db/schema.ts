@@ -98,11 +98,18 @@ export async function initSchema() {
       location   TEXT,
       job_url    TEXT,
       status     TEXT NOT NULL DEFAULT 'applied'
-                   CHECK (status IN ('applied','interviewing','rejected','offer')),
+                   CHECK (status IN ('applied','interviewing','rejected','offer','assessment','no_response')),
       applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       resume_id  UUID REFERENCES tailored_resumes(id) ON DELETE SET NULL,
       sheets_row INT
     )
+  `);
+
+  // Widen the status CHECK constraint on existing tables to include assessment + no_response
+  await pool.query(`
+    ALTER TABLE applied_jobs DROP CONSTRAINT IF EXISTS applied_jobs_status_check;
+    ALTER TABLE applied_jobs ADD CONSTRAINT applied_jobs_status_check
+      CHECK (status IN ('applied','interviewing','rejected','offer','assessment','no_response'));
   `);
 
   await seedMasterResume();
