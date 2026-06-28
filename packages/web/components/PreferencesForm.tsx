@@ -171,7 +171,7 @@ function LocationTagInput({
             value={input}
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={onKey}
-            placeholder={tags.length === 0 ? `Type a city or "remote"…` : ""}
+            placeholder={tags.length === 0 ? 'Type a city name, or Remote' : ""}
             className="flex-1 text-sm outline-none bg-transparent placeholder-gray-400"
             autoComplete="off"
           />
@@ -282,7 +282,7 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
               <TagInput
                 tags={prefs.titleKeywords}
                 onChange={(v) => set("titleKeywords", v)}
-                placeholder="software, engineer, ai…"
+                placeholder="software, engineer, ai..."
               />
             </div>
             <div>
@@ -290,7 +290,7 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
               <TagInput
                 tags={prefs.requiredKeywords}
                 onChange={(v) => set("requiredKeywords", v)}
-                placeholder="intern…"
+                placeholder="intern..."
               />
             </div>
             <div>
@@ -329,7 +329,7 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
               <TagInput
                 tags={prefs.priorityCompanies}
                 onChange={(v) => set("priorityCompanies", v)}
-                placeholder="Google, Anthropic, OpenAI…"
+                placeholder="Google, Anthropic, OpenAI..."
               />
             </div>
           </div>
