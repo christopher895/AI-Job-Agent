@@ -16,3 +16,8 @@ packages/agent/auth.json
 # Misc
 .DS_Store
 *.log
+
+# Resume_Template — generated outputs, keep only source files
+Resume_Template/resume.pdf
+Resume_Template/test-render*.pdf
+Resume_Template/test-render*.png

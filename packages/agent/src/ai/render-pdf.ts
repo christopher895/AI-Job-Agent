@@ -8,7 +8,11 @@ const execFileAsync = promisify(execFile);
 
 // Path to the checked-in LaTeX template directory
 const TEMPLATE_DIR = path.join(__dirname, "../../../../Resume_Template");
-const TECTONIC = "/opt/homebrew/bin/tectonic";
+const TECTONIC = process.env.TECTONIC_PATH || "tectonic";
+
+function allowHtmlFallback(): boolean {
+  return /^(1|true|yes)$/i.test(process.env.ALLOW_HTML_PDF_FALLBACK ?? "");
+}
 
 // ─── LaTeX escaping ──────────────────────────────────────────────────────────
 
@@ -31,6 +35,10 @@ function tex(s: string): string {
 function texUrl(s: string): string {
   // URLs inside \href{} only need % and # escaped
   return String(s ?? "").replace(/%/g, "\\%").replace(/#/g, "\\#");
+}
+
+function inlineTex(s: string): string {
+  return s.split(/\*\*(.+?)\*\*/).map((p, i) => i % 2 === 1 ? `\\textbf{${tex(p)}}` : tex(p)).join("");
 }
 
 // ─── Markdown parser ─────────────────────────────────────────────────────────
@@ -143,7 +151,7 @@ function parseMd(md: string): ParsedDoc {
     } else if (section === "skills") {
       while (i < lines.length && !lines[i].startsWith("## ")) {
         const l = lines[i].trim();
-        if (l) doc.skills.push(...l.split(" · ").map(s => s.trim()).filter(Boolean));
+        if (l) doc.skills.push(l);
         i++;
       }
 
@@ -177,58 +185,22 @@ function parseMd(md: string): ParsedDoc {
 
 function buildLatex(doc: ParsedDoc): string {
   const c = doc.contact;
-  const parts: string[] = [];
-  if (c.location) parts.push(tex(c.location));
-  if (c.email)    parts.push(`\\href{mailto:${texUrl(c.email)}}{${tex(c.email)}}`);
-  if (c.phone)    parts.push(tex(c.phone));
-  if (c.github)   parts.push(`\\href{${texUrl(c.github)}}{\\underline{${tex(c.github.replace(/^https?:\/\//, ""))}}}`);
-  if (c.portfolio) parts.push(`\\href{${texUrl(c.portfolio)}}{\\underline{${tex(c.portfolio.replace(/^https?:\/\//, ""))}}}`);
-  const contactLine = parts.join(" \\ -- \\ ");
+  const addrParts: string[] = [];
+  if (c.email)    addrParts.push(`\\href{mailto:${texUrl(c.email)}}{${tex(c.email)}}`);
+  if (c.phone)    addrParts.push(tex(c.phone));
+  if (c.github)   addrParts.push(`\\href{${texUrl(c.github)}}{${tex(c.github.replace(/^https?:\/\//, ""))}}`);
+  if (c.portfolio) addrParts.push(`\\href{${texUrl(c.portfolio)}}{${tex(c.portfolio.replace(/^https?:\/\//, ""))}}`);
 
   const lines: string[] = [];
 
   lines.push(
-    `\\documentclass[letterpaper,11pt]{article}`,
-    `\\usepackage{latexsym}`,
-    `\\usepackage[empty]{fullpage}`,
-    `\\usepackage{titlesec}`,
-    `\\usepackage{marvosym}`,
-    `\\usepackage[usenames,dvipsnames]{color}`,
-    `\\usepackage{verbatim}`,
-    `\\usepackage{enumitem}`,
-    `\\usepackage[hidelinks]{hyperref}`,
-    `\\usepackage{fancyhdr}`,
-    `\\usepackage[english]{babel}`,
-    `\\usepackage{tabularx}`,
-    `\\usepackage[default]{lato}`,
+    `\\documentclass[10pt]{czresume}`,
+    `\\usepackage[left=0.4in,top=0.4in,right=0.4in,bottom=0.4in]{geometry}`,
     ``,
-    `\\pagestyle{fancy}`,
-    `\\fancyhf{}`,
-    `\\fancyfoot{}`,
-    `\\renewcommand{\\headrulewidth}{0pt}`,
-    `\\renewcommand{\\footrulewidth}{0pt}`,
-    `\\addtolength{\\oddsidemargin}{-0.5in}`,
-    `\\addtolength{\\evensidemargin}{-0.5in}`,
-    `\\addtolength{\\textwidth}{1in}`,
-    `\\addtolength{\\topmargin}{-.5in}`,
-    `\\addtolength{\\textheight}{1.0in}`,
-    `\\urlstyle{same}`,
-    `\\raggedbottom`,
-    `\\raggedright`,
-    `\\setlength{\\tabcolsep}{0in}`,
-    `\\titleformat{\\section}{`,
-    `  \\vspace{-4pt}\\scshape\\raggedright\\large`,
-    `}{}{0em}{}[\\color{black}\\titlerule\\vspace{-5pt}]`,
+    `\\name{${tex(doc.name)}}`,
+    `\\address{${addrParts.join(" \\\\ ")}}`,
     ``,
     `\\begin{document}`,
-    `\\input{custom-commands}`,
-    ``,
-    `%---------- HEADING ----------`,
-    `\\begin{center}`,
-    `    \\textbf{\\Huge \\scshape ${tex(doc.name)}} \\\\ \\vspace{3pt}`,
-    `    \\small`,
-    `    ${contactLine}`,
-    `\\end{center}`,
   );
 
   if (doc.summary) {
@@ -237,72 +209,53 @@ function buildLatex(doc: ParsedDoc): string {
 
   // Education
   if (doc.education.length) {
-    lines.push(``, `%---------- EDUCATION ----------`, `\\section{Education}`, `\\resumeSubHeadingListStart`, ``);
+    lines.push(``, `\\begin{rSection}{Education}`, ``);
     for (const e of doc.education) {
-      const degreesTex = tex(e.degrees);
-      lines.push(
-        `    \\resumeProjectHeading`,
-        `    {\\textbf{${tex(e.school)},} \\textit{${degreesTex}}}{\\textbf{${tex(e.location)}}}`,
-      );
-      const items: string[] = [];
-      if (e.gpa) items.push(`\\textbf{GPA:} ${tex(e.gpa)} \\hfill \\textit{${tex(e.graduation)}}`);
-      if (items.length) {
-        lines.push(`    \\resumeItemListStart`);
-        for (const it of items) lines.push(`        \\resumeItem{${it}}`);
-        lines.push(`    \\resumeItemListEnd`);
-      }
-      lines.push(``);
+      lines.push(`{\\bf ${tex(e.school)},} {\\em ${tex(e.degrees)}} \\hfill {${tex(e.location)}}\\\\`);
+      if (e.gpa) lines.push(`\\textbf{GPA:} ${tex(e.gpa)} \\hfill {\\em ${tex(e.graduation)}}`);
     }
-    lines.push(`\\resumeSubHeadingListEnd`);
+    lines.push(``, `\\end{rSection}`);
   }
 
   // Experience
   if (doc.experience.length) {
-    lines.push(``, `%---------- EXPERIENCE ----------`, `\\section{Experience}`, `\\resumeSubHeadingListStart`, ``);
-    for (const e of doc.experience) {
+    lines.push(``, `\\begin{rSection}{Experience}`, ``);
+    for (let idx = 0; idx < doc.experience.length; idx++) {
+      const e = doc.experience[idx];
       lines.push(
-        `    \\resumeSubheading`,
-        `    {${tex(e.company)}}{${tex(e.location)}}`,
-        `    {${tex(e.title)}}{${tex(e.dates)}}`,
+        `\\textbf{${tex(e.company)}} \\hfill {${tex(e.location)}}\\\\`,
+        `\\textbf{${tex(e.title)}} \\hfill {\\em ${tex(e.dates)}}`,
       );
       if (e.bullets.length) {
-        lines.push(`    \\resumeItemListStart`);
-        for (const b of e.bullets) lines.push(`        \\resumeItem{${tex(b)}}`);
-        lines.push(`    \\resumeItemListEnd`);
+        lines.push(`\\begin{itemize}`);
+        for (const b of e.bullets) lines.push(`    \\item ${tex(b)}`);
+        lines.push(`\\end{itemize}`);
       }
-      lines.push(``);
+      if (idx < doc.experience.length - 1) lines.push(`\\vspace{0.5em}`, ``);
     }
-    lines.push(`\\resumeSubHeadingListEnd`);
+    lines.push(``, `\\end{rSection}`);
   }
 
   // Projects
   if (doc.projects.length) {
-    lines.push(``, `%---------- PROJECTS ----------`, `\\section{Projects}`, `\\resumeSubHeadingListStart`, ``);
+    lines.push(``, `\\begin{rSection}{Projects}`, `\\vspace{-1em}`, ``);
     for (const p of doc.projects) {
-      lines.push(
-        `    \\resumeProjectHeading`,
-        `    {\\textbf{${tex(p.name)},} \\emph{${tex(p.tech)}}}{\\emph{${tex(p.dates)}}}`,
-      );
+      lines.push(`\\item \\textbf{${tex(p.name)},} {\\em ${tex(p.tech)}} \\hfill {\\em ${tex(p.dates)}}`);
       if (p.bullets.length) {
-        lines.push(`    \\resumeItemListStart`);
-        for (const b of p.bullets) lines.push(`        \\resumeItem{${tex(b)}}`);
-        lines.push(`    \\resumeItemListEnd`);
+        lines.push(`\\begin{itemize}`);
+        for (const b of p.bullets) lines.push(`    \\item ${tex(b)}`);
+        lines.push(`\\end{itemize}`);
+        lines.push(``);
       }
-      lines.push(``);
     }
-    lines.push(`\\resumeSubHeadingListEnd`);
+    lines.push(`\\end{rSection}`);
   }
 
   // Skills
   if (doc.skills.length) {
-    lines.push(
-      ``, `%---------- SKILLS ----------`, `\\section{Skills \\& Interests}`,
-      `    \\begin{itemize}[leftmargin=0.15in, label={}]`,
-      `        \\small{`,
-      `        \\item ${doc.skills.map(tex).join(", ")}`,
-      `        }`,
-      `    \\end{itemize}`,
-    );
+    lines.push(``, `\\begin{rSection}{Skills \\& Interests}`, `\\begin{itemize}`);
+    for (const s of doc.skills) lines.push(`    \\item ${inlineTex(s)}`);
+    lines.push(`\\end{itemize}`, `\\end{rSection}`);
   }
 
   lines.push(``, `\\end{document}`);
@@ -361,10 +314,10 @@ export async function renderPdf(markdown: string): Promise<Buffer> {
   try {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "resume-pdf-"));
 
-    // Copy custom-commands.tex from the checked-in template
+    // Copy czresume.cls from the checked-in template (unique name avoids tectonic's CTAN cache)
     await fs.copyFile(
-      path.join(TEMPLATE_DIR, "custom-commands.tex"),
-      path.join(tmpDir, "custom-commands.tex"),
+      path.join(TEMPLATE_DIR, "czresume.cls"),
+      path.join(tmpDir, "czresume.cls"),
     );
 
     const texFile = path.join(tmpDir, "resume.tex");
@@ -377,13 +330,11 @@ export async function renderPdf(markdown: string): Promise<Buffer> {
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes("ENOENT") || msg.includes("not found")) {
-      console.warn("[render-pdf] tectonic not found — falling back to HTML renderer");
+    if (allowHtmlFallback()) {
+      console.warn("[render-pdf] tectonic unavailable — using HTML fallback");
       return renderHtmlFallback(markdown);
     }
-    console.error("[render-pdf] tectonic failed:", msg);
-    console.warn("[render-pdf] falling back to HTML renderer");
-    return renderHtmlFallback(markdown);
+    throw new Error(`LaTeX PDF render failed with ${TECTONIC}: ${msg}`);
   } finally {
     if (tmpDir) {
       fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
