@@ -302,9 +302,8 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
 
       {/* Content + optional preview panel */}
       <div className={`flex flex-1 min-w-0 ${showPreview ? "divide-x divide-gray-200" : ""}`}>
-
-      {/* Form content */}
-      <div className={`px-8 py-8 overflow-y-auto ${showPreview ? "w-1/2" : "flex-1"}`}>
+        {/* Form content */}
+        <div className={`px-8 py-8 overflow-y-auto ${showPreview ? "w-1/2" : "flex-1"}`}>
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
@@ -527,60 +526,59 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
           </div>
         )}
 
-        {/* Bottom save */}
-        <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
-          <button
-            onClick={save}
-            disabled={saving}
-            className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg disabled:opacity-50 transition-colors"
-          >
-            {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
-          </button>
+          {/* Bottom save */}
+          <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg disabled:opacity-50 transition-colors"
+            >
+              {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
+            </button>
+          </div>
         </div>
+
+        {/* PDF preview panel */}
+        {showPreview && (
+          <div className="w-1/2 flex flex-col bg-gray-50">
+            <div className="px-4 py-2.5 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
+              <span className="text-xs font-medium text-gray-600">PDF Preview</span>
+              <span className="text-xs text-gray-400">
+                {previewLoading
+                  ? "Compiling LaTeX…"
+                  : previewBlobUrl
+                  ? "Showing current form state"
+                  : ""}
+              </span>
+            </div>
+
+            <div className="flex-1 min-h-0">
+              {previewError && (
+                <div className="p-4 text-sm text-red-600 bg-red-50 border-b border-red-100">
+                  {previewError}
+                </div>
+              )}
+              {previewLoading && !previewBlobUrl && (
+                <div className="h-full flex flex-col items-center justify-center gap-3 text-gray-400">
+                  <svg className="animate-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                    <path d="M21 3v5h-5" />
+                  </svg>
+                  <span className="text-sm">Compiling LaTeX with Tectonic…</span>
+                  <span className="text-xs">This takes about 3–5 seconds</span>
+                </div>
+              )}
+              {previewBlobUrl && (
+                <iframe
+                  src={previewBlobUrl}
+                  className="w-full h-full border-0"
+                  title="Master resume PDF preview"
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* PDF preview panel */}
-      {showPreview && (
-        <div className="w-1/2 flex flex-col bg-gray-50">
-          <div className="px-4 py-2.5 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
-            <span className="text-xs font-medium text-gray-600">PDF Preview</span>
-            <span className="text-xs text-gray-400">
-              {previewLoading
-                ? "Compiling LaTeX…"
-                : previewBlobUrl
-                ? "Showing current form state"
-                : ""}
-            </span>
-          </div>
-
-          <div className="flex-1 min-h-0">
-            {previewError && (
-              <div className="p-4 text-sm text-red-600 bg-red-50 border-b border-red-100">
-                {previewError}
-              </div>
-            )}
-            {previewLoading && !previewBlobUrl && (
-              <div className="h-full flex flex-col items-center justify-center gap-3 text-gray-400">
-                <svg className="animate-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-                  <path d="M21 3v5h-5" />
-                </svg>
-                <span className="text-sm">Compiling LaTeX with Tectonic…</span>
-                <span className="text-xs">This takes about 3–5 seconds</span>
-              </div>
-            )}
-            {previewBlobUrl && (
-              <iframe
-                src={previewBlobUrl}
-                className="w-full h-full border-0"
-                title="Master resume PDF preview"
-              />
-            )}
-          </div>
-        </div>
-      )}
-
-      </div>{/* end content + preview wrapper */}
     </div>
   );
 }
