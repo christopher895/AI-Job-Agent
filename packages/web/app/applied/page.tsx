@@ -19,12 +19,21 @@ export default async function AppliedPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Applied Jobs</h1>
           <p className="text-sm text-gray-500 mt-1">Track all your job applications in one place.</p>
         </div>
-        <button className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 12h14" /><path d="M12 5v14" />
-          </svg>
-          Add Application
-        </button>
+        {process.env.GOOGLE_SHEETS_SPREADSHEET_ID && (
+          <a
+            href={`https://docs.google.com/spreadsheets/d/${process.env.GOOGLE_SHEETS_SPREADSHEET_ID}/edit`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+            Open in Google Sheets
+          </a>
+        )}
       </div>
 
       {error && (
