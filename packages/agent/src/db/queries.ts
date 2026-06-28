@@ -1,5 +1,6 @@
 import { pool } from "./pool";
 import { MasterResume, MasterResumeSchema } from "../ai/types";
+import { Preferences, FILTERS } from "../config";
 
 export type TailoredResumeRow = {
   id: string;
@@ -93,6 +94,27 @@ export async function getMasterResume(): Promise<MasterResume> {
 export async function updateMasterResume(data: MasterResume): Promise<void> {
   await pool.query(
     "UPDATE master_resume SET data = $1, updated_at = NOW() WHERE id = 1",
+    [JSON.stringify(data)]
+  );
+}
+
+// ── Preferences ───────────────────────────────────────────────────────────────
+
+export async function getPreferences(): Promise<Preferences> {
+  const { rows } = await pool.query("SELECT data FROM preferences WHERE id = 1");
+  if (rows.length === 0) {
+    await pool.query(
+      "INSERT INTO preferences (id, data) VALUES (1, $1) ON CONFLICT (id) DO NOTHING",
+      [JSON.stringify(FILTERS)]
+    );
+    return FILTERS;
+  }
+  return rows[0].data as Preferences;
+}
+
+export async function updatePreferences(data: Preferences): Promise<void> {
+  await pool.query(
+    "UPDATE preferences SET data = $1, updated_at = NOW() WHERE id = 1",
     [JSON.stringify(data)]
   );
 }
