@@ -21,9 +21,9 @@ export default function TailorForm({
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  async function handleUrlBlur() {
+  async function handleFetchJd() {
     const trimmed = jobUrl.trim();
-    if (!trimmed || jdText) return;
+    if (!trimmed) return;
     setFetchStatus("fetching");
     setError(null);
     try {
@@ -65,81 +65,111 @@ export default function TailorForm({
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-10">
-      <h1 className="text-xl font-semibold text-zinc-900 mb-8">Tailor Resume</h1>
+    <div className="px-8 py-8 max-w-2xl">
+      <div className="mb-8">
+        <h1 className="text-2xl font-semibold text-gray-900">Tailor a New Resume</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Paste a job link or description and we&apos;ll tailor your resume.
+        </p>
+      </div>
 
       <div className="flex flex-col gap-5">
+        {/* Job URL */}
         <div>
-          <label className="block text-sm font-medium text-zinc-700 mb-1">Job URL</label>
-          <input
-            type="url"
-            value={jobUrl}
-            onChange={(e) => setJobUrl(e.target.value)}
-            onBlur={handleUrlBlur}
-            placeholder="https://jobs.example.com/..."
-            className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 bg-white"
-          />
-          {fetchStatus === "fetching" && (
-            <p className="text-xs text-zinc-400 mt-1">Fetching job description…</p>
-          )}
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Job URL</label>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              value={jobUrl}
+              onChange={(e) => {
+                setJobUrl(e.target.value);
+                if (fetchStatus !== "idle") setFetchStatus("idle");
+              }}
+              onKeyDown={(e) => e.key === "Enter" && handleFetchJd()}
+              placeholder="https://boards.greenhouse.io/vercel/jobs/1234567"
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+            />
+            <button
+              onClick={handleFetchJd}
+              disabled={fetchStatus === "fetching" || !jobUrl.trim()}
+              className="flex-shrink-0 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white"
+            >
+              {fetchStatus === "fetching" ? "Fetching…" : "Fetch JD"}
+            </button>
+          </div>
           {fetchStatus === "done" && (
-            <p className="text-xs text-green-600 mt-1">Job description fetched.</p>
+            <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Job description fetched successfully
+            </p>
+          )}
+          {fetchStatus === "failed" && (
+            <p className="text-xs text-red-600 mt-1.5">
+              Could not fetch — paste the description below.
+            </p>
           )}
         </div>
 
+        {/* Job Title */}
         <div>
-          <label className="block text-sm font-medium text-zinc-700 mb-1">
-            Job description
-            <span className="text-zinc-400 font-normal ml-1">(or paste manually)</span>
-          </label>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Job Title</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Frontend Engineer"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+          />
+        </div>
+
+        {/* Company */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Company</label>
+          <input
+            type="text"
+            value={company}
+            onChange={(e) => setCompany(e.target.value)}
+            placeholder="Vercel"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+          />
+        </div>
+
+        {/* Job Description */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Job Description</label>
           <textarea
             value={jdText}
             onChange={(e) => setJdText(e.target.value)}
             placeholder="Paste the full job description here…"
-            rows={12}
-            className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 bg-white resize-y font-mono"
+            rows={10}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white resize-y"
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 mb-1">
-              Job title <span className="text-zinc-400 font-normal">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Software Engineer Intern"
-              className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 bg-white"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 mb-1">
-              Company <span className="text-zinc-400 font-normal">(optional)</span>
-            </label>
-            <input
-              type="text"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-              placeholder="Acme Corp"
-              className="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 bg-white"
-            />
-          </div>
-        </div>
-
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-md px-3 py-2 text-sm">
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2.5 text-sm">
             {error}
           </div>
         )}
 
+        {/* Generate button */}
         <button
           onClick={handleGenerate}
           disabled={generating}
-          className="bg-zinc-900 text-white text-sm px-5 py-2.5 rounded-md hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors w-fit"
+          className="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {generating ? "Generating… (this takes ~30s)" : "Generate tailored resume"}
+          {generating ? (
+            <>
+              <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              Generating… (this takes ~30s)
+            </>
+          ) : (
+            "Generate Tailored Resume ✨"
+          )}
         </button>
       </div>
     </div>

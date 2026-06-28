@@ -3,6 +3,7 @@ import { promisify } from "util";
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as os from "os";
+import type { MasterResume } from "./types";
 
 const execFileAsync = promisify(execFile);
 
@@ -73,6 +74,7 @@ type ParsedDoc = {
   summary: string;
   experience: ExpEntry[];
   projects: ProjEntry[];
+  extracurriculars?: ExpEntry[];
   skills: string[];
   education: EduEntry[];
 };
@@ -251,6 +253,25 @@ function buildLatex(doc: ParsedDoc): string {
     lines.push(`\\end{rSection}`);
   }
 
+  // Extracurriculars
+  if (doc.extracurriculars?.length) {
+    lines.push(``, `\\begin{rSection}{Extracurriculars}`, ``);
+    for (let idx = 0; idx < doc.extracurriculars.length; idx++) {
+      const e = doc.extracurriculars[idx];
+      lines.push(
+        `\\textbf{${tex(e.company)}} \\hfill {${tex(e.location)}}\\\\`,
+        `\\textbf{${tex(e.title)}} \\hfill {\\em ${tex(e.dates)}}`,
+      );
+      if (e.bullets.length) {
+        lines.push(`\\begin{itemize}`);
+        for (const b of e.bullets) lines.push(`    \\item ${tex(b)}`);
+        lines.push(`\\end{itemize}`);
+      }
+      if (idx < doc.extracurriculars.length - 1) lines.push(`\\vspace{0.5em}`, ``);
+    }
+    lines.push(``, `\\end{rSection}`);
+  }
+
   // Skills
   if (doc.skills.length) {
     lines.push(``, `\\begin{rSection}{Skills \\& Interests}`, `\\begin{itemize}`);
@@ -304,12 +325,9 @@ async function renderHtmlFallback(markdown: string): Promise<Buffer> {
   }
 }
 
-// ─── Main export ──────────────────────────────────────────────────────────────
+// ─── Shared LaTeX compilation ─────────────────────────────────────────────────
 
-export async function renderPdf(markdown: string): Promise<Buffer> {
-  const doc = parseMd(markdown);
-  const latexSrc = buildLatex(doc);
-
+async function compileTex(latexSrc: string): Promise<Buffer> {
   let tmpDir: string | null = null;
   try {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "resume-pdf-"));
@@ -322,12 +340,23 @@ export async function renderPdf(markdown: string): Promise<Buffer> {
 
     const texFile = path.join(tmpDir, "resume.tex");
     await fs.writeFile(texFile, latexSrc, "utf8");
-
     await execFileAsync(TECTONIC, [texFile], { cwd: tmpDir, timeout: 30_000 });
 
-    const pdfPath = path.join(tmpDir, "resume.pdf");
-    return await fs.readFile(pdfPath);
+    return await fs.readFile(path.join(tmpDir, "resume.pdf"));
+  } finally {
+    if (tmpDir) {
+      fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+}
 
+// ─── Main exports ─────────────────────────────────────────────────────────────
+
+export async function renderPdf(markdown: string): Promise<Buffer> {
+  const doc = parseMd(markdown);
+  const latexSrc = buildLatex(doc);
+  try {
+    return await compileTex(latexSrc);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (allowHtmlFallback()) {
@@ -335,9 +364,96 @@ export async function renderPdf(markdown: string): Promise<Buffer> {
       return renderHtmlFallback(markdown);
     }
     throw new Error(`LaTeX PDF render failed with ${TECTONIC}: ${msg}`);
-  } finally {
-    if (tmpDir) {
-      fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+// ─── Master Resume JSON → LaTeX → PDF ────────────────────────────────────────
+
+function masterResumeToDoc(mr: MasterResume): ParsedDoc {
+  const b = mr.basics;
+  const skillLines: string[] = [];
+  if (mr.skills.languages.length) skillLines.push(`**Languages:** ${mr.skills.languages.join(", ")}`);
+  if (mr.skills.frameworks.length) skillLines.push(`**Frameworks:** ${mr.skills.frameworks.join(", ")}`);
+  if (mr.skills.tools.length) skillLines.push(`**Tools:** ${mr.skills.tools.join(", ")}`);
+  if (mr.skills.interests.length) skillLines.push(`**Interests:** ${mr.skills.interests.join(", ")}`);
+
+  return {
+    name: b.name,
+    contact: {
+      location: b.location,
+      email: b.email,
+      phone: b.phone,
+      github: b.github,
+      portfolio: b.portfolio,
+    },
+    summary: b.summary,
+    experience: mr.experience.map((exp) => ({
+      company: exp.company,
+      title: exp.title,
+      location: exp.location,
+      dates: [exp.start, exp.end].filter(Boolean).join("--"),
+      bullets: exp.bullets.map((bullet) => bullet.text),
+    })),
+    projects: mr.projects.map((p) => ({
+      name: p.name,
+      tech: p.tech.join(", "),
+      dates: [p.start, p.end].filter(Boolean).join("--"),
+      link: p.link,
+      bullets: p.bullets.map((bullet) => bullet.text),
+    })),
+    extracurriculars: mr.extracurriculars.map((e) => ({
+      company: e.company,
+      title: e.title,
+      location: e.location,
+      dates: [e.start, e.end].filter(Boolean).join("--"),
+      bullets: e.bullets.map((bullet) => bullet.text),
+    })),
+    skills: skillLines,
+    education: mr.education.map((edu) => ({
+      school: edu.school,
+      degrees: edu.degrees.join(", "),
+      location: edu.location,
+      graduation: edu.graduation,
+      gpa: edu.gpa,
+    })),
+  };
+}
+
+export async function renderMasterResumePdf(mr: MasterResume): Promise<Buffer> {
+  const doc = masterResumeToDoc(mr);
+  const latexSrc = buildLatex(doc);
+  try {
+    return await compileTex(latexSrc);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (allowHtmlFallback()) {
+      console.warn("[render-pdf] tectonic unavailable — using HTML fallback for master resume");
+      const b = mr.basics;
+      const skills = [
+        mr.skills.languages.length ? `Languages: ${mr.skills.languages.join(", ")}` : "",
+        mr.skills.frameworks.length ? `Frameworks: ${mr.skills.frameworks.join(", ")}` : "",
+        mr.skills.tools.length ? `Tools: ${mr.skills.tools.join(", ")}` : "",
+        mr.skills.interests.length ? `Interests: ${mr.skills.interests.join(", ")}` : "",
+      ].filter(Boolean).map((s) => `- ${s}`);
+      const md = [
+        `# ${b.name}`,
+        `${b.location} · ${b.email} · ${b.phone}`,
+        b.summary,
+        `## Experience`,
+        ...mr.experience.flatMap((e) => [
+          `**${e.company}** — ${e.title} · ${e.start}--${e.end}`,
+          ...e.bullets.map((bullet) => `- ${bullet.text}`),
+        ]),
+        `## Projects`,
+        ...mr.projects.flatMap((p) => [
+          `**${p.name}** · ${p.tech.join(", ")}`,
+          ...p.bullets.map((bullet) => `- ${bullet.text}`),
+        ]),
+        `## Skills`,
+        ...skills,
+      ].join("\n");
+      return renderHtmlFallback(md);
     }
+    throw new Error(`LaTeX PDF render failed with ${TECTONIC}: ${msg}`);
   }
 }
