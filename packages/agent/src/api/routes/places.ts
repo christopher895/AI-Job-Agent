@@ -2,69 +2,93 @@ import { Router } from "express";
 
 const router = Router();
 
-type NominatimResult = {
-  display_name: string;
-  address: {
-    city?: string;
-    town?: string;
-    village?: string;
-    state?: string;
-    country?: string;
-    country_code?: string;
-  };
-};
+// Static list of major US cities — no external API needed.
+const US_CITIES = [
+  "Albuquerque, New Mexico",
+  "Anchorage, Alaska",
+  "Arlington, Texas",
+  "Atlanta, Georgia",
+  "Austin, Texas",
+  "Baltimore, Maryland",
+  "Baton Rouge, Louisiana",
+  "Birmingham, Alabama",
+  "Boise, Idaho",
+  "Boston, Massachusetts",
+  "Buffalo, New York",
+  "Charlotte, North Carolina",
+  "Chicago, Illinois",
+  "Cincinnati, Ohio",
+  "Cleveland, Ohio",
+  "Colorado Springs, Colorado",
+  "Columbus, Ohio",
+  "Dallas, Texas",
+  "Denver, Colorado",
+  "Des Moines, Iowa",
+  "Detroit, Michigan",
+  "Durham, North Carolina",
+  "El Paso, Texas",
+  "Fort Worth, Texas",
+  "Fresno, California",
+  "Honolulu, Hawaii",
+  "Houston, Texas",
+  "Indianapolis, Indiana",
+  "Jacksonville, Florida",
+  "Kansas City, Missouri",
+  "Las Vegas, Nevada",
+  "Long Beach, California",
+  "Los Angeles, California",
+  "Louisville, Kentucky",
+  "Madison, Wisconsin",
+  "Memphis, Tennessee",
+  "Mesa, Arizona",
+  "Miami, Florida",
+  "Milwaukee, Wisconsin",
+  "Minneapolis, Minnesota",
+  "Nashville, Tennessee",
+  "New Orleans, Louisiana",
+  "New York, New York",
+  "Newark, New Jersey",
+  "Norfolk, Virginia",
+  "Oakland, California",
+  "Oklahoma City, Oklahoma",
+  "Omaha, Nebraska",
+  "Orlando, Florida",
+  "Philadelphia, Pennsylvania",
+  "Phoenix, Arizona",
+  "Pittsburgh, Pennsylvania",
+  "Portland, Oregon",
+  "Raleigh, North Carolina",
+  "Richmond, Virginia",
+  "Riverside, California",
+  "Sacramento, California",
+  "Salt Lake City, Utah",
+  "San Antonio, Texas",
+  "San Diego, California",
+  "San Francisco, California",
+  "San Jose, California",
+  "Seattle, Washington",
+  "St. Louis, Missouri",
+  "Tampa, Florida",
+  "Tucson, Arizona",
+  "Tulsa, Oklahoma",
+  "Virginia Beach, Virginia",
+  "Washington, DC",
+  "Wichita, Kansas",
+].sort();
 
-function formatPlace(r: NominatimResult): { name: string } | null {
-  const a = r.address;
-  const city = a.city ?? a.town ?? a.village ?? "";
-  const state = a.state ?? "";
-  if (!city || !state) return null;
-  return { name: `${city}, ${state}` };
-}
-
-router.get("/", async (req, res) => {
-  const q = (req.query.q as string ?? "").trim();
+router.get("/", (req, res) => {
+  const q = ((req.query.q as string) ?? "").trim().toLowerCase();
   if (q.length < 2) {
     res.json([]);
     return;
   }
 
-  try {
-    const url = new URL("https://nominatim.openstreetmap.org/search");
-    url.searchParams.set("q", q);
-    url.searchParams.set("format", "json");
-    url.searchParams.set("addressdetails", "1");
-    url.searchParams.set("limit", "8");
-    url.searchParams.set("featuretype", "city");
-    url.searchParams.set("countrycodes", "us");
+  const matches = US_CITIES
+    .filter((city) => city.toLowerCase().startsWith(q))
+    .slice(0, 6)
+    .map((name) => ({ name }));
 
-    const response = await fetch(url.toString(), {
-      headers: {
-        "User-Agent": "AI-Job-Agent/1.0 (zhanggopher895@gmail.com)",
-        "Accept-Language": "en",
-      },
-    });
-
-    if (!response.ok) {
-      res.status(502).json({ error: "Geocoding service unavailable" });
-      return;
-    }
-
-    const results: NominatimResult[] = await response.json();
-    const qLower = q.toLowerCase();
-    const places = results
-      .map(formatPlace)
-      .filter((p): p is { name: string } => p !== null)
-      // Only keep results where the city name actually starts with what the user typed
-      .filter((p) => p.name.toLowerCase().split(",")[0].trim().startsWith(qLower))
-      .filter((p, i, arr) => arr.findIndex((x) => x.name === p.name) === i)
-      .slice(0, 6);
-
-    res.json(places);
-  } catch (err) {
-    console.error("[places] Nominatim error:", err);
-    res.status(502).json({ error: "Geocoding service unavailable" });
-  }
+  res.json(matches);
 });
 
 export default router;
