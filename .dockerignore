@@ -1,0 +1,16 @@
+.git
+.github
+.husky
+node_modules
+packages/agent/node_modules
+packages/web/node_modules
+packages/agent/dist
+packages/web/.next
+packages/web/node_modules
+.env
+.env.local
+packages/web/.env.local
+Resume_Template/test-render*.pdf
+Resume_Template/test-render*.png
+*.log
+.DS_Store
