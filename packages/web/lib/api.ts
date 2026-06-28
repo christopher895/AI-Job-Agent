@@ -160,7 +160,7 @@ export const api = {
   patchApplied: (id: string, status: string) =>
     request<AppliedJob>("PATCH", `/applied/${id}`, { status }),
   getPlaces: (q: string) =>
-    request<{ name: string; displayName: string }[]>("GET", `/places?q=${encodeURIComponent(q)}`),
+    request<{ name: string }[]>("GET", `/places?q=${encodeURIComponent(q)}`),
   getPreferences: () => request<Preferences>("GET", "/preferences"),
   putPreferences: (data: Preferences) => request<{ updated: boolean }>("PUT", "/preferences", data),
   pdfUrl: (id: string) => `${API}/resume/${id}/pdf`,

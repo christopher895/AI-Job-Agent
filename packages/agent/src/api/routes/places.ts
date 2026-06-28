@@ -14,13 +14,12 @@ type NominatimResult = {
   };
 };
 
-function formatPlace(r: NominatimResult): { name: string; displayName: string } {
+function formatPlace(r: NominatimResult): { name: string } | null {
   const a = r.address;
   const city = a.city ?? a.town ?? a.village ?? "";
-  const secondary =
-    a.country_code === "us" ? a.state ?? a.country ?? "" : a.country ?? "";
-  const displayName = [city, secondary].filter(Boolean).join(", ");
-  return { name: city.toLowerCase(), displayName };
+  const state = a.state ?? "";
+  if (!city || !state) return null;
+  return { name: `${city}, ${state}` };
 }
 
 router.get("/", async (req, res) => {
@@ -35,8 +34,9 @@ router.get("/", async (req, res) => {
     url.searchParams.set("q", q);
     url.searchParams.set("format", "json");
     url.searchParams.set("addressdetails", "1");
-    url.searchParams.set("limit", "6");
+    url.searchParams.set("limit", "8");
     url.searchParams.set("featuretype", "city");
+    url.searchParams.set("countrycodes", "us");
 
     const response = await fetch(url.toString(), {
       headers: {
@@ -53,8 +53,9 @@ router.get("/", async (req, res) => {
     const results: NominatimResult[] = await response.json();
     const places = results
       .map(formatPlace)
-      .filter((p) => p.name.length > 0)
-      .filter((p, i, arr) => arr.findIndex((x) => x.name === p.name) === i);
+      .filter((p): p is { name: string } => p !== null)
+      .filter((p, i, arr) => arr.findIndex((x) => x.name === p.name) === i)
+      .slice(0, 6);
 
     res.json(places);
   } catch (err) {

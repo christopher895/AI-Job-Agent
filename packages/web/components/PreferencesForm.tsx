@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { api, Preferences } from "../lib/api";
 
-type Place = { name: string; displayName: string };
+type Place = { name: string };
 
 function Label({ children }: { children: React.ReactNode }) {
   return <label className="block text-xs font-medium text-gray-600 mb-1">{children}</label>;
@@ -96,9 +96,9 @@ function LocationTagInput({
   }, []);
 
   function addTag(name: string) {
-    const lower = name.toLowerCase().trim();
-    if (lower && !tags.map((t) => t.toLowerCase()).includes(lower)) {
-      onChange([...tags, lower]);
+    const val = name.trim();
+    if (val && !tags.map((t) => t.toLowerCase()).includes(val.toLowerCase())) {
+      onChange([...tags, val]);
     }
     setInput("");
     setSuggestions([]);
@@ -116,7 +116,7 @@ function LocationTagInput({
 
     // "remote" is always valid — no need to geocode it
     if (REMOTE_NAMES.has(trimmed.toLowerCase())) {
-      setSuggestions([{ name: "remote", displayName: "Remote / Anywhere" }]);
+      setSuggestions([{ name: "Remote" }]);
       return;
     }
 
@@ -189,14 +189,11 @@ function LocationTagInput({
                 type="button"
                 onMouseDown={(e) => { e.preventDefault(); addTag(place.name); }}
                 onMouseEnter={() => setActiveIdx(i)}
-                className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${
+                className={`w-full text-left px-3 py-2 text-sm transition-colors ${
                   i === activeIdx ? "bg-violet-50 text-violet-700" : "text-gray-700 hover:bg-gray-50"
                 }`}
               >
-                <span className="font-medium capitalize">{place.name}</span>
-                <span className={`text-xs ${i === activeIdx ? "text-violet-500" : "text-gray-400"}`}>
-                  {place.displayName}
-                </span>
+                {place.name}
               </button>
             </li>
           ))}
