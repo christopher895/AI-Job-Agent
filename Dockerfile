@@ -28,7 +28,6 @@ RUN node_modules/.bin/playwright install-deps chromium \
 COPY packages/agent/src ./packages/agent/src
 COPY packages/agent/tsconfig.json ./packages/agent/
 COPY Resume_Template ./Resume_Template
-COPY tsconfig.json ./
 
 RUN npm run build --workspace=packages/agent
 
