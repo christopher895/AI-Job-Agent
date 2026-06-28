@@ -1,6 +1,8 @@
 "use client";
-import { useState, KeyboardEvent } from "react";
+import { useState, useRef, useEffect, KeyboardEvent } from "react";
 import { api, Preferences } from "../lib/api";
+
+type Place = { name: string; displayName: string };
 
 function Label({ children }: { children: React.ReactNode }) {
   return <label className="block text-xs font-medium text-gray-600 mb-1">{children}</label>;
@@ -12,6 +14,15 @@ function SectionHeader({ title, description }: { title: string; description?: st
       <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-widest">{title}</h2>
       {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
     </div>
+  );
+}
+
+function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 text-xs px-2 py-0.5 rounded-md font-medium">
+      {label}
+      <button type="button" onClick={onRemove} className="text-violet-400 hover:text-violet-700 leading-none">×</button>
+    </span>
   );
 }
 
@@ -35,30 +46,14 @@ function TagInput({
   }
 
   function onKey(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      add();
-    } else if (e.key === "Backspace" && input === "" && tags.length > 0) {
-      onChange(tags.slice(0, -1));
-    }
+    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); add(); }
+    else if (e.key === "Backspace" && input === "" && tags.length > 0) onChange(tags.slice(0, -1));
   }
 
   return (
     <div className="border border-gray-200 rounded-lg px-3 py-2 bg-white flex flex-wrap gap-1.5 min-h-[40px] focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-transparent">
       {tags.map((tag) => (
-        <span
-          key={tag}
-          className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 text-xs px-2 py-0.5 rounded-md font-medium"
-        >
-          {tag}
-          <button
-            type="button"
-            onClick={() => onChange(tags.filter((t) => t !== tag))}
-            className="text-violet-400 hover:text-violet-700 leading-none"
-          >
-            ×
-          </button>
-        </span>
+        <Chip key={tag} label={tag} onRemove={() => onChange(tags.filter((t) => t !== tag))} />
       ))}
       <input
         type="text"
@@ -69,6 +64,144 @@ function TagInput({
         placeholder={tags.length === 0 ? placeholder : ""}
         className="flex-1 min-w-[100px] text-sm outline-none bg-transparent placeholder-gray-400"
       />
+    </div>
+  );
+}
+
+const REMOTE_NAMES = new Set(["remote", "anywhere", "remote / anywhere"]);
+
+function LocationTagInput({
+  tags,
+  onChange,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+}) {
+  const [input, setInput] = useState("");
+  const [suggestions, setSuggestions] = useState<Place[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const open = suggestions.length > 0;
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setSuggestions([]);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  function addTag(name: string) {
+    const lower = name.toLowerCase().trim();
+    if (lower && !tags.map((t) => t.toLowerCase()).includes(lower)) {
+      onChange([...tags, lower]);
+    }
+    setInput("");
+    setSuggestions([]);
+    setActiveIdx(-1);
+  }
+
+  function handleInputChange(val: string) {
+    setInput(val);
+    setActiveIdx(-1);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    const trimmed = val.trim();
+    if (trimmed.length < 2) { setSuggestions([]); return; }
+
+    // "remote" is always valid — no need to geocode it
+    if (REMOTE_NAMES.has(trimmed.toLowerCase())) {
+      setSuggestions([{ name: "remote", displayName: "Remote / Anywhere" }]);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const results = await api.getPlaces(trimmed);
+        setSuggestions(results);
+      } catch {
+        setSuggestions([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 320);
+  }
+
+  function onKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.max(i - 1, -1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (open && activeIdx >= 0) {
+        addTag(suggestions[activeIdx].name);
+      } else if (open && suggestions.length > 0) {
+        addTag(suggestions[0].name);
+      } else {
+        addTag(input);
+      }
+    } else if (e.key === "Escape") {
+      setSuggestions([]);
+      setActiveIdx(-1);
+    } else if (e.key === "Backspace" && input === "" && tags.length > 0) {
+      onChange(tags.slice(0, -1));
+    }
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="border border-gray-200 rounded-lg px-3 py-2 bg-white flex flex-wrap gap-1.5 min-h-[40px] focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-transparent">
+        {tags.map((tag) => (
+          <Chip key={tag} label={tag} onRemove={() => onChange(tags.filter((t) => t !== tag))} />
+        ))}
+        <div className="flex-1 min-w-[140px] flex items-center gap-1.5">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onKeyDown={onKey}
+            placeholder={tags.length === 0 ? `Type a city or "remote"…` : ""}
+            className="flex-1 text-sm outline-none bg-transparent placeholder-gray-400"
+            autoComplete="off"
+          />
+          {loading && (
+            <svg className="animate-spin flex-shrink-0 text-gray-300" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+            </svg>
+          )}
+        </div>
+      </div>
+
+      {open && (
+        <ul className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+          {suggestions.map((place, i) => (
+            <li key={place.name}>
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); addTag(place.name); }}
+                onMouseEnter={() => setActiveIdx(i)}
+                className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${
+                  i === activeIdx ? "bg-violet-50 text-violet-700" : "text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                <span className="font-medium capitalize">{place.name}</span>
+                <span className={`text-xs ${i === activeIdx ? "text-violet-500" : "text-gray-400"}`}>
+                  {place.displayName}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -129,13 +262,12 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
         <div className="border border-gray-100 rounded-xl p-5 bg-white">
           <SectionHeader
             title="Target Locations"
-            description="Jobs must be in one of these cities, or remote/unspecified."
+            description="Jobs must be in one of these cities, or remote/unspecified. Select from suggestions to validate."
           />
-          <Label>Cities (press Enter or comma to add)</Label>
-          <TagInput
+          <Label>Cities</Label>
+          <LocationTagInput
             tags={prefs.targetLocations}
             onChange={(v) => set("targetLocations", v)}
-            placeholder="new york, seattle, remote…"
           />
         </div>
 
