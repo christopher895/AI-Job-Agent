@@ -79,6 +79,14 @@ export async function initSchema() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS preferences (
+      id         INT PRIMARY KEY DEFAULT 1,
+      data       JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS applied_jobs (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       company    TEXT NOT NULL,
@@ -107,6 +115,7 @@ export async function initSchema() {
   `);
 
   await seedMasterResume();
+  await seedPreferences();
 
   console.log("Schema initialized.");
 }
@@ -116,5 +125,13 @@ async function seedMasterResume() {
   await pool.query(
     `INSERT INTO master_resume (id, data) VALUES (1, $1) ON CONFLICT (id) DO NOTHING`,
     [JSON.stringify(MASTER_RESUME)]
+  );
+}
+
+async function seedPreferences() {
+  const { FILTERS } = await import("../config");
+  await pool.query(
+    `INSERT INTO preferences (id, data) VALUES (1, $1) ON CONFLICT (id) DO NOTHING`,
+    [JSON.stringify(FILTERS)]
   );
 }
