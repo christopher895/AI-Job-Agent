@@ -364,6 +364,7 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
               <option value="applied">Applied</option>
               <option value="interviewing">Interviewing</option>
               <option value="assessment">Assessment</option>
+              <option value="no_response">No Response</option>
               <option value="offer">Offer</option>
               <option value="rejected">Rejected</option>
             </select>
