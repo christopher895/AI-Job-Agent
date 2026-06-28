@@ -17,7 +17,7 @@ export default async function ResumePage({ params }: Props) {
   }
 
   return (
-    <div className="flex flex-col" style={{ minHeight: "calc(100vh - 49px)" }}>
+    <div className="h-full flex flex-col">
       <ResumeEditor resume={resume} />
     </div>
   );
