@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 COPY packages/web/package.json ./packages/web/
+COPY packages/agent/package.json ./packages/agent/
 
 RUN npm ci
 

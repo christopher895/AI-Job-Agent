@@ -226,7 +226,6 @@ Both services share the same Railway Postgres and Redis instances. Set `WEB_URL`
 
 **generate → critique → revise loop** — A single tailoring pass produces inconsistent quality. Running a separate critic model that scores the draft and returns a fix list, then revising, reliably pushes output quality above a useful threshold.
 
-**czresume.cls over a generic class** — `resume` is a real CTAN package; tectonic would download it instead of using the local file. A uniquely named class guarantees the local template is always used.
 
 **BullMQ over direct async calls** — Multiple jobs dropping simultaneously need concurrent processing without race conditions. BullMQ's Redis-backed queue handles per-domain concurrency limits cleanly.
 
