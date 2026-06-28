@@ -154,7 +154,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               ...exp,
               bullets: [
                 ...exp.bullets,
-                { id: `new-${Date.now()}-${Math.random()}`, text: "", tech: [], metrics: [], tags: [] },
+                { id: crypto.randomUUID(), text: "", tech: [], metrics: [], tags: [] },
               ],
             }
       ),
@@ -198,7 +198,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               ...p,
               bullets: [
                 ...p.bullets,
-                { id: `new-${Date.now()}-${Math.random()}`, text: "", tech: [], metrics: [], tags: [] },
+                { id: crypto.randomUUID(), text: "", tech: [], metrics: [], tags: [] },
               ],
             }
       ),
@@ -242,7 +242,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               ...e,
               bullets: [
                 ...e.bullets,
-                { id: `new-${Date.now()}-${Math.random()}`, text: "", tech: [], metrics: [], tags: [] },
+                { id: crypto.randomUUID(), text: "", tech: [], metrics: [], tags: [] },
               ],
             }
       ),
@@ -386,7 +386,8 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white resize-none"
               />
             </div>
-            <p className="text-xs text-green-600 mt-4">&#x2022; Last saved recently</p>
+            {saved && <p className="text-xs text-green-600 mt-4">&#x2022; Saved</p>}
+            {saving && <p className="text-xs text-gray-400 mt-4">&#x2022; Saving…</p>}
           </div>
         )}
 

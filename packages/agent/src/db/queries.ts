@@ -13,6 +13,8 @@ export type TailoredResumeRow = {
   updated_at: Date;
 };
 
+export type ResumeListItem = Omit<TailoredResumeRow, "jd_text" | "markdown">;
+
 export type AppliedJobRow = {
   id: string;
   company: string;
@@ -124,9 +126,9 @@ export async function getTailoredResume(id: string): Promise<TailoredResumeRow |
   return rows[0] ?? null;
 }
 
-export async function listTailoredResumes(): Promise<TailoredResumeRow[]> {
+export async function listTailoredResumes(): Promise<ResumeListItem[]> {
   const { rows } = await pool.query(
-    `SELECT id, job_title, company, job_url, jd_text, markdown, critic_score, created_at, updated_at
+    `SELECT id, job_title, company, job_url, critic_score, created_at, updated_at
      FROM tailored_resumes ORDER BY created_at DESC`
   );
   return rows;

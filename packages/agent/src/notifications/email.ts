@@ -62,8 +62,9 @@ export async function sendJobEmail(jobs: JobListing[]) {
       ? `New internship: ${jobs[0].title} at ${jobs[0].company}`
       : `${jobs.length} new internships detected`;
 
+  const from = process.env.EMAIL_FROM ?? "Job Agent <onboarding@resend.dev>";
   await getResend().emails.send({
-    from: "Job Agent <onboarding@resend.dev>",
+    from,
     to: toEmail,
     subject,
     html: buildEmailHtml(jobs),
