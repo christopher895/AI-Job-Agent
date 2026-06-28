@@ -8,7 +8,6 @@ COPY packages/web/package.json ./packages/web/
 RUN npm ci
 
 COPY packages/web ./packages/web
-COPY tsconfig.json ./
 
 RUN npm run build --workspace=packages/web
 
