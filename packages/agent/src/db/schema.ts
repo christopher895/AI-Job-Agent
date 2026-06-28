@@ -1,8 +1,6 @@
 import { pool } from "./pool";
 
 export async function initSchema() {
-  await pool.query(`CREATE EXTENSION IF NOT EXISTS vector`);
-
   await pool.query(`
     CREATE TABLE IF NOT EXISTS companies (
       id          SERIAL PRIMARY KEY,
@@ -58,16 +56,6 @@ export async function initSchema() {
   `);
 
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS resume_chunks (
-      id         SERIAL PRIMARY KEY,
-      content    TEXT NOT NULL,
-      embedding  vector(1536),
-      chunk_type TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-
-  await pool.query(`
     CREATE TABLE IF NOT EXISTS tailored_resumes (
       id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       job_title    TEXT,
@@ -110,6 +98,12 @@ export async function initSchema() {
     ALTER TABLE applied_jobs DROP CONSTRAINT IF EXISTS applied_jobs_status_check;
     ALTER TABLE applied_jobs ADD CONSTRAINT applied_jobs_status_check
       CHECK (status IN ('applied','interviewing','rejected','offer','assessment','no_response'));
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_tailored_resumes_created ON tailored_resumes(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_snapshots_company_scraped ON snapshots(company_id, scraped_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_applied_jobs_applied ON applied_jobs(applied_at DESC);
   `);
 
   await seedMasterResume();

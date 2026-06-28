@@ -22,8 +22,18 @@ async function scrapeCompany(company: Company): Promise<JobListing[]> {
   }
 }
 
+function getCareerUrl(company: Company): string {
+  switch (company.platform) {
+    case "greenhouse": return `https://boards.greenhouse.io/${company.slug}`;
+    case "ashby":      return `https://jobs.ashbyhq.com/${company.slug}`;
+    case "lever":      return `https://jobs.lever.co/${company.slug}`;
+    case "amazon":     return "https://www.amazon.jobs/";
+    default:           return `https://${company.platform}/${company.slug}`;
+  }
+}
+
 async function processCompany(company: Company): Promise<JobListing[]> {
-  const record = await getOrCreateCompany(company.name, `https://${company.platform}/${company.slug}`, company.platform);
+  const record = await getOrCreateCompany(company.name, getCareerUrl(company), company.platform);
 
   const currentJobs = await scrapeCompany(company);
 
