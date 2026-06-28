@@ -82,6 +82,7 @@ function LocationTagInput({
   const [loading, setLoading] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const generationRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const open = suggestions.length > 0;
 
@@ -121,14 +122,15 @@ function LocationTagInput({
     }
 
     debounceRef.current = setTimeout(async () => {
+      const gen = ++generationRef.current;
       setLoading(true);
       try {
         const results = await api.getPlaces(trimmed);
-        setSuggestions(results);
+        if (gen === generationRef.current) setSuggestions(results);
       } catch {
-        setSuggestions([]);
+        if (gen === generationRef.current) setSuggestions([]);
       } finally {
-        setLoading(false);
+        if (gen === generationRef.current) setLoading(false);
       }
     }, 320);
   }

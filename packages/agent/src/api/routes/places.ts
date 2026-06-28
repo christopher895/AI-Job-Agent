@@ -51,9 +51,12 @@ router.get("/", async (req, res) => {
     }
 
     const results: NominatimResult[] = await response.json();
+    const qLower = q.toLowerCase();
     const places = results
       .map(formatPlace)
       .filter((p): p is { name: string } => p !== null)
+      // Only keep results where the city name actually starts with what the user typed
+      .filter((p) => p.name.toLowerCase().split(",")[0].trim().startsWith(qLower))
       .filter((p, i, arr) => arr.findIndex((x) => x.name === p.name) === i)
       .slice(0, 6);
 
