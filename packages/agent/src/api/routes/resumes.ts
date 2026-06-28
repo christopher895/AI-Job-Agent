@@ -87,7 +87,12 @@ router.post("/resume/:id/email", async (req, res) => {
     }
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) { res.status(500).json({ error: "RESEND_API_KEY is not configured" }); return; }
+  const toEmail = process.env.YOUR_EMAIL;
+  if (!toEmail) { res.status(500).json({ error: "YOUR_EMAIL is not configured" }); return; }
+
+  const resend = new Resend(resendKey);
   const subject =
     row.job_title && row.company
       ? `${row.company} — ${row.job_title} resume`
@@ -95,7 +100,7 @@ router.post("/resume/:id/email", async (req, res) => {
 
   await resend.emails.send({
     from: "Job Agent <onboarding@resend.dev>",
-    to: process.env.YOUR_EMAIL!,
+    to: toEmail,
     subject,
     html: `<p>Tailored resume for <strong>${row.job_title ?? "this role"}</strong> at <strong>${row.company ?? "this company"}</strong>.</p>`,
     attachments: [{ filename: `${subject}.pdf`, content: pdf }],
