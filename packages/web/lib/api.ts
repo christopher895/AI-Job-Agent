@@ -103,6 +103,19 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return res.json() as Promise<T>;
 }
 
+async function requestBlob(method: string, path: string, body?: unknown): Promise<Blob> {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.blob();
+}
+
 export const api = {
   listResumes: () => request<ResumeListItem[]>("GET", "/resumes"),
   getResume: (id: string) => request<Resume>("GET", `/resume/${id}`),
@@ -138,4 +151,7 @@ export const api = {
   patchApplied: (id: string, status: string) =>
     request<AppliedJob>("PATCH", `/applied/${id}`, { status }),
   pdfUrl: (id: string) => `${API}/resume/${id}/pdf`,
+  getPdfBlob: (id: string) => requestBlob("GET", `/resume/${id}/pdf`),
+  previewMasterResumePdf: (data: MasterResume) =>
+    requestBlob("POST", "/master-resume/preview-pdf", data),
 };

@@ -1,9 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { api, MasterResume, ExperienceEntry, ProjectEntry, EducationEntry } from "../lib/api";
 
+const SECTIONS = ["Basics", "Experience", "Projects", "Skills", "Education", "Extracurriculars"] as const;
+type Section = (typeof SECTIONS)[number];
+
 function Label({ children }: { children: React.ReactNode }) {
-  return <label className="block text-xs font-medium text-zinc-600 mb-1">{children}</label>;
+  return <label className="block text-xs font-medium text-gray-600 mb-1">{children}</label>;
 }
 
 function TextInput({
@@ -21,17 +24,16 @@ function TextInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full border border-zinc-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 bg-white"
+      className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
     />
   );
 }
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <div className="flex items-center gap-3 mb-4 mt-8">
-      <h2 className="text-sm font-semibold text-zinc-900 uppercase tracking-widest">{title}</h2>
-      <div className="flex-1 border-t border-zinc-200" />
-    </div>
+    <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-widest mb-4 mt-8 first:mt-0">
+      {title}
+    </h2>
   );
 }
 
@@ -54,11 +56,11 @@ function BulletList({
             value={b.text}
             onChange={(e) => onUpdate(i, e.target.value)}
             rows={2}
-            className="flex-1 border border-zinc-200 rounded px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-zinc-400 resize-none"
+            className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
           />
           <button
             onClick={() => onRemove(i)}
-            className="text-zinc-300 hover:text-red-400 text-lg leading-none self-start pt-1.5 transition-colors"
+            className="text-gray-300 hover:text-red-400 text-lg leading-none self-start pt-1.5 transition-colors"
             title="Remove bullet"
           >
             ×
@@ -67,7 +69,7 @@ function BulletList({
       ))}
       <button
         onClick={onAdd}
-        className="text-xs text-zinc-400 hover:text-zinc-600 text-left mt-1 transition-colors"
+        className="text-xs text-gray-400 hover:text-violet-600 text-left mt-1 transition-colors"
       >
         + Add bullet
       </button>
@@ -80,6 +82,12 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<Section>("Basics");
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const prevBlobRef = useRef<string | null>(null);
 
   async function save() {
     setSaving(true);
@@ -92,6 +100,23 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function generatePreview() {
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setShowPreview(true);
+    try {
+      const blob = await api.previewMasterResumePdf(resume);
+      const url = URL.createObjectURL(blob);
+      if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
+      prevBlobRef.current = url;
+      setPreviewBlobUrl(url);
+    } catch (e) {
+      setPreviewError(e instanceof Error ? e.message : "PDF generation failed.");
+    } finally {
+      setPreviewLoading(false);
     }
   }
 
@@ -109,7 +134,6 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ),
     }));
   }
-
   function setExpBullet(ei: number, bi: number, text: string) {
     setResume((prev) => ({
       ...prev,
@@ -120,7 +144,6 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ),
     }));
   }
-
   function addExpBullet(ei: number) {
     setResume((prev) => ({
       ...prev,
@@ -137,7 +160,6 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ),
     }));
   }
-
   function removeExpBullet(ei: number, bi: number) {
     setResume((prev) => ({
       ...prev,
@@ -156,7 +178,6 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ),
     }));
   }
-
   function setProjBullet(pi: number, bi: number, text: string) {
     setResume((prev) => ({
       ...prev,
@@ -167,7 +188,6 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ),
     }));
   }
-
   function addProjBullet(pi: number) {
     setResume((prev) => ({
       ...prev,
@@ -184,7 +204,6 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ),
     }));
   }
-
   function removeProjBullet(pi: number, bi: number) {
     setResume((prev) => ({
       ...prev,
@@ -203,7 +222,6 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ),
     }));
   }
-
   function setExtraBullet(ei: number, bi: number, text: string) {
     setResume((prev) => ({
       ...prev,
@@ -214,7 +232,6 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ),
     }));
   }
-
   function addExtraBullet(ei: number) {
     setResume((prev) => ({
       ...prev,
@@ -231,7 +248,6 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ),
     }));
   }
-
   function removeExtraBullet(ei: number, bi: number) {
     setResume((prev) => ({
       ...prev,
@@ -242,11 +258,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   }
 
   // ── Education ────────────────────────────────────────────────────
-  function setEduField(
-    idx: number,
-    field: keyof EducationEntry,
-    value: string | string[]
-  ) {
+  function setEduField(idx: number, field: keyof EducationEntry, value: string | string[]) {
     setResume((prev) => ({
       ...prev,
       education: prev.education.map((e, i) =>
@@ -261,10 +273,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ...prev,
       skills: {
         ...prev.skills,
-        [field]: csv
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
+        [field]: csv.split(",").map((s) => s.trim()).filter(Boolean),
       },
     }));
   }
@@ -272,250 +281,306 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   const basics = resume.basics;
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-10">
-      {/* Top bar */}
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-xl font-semibold text-zinc-900">Master Resume</h1>
-        <div className="flex items-center gap-3">
-          {error && <span className="text-xs text-red-600">{error}</span>}
+    <div className="flex h-full">
+      {/* Section tabs */}
+      <div className="w-44 flex-shrink-0 border-r border-gray-200 bg-white px-3 py-6">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">Sections</p>
+        {SECTIONS.map((s) => (
+          <button
+            key={s}
+            onClick={() => setActiveSection(s)}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-0.5 transition-colors ${
+              activeSection === s
+                ? "bg-violet-50 text-violet-700 font-medium"
+                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            }`}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {/* Content + optional preview panel */}
+      <div className={`flex flex-1 min-w-0 ${showPreview ? "divide-x divide-gray-200" : ""}`}>
+
+      {/* Form content */}
+      <div className={`px-8 py-8 overflow-y-auto ${showPreview ? "w-1/2" : "flex-1"}`}>
+        {/* Header */}
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">Master Resume</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              This is the source of truth used to generate all tailored resumes.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {error && <span className="text-xs text-red-600">{error}</span>}
+            <button
+              onClick={generatePreview}
+              disabled={previewLoading}
+              className={`flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border transition-colors font-medium ${
+                showPreview
+                  ? "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
+                  : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              } disabled:opacity-50`}
+            >
+              <svg
+                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                className={previewLoading ? "animate-spin" : ""}
+              >
+                {previewLoading ? (
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                ) : (
+                  <>
+                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </>
+                )}
+              </svg>
+              {previewLoading ? "Rendering…" : showPreview ? "Refresh PDF" : "Preview PDF"}
+            </button>
+            {showPreview && (
+              <button
+                onClick={() => setShowPreview(false)}
+                className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 transition-colors"
+                title="Close preview"
+              >
+                ✕
+              </button>
+            )}
+            <button
+              onClick={save}
+              disabled={saving}
+              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
+              {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
+            </button>
+          </div>
+        </div>
+
+        {/* ── Basics ── */}
+        {activeSection === "Basics" && (
+          <div>
+            <SectionHeader title="Basics" />
+            <div className="grid grid-cols-2 gap-4">
+              {(["name", "location", "email", "phone", "github", "linkedin", "portfolio"] as const).map(
+                (field) => (
+                  <div key={field}>
+                    <Label>{field.charAt(0).toUpperCase() + field.slice(1)}</Label>
+                    <TextInput value={basics[field]} onChange={(v) => setBasics(field, v)} />
+                  </div>
+                )
+              )}
+            </div>
+            <div className="mt-4">
+              <Label>Summary</Label>
+              <textarea
+                value={basics.summary}
+                onChange={(e) => setBasics("summary", e.target.value)}
+                rows={4}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white resize-none"
+              />
+            </div>
+            <p className="text-xs text-green-600 mt-4">&#x2022; Last saved recently</p>
+          </div>
+        )}
+
+        {/* ── Experience ── */}
+        {activeSection === "Experience" && (
+          <div>
+            <SectionHeader title="Experience" />
+            {resume.experience.map((exp, ei) => (
+              <div key={exp.id} className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div><Label>Company</Label><TextInput value={exp.company} onChange={(v) => setExpField(ei, "company", v)} /></div>
+                  <div><Label>Title</Label><TextInput value={exp.title} onChange={(v) => setExpField(ei, "title", v)} /></div>
+                  <div><Label>Location</Label><TextInput value={exp.location} onChange={(v) => setExpField(ei, "location", v)} /></div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><Label>Start</Label><TextInput value={exp.start} onChange={(v) => setExpField(ei, "start", v)} /></div>
+                    <div><Label>End</Label><TextInput value={exp.end} onChange={(v) => setExpField(ei, "end", v)} /></div>
+                  </div>
+                </div>
+                <Label>Bullets</Label>
+                <BulletList
+                  bullets={exp.bullets}
+                  onUpdate={(bi, text) => setExpBullet(ei, bi, text)}
+                  onAdd={() => addExpBullet(ei)}
+                  onRemove={(bi) => removeExpBullet(ei, bi)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Projects ── */}
+        {activeSection === "Projects" && (
+          <div>
+            <SectionHeader title="Projects" />
+            {resume.projects.map((proj, pi) => (
+              <div key={proj.id} className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div><Label>Name</Label><TextInput value={proj.name} onChange={(v) => setProjField(pi, "name", v)} /></div>
+                  <div>
+                    <Label>Tech (comma-separated)</Label>
+                    <TextInput
+                      value={proj.tech.join(", ")}
+                      onChange={(v) => setProjField(pi, "tech", v.split(",").map((s) => s.trim()).filter(Boolean))}
+                    />
+                  </div>
+                  <div><Label>Link</Label><TextInput value={proj.link} onChange={(v) => setProjField(pi, "link", v)} /></div>
+                  <div><Label>Repo</Label><TextInput value={proj.repo} onChange={(v) => setProjField(pi, "repo", v)} /></div>
+                  <div><Label>Start</Label><TextInput value={proj.start} onChange={(v) => setProjField(pi, "start", v)} /></div>
+                  <div><Label>End</Label><TextInput value={proj.end} onChange={(v) => setProjField(pi, "end", v)} /></div>
+                </div>
+                <Label>Bullets</Label>
+                <BulletList
+                  bullets={proj.bullets}
+                  onUpdate={(bi, text) => setProjBullet(pi, bi, text)}
+                  onAdd={() => addProjBullet(pi)}
+                  onRemove={(bi) => removeProjBullet(pi, bi)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Skills ── */}
+        {activeSection === "Skills" && (
+          <div>
+            <SectionHeader title="Skills" />
+            <div className="border border-gray-100 rounded-xl p-4 bg-white grid grid-cols-2 gap-4">
+              {(["languages", "frameworks", "tools", "interests"] as const).map((field) => (
+                <div key={field}>
+                  <Label>{field.charAt(0).toUpperCase() + field.slice(1)}</Label>
+                  <TextInput
+                    value={resume.skills[field].join(", ")}
+                    onChange={(v) => setSkills(field, v)}
+                    placeholder="TypeScript, Python, Go, ..."
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Education ── */}
+        {activeSection === "Education" && (
+          <div>
+            <SectionHeader title="Education" />
+            {resume.education.map((edu, idx) => (
+              <div key={idx} className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>School</Label><TextInput value={edu.school} onChange={(v) => setEduField(idx, "school", v)} /></div>
+                  <div><Label>Location</Label><TextInput value={edu.location} onChange={(v) => setEduField(idx, "location", v)} /></div>
+                  <div><Label>Graduation</Label><TextInput value={edu.graduation} onChange={(v) => setEduField(idx, "graduation", v)} /></div>
+                  <div><Label>GPA</Label><TextInput value={edu.gpa ?? ""} onChange={(v) => setEduField(idx, "gpa", v)} placeholder="3.9" /></div>
+                </div>
+                <div className="mt-3">
+                  <Label>Degrees (comma-separated)</Label>
+                  <TextInput
+                    value={edu.degrees.join(", ")}
+                    onChange={(v) => setEduField(idx, "degrees", v.split(",").map((s) => s.trim()).filter(Boolean))}
+                  />
+                </div>
+                <div className="mt-3">
+                  <Label>Coursework (comma-separated)</Label>
+                  <TextInput
+                    value={edu.coursework.join(", ")}
+                    onChange={(v) => setEduField(idx, "coursework", v.split(",").map((s) => s.trim()).filter(Boolean))}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Extracurriculars ── */}
+        {activeSection === "Extracurriculars" && (
+          <div>
+            <SectionHeader title="Extracurriculars" />
+            {resume.extracurriculars.length === 0 && (
+              <p className="text-sm text-gray-400">No extracurricular entries.</p>
+            )}
+            {resume.extracurriculars.map((e, ei) => (
+              <div key={e.id} className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div><Label>Organization</Label><TextInput value={e.company} onChange={(v) => setExtraField(ei, "company", v)} /></div>
+                  <div><Label>Role</Label><TextInput value={e.title} onChange={(v) => setExtraField(ei, "title", v)} /></div>
+                  <div><Label>Start</Label><TextInput value={e.start} onChange={(v) => setExtraField(ei, "start", v)} /></div>
+                  <div><Label>End</Label><TextInput value={e.end} onChange={(v) => setExtraField(ei, "end", v)} /></div>
+                </div>
+                <Label>Bullets</Label>
+                <BulletList
+                  bullets={e.bullets}
+                  onUpdate={(bi, text) => setExtraBullet(ei, bi, text)}
+                  onAdd={() => addExtraBullet(ei)}
+                  onRemove={(bi) => removeExtraBullet(ei, bi)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Bottom save */}
+        <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
           <button
             onClick={save}
             disabled={saving}
-            className="bg-zinc-900 text-white text-sm px-4 py-2 rounded-md hover:bg-zinc-700 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg disabled:opacity-50 transition-colors"
           >
-            {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
+            {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
           </button>
         </div>
       </div>
 
-      {/* ── Basics ── */}
-      <SectionHeader title="Basics" />
-      <div className="grid grid-cols-2 gap-4">
-        {(["name", "location", "email", "phone", "github", "linkedin", "portfolio"] as const).map(
-          (field) => (
-            <div key={field}>
-              <Label>{field.charAt(0).toUpperCase() + field.slice(1)}</Label>
-              <TextInput value={basics[field]} onChange={(v) => setBasics(field, v)} />
-            </div>
-          )
-        )}
-      </div>
-      <div className="mt-4">
-        <Label>Summary</Label>
-        <textarea
-          value={basics.summary}
-          onChange={(e) => setBasics("summary", e.target.value)}
-          rows={3}
-          className="w-full border border-zinc-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 bg-white resize-none"
-        />
-      </div>
+      {/* PDF preview panel */}
+      {showPreview && (
+        <div className="w-1/2 flex flex-col bg-gray-50">
+          <div className="px-4 py-2.5 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
+            <span className="text-xs font-medium text-gray-600">PDF Preview</span>
+            <span className="text-xs text-gray-400">
+              {previewLoading
+                ? "Compiling LaTeX…"
+                : previewBlobUrl
+                ? "Showing current form state"
+                : ""}
+            </span>
+          </div>
 
-      {/* ── Education ── */}
-      <SectionHeader title="Education" />
-      {resume.education.map((edu, idx) => (
-        <div key={idx} className="mb-6 border border-zinc-100 rounded-lg p-4 bg-white">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label>School</Label>
-              <TextInput value={edu.school} onChange={(v) => setEduField(idx, "school", v)} />
-            </div>
-            <div>
-              <Label>Location</Label>
-              <TextInput value={edu.location} onChange={(v) => setEduField(idx, "location", v)} />
-            </div>
-            <div>
-              <Label>Graduation</Label>
-              <TextInput
-                value={edu.graduation}
-                onChange={(v) => setEduField(idx, "graduation", v)}
+          <div className="flex-1 min-h-0">
+            {previewError && (
+              <div className="p-4 text-sm text-red-600 bg-red-50 border-b border-red-100">
+                {previewError}
+              </div>
+            )}
+            {previewLoading && !previewBlobUrl && (
+              <div className="h-full flex flex-col items-center justify-center gap-3 text-gray-400">
+                <svg className="animate-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+                  <path d="M21 3v5h-5" />
+                </svg>
+                <span className="text-sm">Compiling LaTeX with Tectonic…</span>
+                <span className="text-xs">This takes about 3–5 seconds</span>
+              </div>
+            )}
+            {previewBlobUrl && (
+              <iframe
+                src={previewBlobUrl}
+                className="w-full h-full border-0"
+                title="Master resume PDF preview"
               />
-            </div>
-            <div>
-              <Label>GPA</Label>
-              <TextInput
-                value={edu.gpa ?? ""}
-                onChange={(v) => setEduField(idx, "gpa", v)}
-                placeholder="3.9"
-              />
-            </div>
-          </div>
-          <div className="mt-3">
-            <Label>Degrees (comma-separated)</Label>
-            <TextInput
-              value={edu.degrees.join(", ")}
-              onChange={(v) =>
-                setEduField(
-                  idx,
-                  "degrees",
-                  v.split(",").map((s) => s.trim()).filter(Boolean)
-                )
-              }
-            />
-          </div>
-          <div className="mt-3">
-            <Label>Coursework (comma-separated)</Label>
-            <TextInput
-              value={edu.coursework.join(", ")}
-              onChange={(v) =>
-                setEduField(
-                  idx,
-                  "coursework",
-                  v.split(",").map((s) => s.trim()).filter(Boolean)
-                )
-              }
-            />
+            )}
           </div>
         </div>
-      ))}
-
-      {/* ── Experience ── */}
-      <SectionHeader title="Experience" />
-      {resume.experience.map((exp, ei) => (
-        <div key={exp.id} className="mb-6 border border-zinc-100 rounded-lg p-4 bg-white">
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <Label>Company</Label>
-              <TextInput value={exp.company} onChange={(v) => setExpField(ei, "company", v)} />
-            </div>
-            <div>
-              <Label>Title</Label>
-              <TextInput value={exp.title} onChange={(v) => setExpField(ei, "title", v)} />
-            </div>
-            <div>
-              <Label>Location</Label>
-              <TextInput value={exp.location} onChange={(v) => setExpField(ei, "location", v)} />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label>Start</Label>
-                <TextInput value={exp.start} onChange={(v) => setExpField(ei, "start", v)} />
-              </div>
-              <div>
-                <Label>End</Label>
-                <TextInput value={exp.end} onChange={(v) => setExpField(ei, "end", v)} />
-              </div>
-            </div>
-          </div>
-          <Label>Bullets</Label>
-          <BulletList
-            bullets={exp.bullets}
-            onUpdate={(bi, text) => setExpBullet(ei, bi, text)}
-            onAdd={() => addExpBullet(ei)}
-            onRemove={(bi) => removeExpBullet(ei, bi)}
-          />
-        </div>
-      ))}
-
-      {/* ── Projects ── */}
-      <SectionHeader title="Projects" />
-      {resume.projects.map((proj, pi) => (
-        <div key={proj.id} className="mb-6 border border-zinc-100 rounded-lg p-4 bg-white">
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <Label>Name</Label>
-              <TextInput value={proj.name} onChange={(v) => setProjField(pi, "name", v)} />
-            </div>
-            <div>
-              <Label>Tech (comma-separated)</Label>
-              <TextInput
-                value={proj.tech.join(", ")}
-                onChange={(v) =>
-                  setProjField(
-                    pi,
-                    "tech",
-                    v.split(",").map((s) => s.trim()).filter(Boolean)
-                  )
-                }
-              />
-            </div>
-            <div>
-              <Label>Link</Label>
-              <TextInput value={proj.link} onChange={(v) => setProjField(pi, "link", v)} />
-            </div>
-            <div>
-              <Label>Repo</Label>
-              <TextInput value={proj.repo} onChange={(v) => setProjField(pi, "repo", v)} />
-            </div>
-            <div>
-              <Label>Start</Label>
-              <TextInput value={proj.start} onChange={(v) => setProjField(pi, "start", v)} />
-            </div>
-            <div>
-              <Label>End</Label>
-              <TextInput value={proj.end} onChange={(v) => setProjField(pi, "end", v)} />
-            </div>
-          </div>
-          <Label>Bullets</Label>
-          <BulletList
-            bullets={proj.bullets}
-            onUpdate={(bi, text) => setProjBullet(pi, bi, text)}
-            onAdd={() => addProjBullet(pi)}
-            onRemove={(bi) => removeProjBullet(pi, bi)}
-          />
-        </div>
-      ))}
-
-      {/* ── Skills ── */}
-      <SectionHeader title="Skills" />
-      <div className="border border-zinc-100 rounded-lg p-4 bg-white grid grid-cols-2 gap-4">
-        {(["languages", "frameworks", "tools", "interests"] as const).map((field) => (
-          <div key={field}>
-            <Label>{field.charAt(0).toUpperCase() + field.slice(1)}</Label>
-            <TextInput
-              value={resume.skills[field].join(", ")}
-              onChange={(v) => setSkills(field, v)}
-              placeholder="TypeScript, Python, Go, ..."
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* ── Extracurriculars ── */}
-      {resume.extracurriculars.length > 0 && (
-        <>
-          <SectionHeader title="Extracurriculars" />
-          {resume.extracurriculars.map((e, ei) => (
-            <div key={e.id} className="mb-6 border border-zinc-100 rounded-lg p-4 bg-white">
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <div>
-                  <Label>Organization</Label>
-                  <TextInput value={e.company} onChange={(v) => setExtraField(ei, "company", v)} />
-                </div>
-                <div>
-                  <Label>Role</Label>
-                  <TextInput value={e.title} onChange={(v) => setExtraField(ei, "title", v)} />
-                </div>
-                <div>
-                  <Label>Start</Label>
-                  <TextInput value={e.start} onChange={(v) => setExtraField(ei, "start", v)} />
-                </div>
-                <div>
-                  <Label>End</Label>
-                  <TextInput value={e.end} onChange={(v) => setExtraField(ei, "end", v)} />
-                </div>
-              </div>
-              <Label>Bullets</Label>
-              <BulletList
-                bullets={e.bullets}
-                onUpdate={(bi, text) => setExtraBullet(ei, bi, text)}
-                onAdd={() => addExtraBullet(ei)}
-                onRemove={(bi) => removeExtraBullet(ei, bi)}
-              />
-            </div>
-          ))}
-        </>
       )}
 
-      {/* Bottom save */}
-      <div className="mt-8 flex justify-end">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="bg-zinc-900 text-white text-sm px-5 py-2.5 rounded-md hover:bg-zinc-700 disabled:opacity-50 transition-colors"
-        >
-          {saving ? "Saving…" : saved ? "Saved ✓" : "Save changes"}
-        </button>
-      </div>
+      </div>{/* end content + preview wrapper */}
     </div>
   );
 }
