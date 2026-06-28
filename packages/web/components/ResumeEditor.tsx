@@ -96,7 +96,6 @@ function PdfPane({
 export default function ResumeEditor({ resume }: { resume: Resume }) {
   const [markdown, setMarkdown] = useState(resume.markdown);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [applyForm, setApplyForm] = useState<ApplyForm>({
@@ -108,6 +107,7 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const pdfBlobUrlRef = useRef<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -115,8 +115,7 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
     async (value: string) => {
       setSaveStatus("saving");
       try {
-        const { updatedAt } = await api.patchResume(resume.id, value);
-        setLastSaved(new Date(updatedAt));
+        await api.patchResume(resume.id, value);
         setSaveStatus("saved");
       } catch {
         setSaveStatus("error");
@@ -149,7 +148,7 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
     }, 0);
   }
 
-  async function loadPdf() {
+  const loadPdf = useCallback(async () => {
     setPdfLoading(true);
     setPdfError(null);
     try {
@@ -157,6 +156,7 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
       const url = URL.createObjectURL(blob);
       setPdfBlobUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
+        pdfBlobUrlRef.current = url;
         return url;
       });
     } catch (e) {
@@ -164,22 +164,20 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
     } finally {
       setPdfLoading(false);
     }
-  }
+  }, [resume.id]);
 
   // Load PDF whenever the user switches into a mode that shows the preview
   useEffect(() => {
     if (viewMode !== "edit" && !pdfBlobUrl && !pdfLoading) {
-      loadPdf();
+      void loadPdf();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode]);
+  }, [viewMode, pdfBlobUrl, pdfLoading, loadPdf]);
 
   // Revoke blob URL on unmount
   useEffect(() => {
     return () => {
-      if (pdfBlobUrl) URL.revokeObjectURL(pdfBlobUrl);
+      if (pdfBlobUrlRef.current) URL.revokeObjectURL(pdfBlobUrlRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleDownload() {
