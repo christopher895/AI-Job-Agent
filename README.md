@@ -1,6 +1,6 @@
 # AI Job Hunting Agent
 
-An autonomous agent that monitors 20+ company career pages around the clock, detects new job postings the moment they drop, scores how well each role fits your profile, rewrites your resume bullets to match — then texts and emails you within 15 minutes. No manual searching, no missed deadlines.
+An autonomous agent that monitors 20+ company career pages 24/7, detects new job postings via snapshot diffing, auto-tailors Christopher's resume per role using a generate → critique → revise AI loop, and sends email alerts with a one-click link to generate a tailored resume. A web app lets you paste a job description or URL, edit the tailored output, download a PDF, and log applications to Google Sheets — no auth required.
 
 ---
 
@@ -13,90 +13,140 @@ Playwright / Cheerio scrapes each career page
   ↓
 Snapshot diffing (hash sets) detects new postings
   ↓
-RAG pipeline retrieves relevant resume chunks via pgvector cosine similarity
+Location + keyword scoring filters relevant roles
   ↓
-GPT-4o scores role fit 1–100 with reasoning
+Resend alert email (job list + "Tailor Resume" link per job)
   ↓
-GPT-4o rewrites your resume bullets to match the job description
+Click link → /tailor opens with job pre-filled
   ↓
-Twilio SMS  +  Resend email (PDF resume attached)
+GPT-4o: generate → critique → revise (up to 3 passes)
+  ↓
+LaTeX PDF rendered via tectonic + czresume.cls
+  ↓
+Edit inline → Download PDF → Log to Google Sheets
 ```
 
 ---
 
 ## Tech Stack
 
-| Layer         | Tools                                                                     |
-| ------------- | ------------------------------------------------------------------------- |
-| Frontend      | Next.js 14, TypeScript, Tailwind CSS, Shadcn/ui                           |
-| Backend       | Node.js, Express, PostgreSQL, pgvector, Redis, BullMQ, node-cron          |
-| Scraping      | Playwright (dynamic pages), Cheerio (static pages), custom diff algorithm |
-| AI / RAG      | OpenAI GPT-4o, text-embedding-3-small, LangChain JS, Zod                  |
-| Notifications | Twilio (SMS), Resend (email + PDF)                                        |
-| Auth          | Clerk                                                                     |
-| Infra         | Railway (24/7 deployment), Docker Compose (local dev)                     |
+| Layer         | Tools                                                                 |
+| ------------- | --------------------------------------------------------------------- |
+| Frontend      | Next.js 14 (App Router), TypeScript, Tailwind CSS, Shadcn/ui         |
+| Backend       | Node.js, Express, PostgreSQL, Redis, BullMQ, node-cron               |
+| Scraping      | Playwright (JS-rendered pages), Cheerio (static HTML), snapshot diff |
+| AI            | OpenAI GPT-4o, Zod (LLM output validation)                           |
+| PDF           | Tectonic (LaTeX compiler), custom `czresume.cls` template            |
+| Notifications | Resend (job alert emails + "Email to me" from editor)                |
+| Sheets        | Google Sheets API v4 (application log)                               |
+| Auth          | None — private Railway URL, single user                              |
+| Infra         | Railway (deployment), Docker Compose (local Postgres + Redis)        |
 
 ---
 
-## Architecture
-
-### Monorepo Structure
+## Repository Structure
 
 ```
 job-hunting-agent/
 ├── packages/
-│   ├── web/          # Next.js dashboard
-│   └── agent/        # Autonomous scraper + AI pipeline
-├── prisma/           # Database schema
-├── docker-compose.yml
+│   ├── web/              # Next.js 14 app (App Router)
+│   └── agent/            # Scraper, AI pipeline, API server
+├── Resume_Template/
+│   ├── czresume.cls      # Custom LaTeX class (Times Roman, rSection format)
+│   └── resume.tex        # Master resume source
+├── Dockerfile            # Agent service (Railway)
+├── Dockerfile.web        # Web app service (Railway)
+├── docker-compose.yml    # Local Postgres + Redis
 └── .env.example
 ```
 
 ### Agent Package
 
-The core of the system — runs headlessly, no human in the loop.
-
 ```
-agent/
+agent/src/
 ├── scraper/
-│   ├── playwright.ts   # Scrapes JS-rendered career pages
-│   ├── cheerio.ts      # Scrapes static HTML pages
-│   └── diff.ts         # Compares snapshots to find new postings
-├── rag/
-│   ├── embed.ts        # Chunks + embeds your resume into pgvector
-│   └── retrieve.ts     # Cosine similarity search over resume chunks
+│   ├── index.ts          # Orchestrator — scrapes all companies, emails new jobs
+│   ├── playwright.ts     # JS-rendered pages
+│   ├── cheerio.ts        # Static HTML pages
+│   ├── diff.ts           # Snapshot diffing (hash sets)
+│   ├── filters.ts        # Location + keyword scoring
+│   ├── companies.ts      # Tracked company list
+│   └── adapters/         # greenhouse.ts, ashby.ts, lever.ts, amazon.ts
 ├── ai/
-│   ├── scorer.ts       # Fits score 1–100 via GPT-4o
-│   ├── tailor.ts       # Rewrites resume bullets per role
-│   └── chain.ts        # LangChain orchestration
+│   ├── chain.ts          # generate → critique → revise loop (entry point)
+│   ├── tailor.ts         # Single-pass tailoring (LLM call)
+│   ├── critic.ts         # Scores a draft, returns fixes
+│   ├── grounding.ts      # Checks no invented facts
+│   ├── format.ts         # ATS checks + Markdown renderer
+│   ├── master-resume.ts  # Structured JSON source of truth
+│   ├── render-pdf.ts     # Markdown → LaTeX → PDF via tectonic
+│   ├── types.ts          # Zod schemas for MasterResume, TailoredResume
+│   └── llm.ts            # OpenAI wrapper
 ├── notifications/
-│   ├── sms.ts          # Twilio SMS
-│   └── email.ts        # Resend email with PDF resume
-├── queue/              # BullMQ workers + producers
-└── cron/               # node-cron scheduler (every 15 min)
+│   ├── email.ts          # Resend — job alert emails
+│   └── sms.ts            # Twilio (wired up, not in main flow)
+├── queue/
+│   ├── worker.ts         # BullMQ worker
+│   └── producer.ts       # BullMQ producer
+├── cron/
+│   └── scheduler.ts      # node-cron — every 15 min
+└── db/
+    ├── pool.ts           # pg Pool
+    ├── schema.ts         # CREATE TABLE statements
+    └── queries.ts        # All DB access functions
 ```
 
-### Dashboard (web package)
+### Web App (in progress)
 
-A Next.js app for viewing and managing the agent.
-
-- **Dashboard** — detected jobs table sorted by fit score
-- **Companies** — add/remove tracked career pages
-- **History** — every job ever detected, filterable by company/score/date
-- **Settings** — upload a new resume, set score threshold, toggle SMS/email
+```
+web/app/
+├── page.tsx              # / — resume history dashboard
+├── tailor/page.tsx       # /tailor — paste JD or URL, generate
+├── resume/
+│   ├── [id]/page.tsx     # /resume/[id] — inline editor, Download PDF
+│   └── master/page.tsx   # /resume/master — edit master resume
+└── applied/page.tsx      # /applied — application log table
+```
 
 ---
 
 ## Database Schema
 
 ```sql
-companies     (id, name, careers_url, scrape_type, active, created_at)
-jobs          (id, company_id, title, url, description, detected_at, is_new)
-snapshots     (id, company_id, raw_html, job_hashes[], scraped_at)
-resume_chunks (id, content, embedding vector(1536), chunk_type, created_at)
+-- Scraper
+companies        (id, name, careers_url, scrape_type, active, created_at)
+jobs             (id, company_id, title, url, detected_at, is_new)
+snapshots        (id, company_id, job_hashes[], scraped_at)
+
+-- Resume / applications
+tailored_resumes (id uuid, job_title, company, job_url, jd_text,
+                  markdown, pdf bytea, critic_score int,
+                  created_at, updated_at)
+
+master_resume    (id int default 1, data jsonb, updated_at)
+
+applied_jobs     (id uuid, company, job_title, location, job_url,
+                  status, applied_at, resume_id uuid, sheets_row int)
 ```
 
-Resume chunks are stored by type — `experience`, `project`, `skill`, `summary` — so retrieval can pull the most relevant sections for any given job description.
+---
+
+## AI Tailoring Pipeline
+
+The master resume is the single source of truth — GPT-4o may only select or rephrase facts that exist in it, never invent new ones.
+
+```
+POST /api/tailor  (JD text or job URL)
+  → auto-fetch JD if URL (Playwright/Cheerio)
+    → generateBestResume(jd) — up to 3 passes:
+        pass 1: tailor.ts    — rewrite bullets to match JD
+        pass 2: critic.ts    — score draft, return fix list
+        pass 3: tailor.ts    — revise based on fixes
+      → grounding.ts         — verify no invented facts
+    → save tailored_resumes row
+    → render PDF via tectonic + czresume.cls
+    → redirect to /resume/[id]
+```
 
 ---
 
@@ -106,10 +156,10 @@ Resume chunks are stored by type — `experience`, `project`, `skill`, `summary`
 
 - Node.js 18+
 - Docker (for local Postgres + Redis)
+- [Tectonic](https://tectonic-typesetting.github.io/) — `brew install tectonic`
 - OpenAI API key
-- Twilio account
-- Resend account
-- Clerk account
+- Resend API key
+- Google service account with Sheets API access
 
 ### Local Setup
 
@@ -124,10 +174,10 @@ docker-compose up -d
 cp .env.example .env
 # Fill in your keys
 
-# Run the agent
+# Run the agent (Express API + cron scheduler → localhost:3001)
 npm run dev --workspace=packages/agent
 
-# Run the dashboard
+# Run the web app (→ localhost:3000)
 npm run dev --workspace=packages/web
 ```
 
@@ -136,42 +186,48 @@ npm run dev --workspace=packages/web
 ## Environment Variables
 
 ```bash
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/job_agent
+DATABASE_URL=postgresql://jobagent:jobagent@localhost:5432/job_agent
 REDIS_URL=redis://localhost:6379
 
-# AI
 OPENAI_API_KEY=sk-...
 
-# Notifications
-TWILIO_ACCOUNT_SID=AC...
-TWILIO_AUTH_TOKEN=...
-TWILIO_PHONE_NUMBER=+1...
-YOUR_PHONE_NUMBER=+1...
 RESEND_API_KEY=re_...
 YOUR_EMAIL=you@example.com
 
-# Auth
-CLERK_SECRET_KEY=sk_...
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_...
+GOOGLE_SHEETS_SPREADSHEET_ID=...
+GOOGLE_SERVICE_ACCOUNT_JSON='{...}'
+
+# Local: /opt/homebrew/bin/tectonic
+# Railway: set automatically via Dockerfile
+TECTONIC_PATH=/opt/homebrew/bin/tectonic
+
+WEB_URL=http://localhost:3000   # agent uses this for CORS + email links
+APP_URL=http://localhost:3001
 ```
+
+---
+
+## Deployment (Railway)
+
+Two separate Railway services, same GitHub repo, different Dockerfiles:
+
+| Service | Dockerfile | Purpose |
+|---|---|---|
+| `agent` | `Dockerfile` | Scraper + AI pipeline + Express API |
+| `web` | `Dockerfile.web` | Next.js web app |
+
+Both services share the same Railway Postgres and Redis instances. Set `WEB_URL` on the agent service to the web service's Railway URL, and `NEXT_PUBLIC_AGENT_URL` on the web service to the agent's Railway URL.
 
 ---
 
 ## Key Design Decisions
 
-**pgvector over Pinecone** — At the scale of a few hundred resume chunks, pgvector inside the existing Postgres instance keeps the stack simple and costs nothing extra. Pinecone would only make sense at millions of vectors or sub-10ms latency requirements.
+**No RAG / pgvector** — The master resume is small enough to fit entirely in a single GPT-4o prompt. Embedding chunks and doing cosine retrieval adds complexity with no benefit at this scale.
 
-**BullMQ over direct async calls** — Multiple jobs dropping simultaneously need concurrent processing without race conditions or duplicate alerts. BullMQ's Redis-backed queue handles concurrency limits per domain cleanly.
+**generate → critique → revise loop** — A single tailoring pass produces inconsistent quality. Running a separate critic model that scores the draft and returns a fix list, then revising, reliably pushes output quality above a useful threshold.
 
-**Snapshot diffing via hash sets** — O(n) comparison of job URL hashes between scrape runs. Simple, fast, and easy to reason about in an interview.
+**czresume.cls over a generic class** — `resume` is a real CTAN package; tectonic would download it instead of using the local file. A uniquely named class guarantees the local template is always used.
 
-**Zod on all LLM outputs** — GPT-4o occasionally returns malformed JSON. Zod catches schema violations before they propagate through the pipeline, with retry logic on failure.
+**BullMQ over direct async calls** — Multiple jobs dropping simultaneously need concurrent processing without race conditions. BullMQ's Redis-backed queue handles per-domain concurrency limits cleanly.
 
----
-
-## Deployment
-
-The app runs on Railway with both the `web` and `agent` packages deployed as separate services. Railway natively supports cron jobs and background workers, so node-cron keeps running without any extra configuration.
-
-**Stack:** Next.js · TypeScript · PostgreSQL · pgvector · Playwright · LangChain · OpenAI · Redis · Twilio
+**No auth** — Single user, private Railway URL. Adding auth would add overhead with zero security benefit in this setup.
