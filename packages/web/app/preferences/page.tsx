@@ -2,13 +2,9 @@ import { api } from "../../lib/api";
 import PreferencesForm from "../../components/PreferencesForm";
 
 export default async function PreferencesPage() {
+  let prefs;
   try {
-    const prefs = await api.getPreferences();
-    return (
-      <div className="px-8 py-8 max-w-2xl">
-        <PreferencesForm initial={prefs} />
-      </div>
-    );
+    prefs = await api.getPreferences();
   } catch {
     return (
       <div className="px-8 py-8">
@@ -18,4 +14,10 @@ export default async function PreferencesPage() {
       </div>
     );
   }
+
+  return (
+    <div className="px-8 py-8 max-w-2xl">
+      <PreferencesForm initial={prefs} />
+    </div>
+  );
 }
