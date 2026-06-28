@@ -49,6 +49,14 @@ function parseCard(rawText: string): { title: string; company: string; location:
   return { title, company, location };
 }
 
+function warnIfUnknownsAreHigh(jobs: JobListing[]) {
+  if (jobs.length === 0) return;
+  const unknownCount = jobs.filter((j) => j.title === "Unknown" || j.company === "Unknown").length;
+  if (unknownCount / jobs.length > 0.5) {
+    console.warn(`[jobright] ${unknownCount}/${jobs.length} cards parsed as Unknown — Jobright UI may have changed`);
+  }
+}
+
 export async function scrapeJobright(): Promise<JobListing[]> {
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ storageState: AUTH_PATH });
@@ -118,5 +126,6 @@ export async function scrapeJobright(): Promise<JobListing[]> {
     jobs.push({ title, company, location, url });
   }
 
+  warnIfUnknownsAreHigh(jobs);
   return jobs;
 }
