@@ -110,6 +110,7 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
   const pdfBlobUrlRef = useRef<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const hasAttemptedLoadRef = useRef(false);
 
   const autoSave = useCallback(
     async (value: string) => {
@@ -168,8 +169,11 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
 
   // Load PDF whenever the user switches into a mode that shows the preview
   useEffect(() => {
-    if (viewMode !== "edit" && !pdfBlobUrl && !pdfLoading) {
-      void loadPdf();
+    if (viewMode !== "edit" && !pdfBlobUrl && !pdfLoading && !hasAttemptedLoadRef.current) {
+      hasAttemptedLoadRef.current = true;
+      loadPdf().catch(() => {
+        // Error already handled in loadPdf
+      });
     }
   }, [viewMode, pdfBlobUrl, pdfLoading, loadPdf]);
 
