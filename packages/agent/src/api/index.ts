@@ -4,6 +4,7 @@ import resumesRouter from "./routes/resumes";
 import masterResumeRouter from "./routes/master-resume";
 import appliedRouter from "./routes/applied";
 import preferencesRouter from "./routes/preferences";
+import placesRouter from "./routes/places";
 
 const router = Router();
 
@@ -12,5 +13,6 @@ router.use("/", resumesRouter);         // defines /resumes, /resume/:id, /resum
 router.use("/master-resume", masterResumeRouter);
 router.use("/applied", appliedRouter);
 router.use("/preferences", preferencesRouter);
+router.use("/places", placesRouter);
 
 export default router;

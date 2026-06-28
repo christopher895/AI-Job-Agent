@@ -15,12 +15,17 @@ export function matchesFilters(title: string): boolean {
   return activePrefs.titleKeywords.some((kw) => lower.includes(kw.toLowerCase()));
 }
 
+// Extract the city portion from a stored preference like "New York, New York" or legacy "new york"
+function cityToken(pref: string): string {
+  return pref.toLowerCase().split(",")[0].trim();
+}
+
 export function matchesLocation(location: string): boolean {
   if (!location || location.trim() === "") return true;
 
   const lower = location.toLowerCase();
   if (lower.includes("remote") || lower.includes("anywhere")) return true;
-  return activePrefs.targetLocations.some((city) => lower.includes(city));
+  return activePrefs.targetLocations.some((pref) => lower.includes(cityToken(pref)));
 }
 
 const AI_ROLE_KEYWORDS = [
@@ -56,7 +61,7 @@ export function scoreJob(job: JobListing): number {
 
   if (location === "" || location.includes("remote")) {
     score += 10;
-  } else if (activePrefs.targetLocations.some((city) => location.includes(city))) {
+  } else if (activePrefs.targetLocations.some((pref) => location.includes(cityToken(pref)))) {
     score += 20;
   }
 
