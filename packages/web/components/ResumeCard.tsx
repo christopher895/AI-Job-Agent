@@ -58,6 +58,11 @@ export default function ResumeCard({
             {date} &bull; Edited {editedAgo}
           </p>
         </div>
+        <button className="text-gray-400 hover:text-gray-600 p-0.5 flex-shrink-0 mt-0.5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
+          </svg>
+        </button>
       </div>
 
       {/* Bottom: score + actions */}
