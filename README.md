@@ -33,7 +33,7 @@ Edit inline → Download PDF → Log to Google Sheets
 | Layer         | Tools                                                                 |
 | ------------- | --------------------------------------------------------------------- |
 | Frontend      | Next.js 14 (App Router), TypeScript, Tailwind CSS, Shadcn/ui         |
-| Backend       | Node.js, Express, PostgreSQL, Redis, BullMQ, node-cron               |
+| Backend       | Node.js, Express, PostgreSQL, node-cron                               |
 | Scraping      | Playwright (JS-rendered pages), Cheerio (static HTML), snapshot diff |
 | AI            | OpenAI GPT-4o, Zod (LLM output validation)                           |
 | PDF           | Tectonic (LaTeX compiler), custom `czresume.cls` template            |
@@ -68,6 +68,7 @@ agent/src/
 │   ├── index.ts          # Orchestrator — scrapes all companies, emails new jobs
 │   ├── playwright.ts     # JS-rendered pages
 │   ├── cheerio.ts        # Static HTML pages
+│   ├── fetch-jd.ts       # Auto-fetch JD text from a job URL (Cheerio → Playwright fallback)
 │   ├── diff.ts           # Snapshot diffing (hash sets)
 │   ├── filters.ts        # Location + keyword scoring
 │   ├── companies.ts      # Tracked company list
@@ -78,16 +79,24 @@ agent/src/
 │   ├── critic.ts         # Scores a draft, returns fixes
 │   ├── grounding.ts      # Checks no invented facts
 │   ├── format.ts         # ATS checks + Markdown renderer
-│   ├── master-resume.ts  # Structured JSON source of truth
 │   ├── render-pdf.ts     # Markdown → LaTeX → PDF via tectonic
+│   ├── master-resume.ts  # Structured JSON source of truth
 │   ├── types.ts          # Zod schemas for MasterResume, TailoredResume
-│   └── llm.ts            # OpenAI wrapper
+│   ├── llm.ts            # OpenAI wrapper
+│   └── knowledge/
+│       └── best-practices.ts  # Resume rubric + prompt blocks used by tailor/critic/format
+├── api/
+│   ├── index.ts          # Express router mount
+│   └── routes/
+│       ├── tailor.ts     # POST /api/tailor
+│       ├── resumes.ts    # GET /api/resumes, GET /api/resumes/:id, PATCH /api/resumes/:id
+│       ├── applied.ts    # GET/POST /api/applied
+│       └── master-resume.ts  # GET/PUT /api/master-resume
+├── integrations/
+│   └── sheets.ts         # Google Sheets API — append/update application rows
 ├── notifications/
 │   ├── email.ts          # Resend — job alert emails
 │   └── sms.ts            # Twilio (wired up, not in main flow)
-├── queue/
-│   ├── worker.ts         # BullMQ worker
-│   └── producer.ts       # BullMQ producer
 ├── cron/
 │   └── scheduler.ts      # node-cron — every 15 min
 └── db/
@@ -99,13 +108,24 @@ agent/src/
 ### Web App (in progress)
 
 ```
-web/app/
-├── page.tsx              # / — resume history dashboard
-├── tailor/page.tsx       # /tailor — paste JD or URL, generate
-├── resume/
-│   ├── [id]/page.tsx     # /resume/[id] — inline editor, Download PDF
-│   └── master/page.tsx   # /resume/master — edit master resume
-└── applied/page.tsx      # /applied — application log table
+web/
+├── app/
+│   ├── page.tsx              # / — resume history dashboard
+│   ├── tailor/page.tsx       # /tailor — paste JD or URL, generate
+│   ├── resume/
+│   │   ├── [id]/page.tsx     # /resume/[id] — inline editor, Download PDF
+│   │   └── master/page.tsx   # /resume/master — edit master resume
+│   └── applied/page.tsx      # /applied — application log table
+├── components/
+│   ├── ResumeEditor.tsx      # Inline text editor with Download/Email buttons
+│   ├── ResumeCard.tsx        # Card used in history dashboard
+│   ├── DashboardClient.tsx   # Client-side dashboard wrapper
+│   ├── AppliedTable.tsx      # Application log table
+│   ├── MasterResumeForm.tsx  # Form for editing master resume fields
+│   ├── TailorForm.tsx        # JD input + generate button
+│   └── Nav.tsx               # Top navigation bar
+└── lib/
+    └── api.ts                # Typed fetch wrappers for agent API
 ```
 
 ---
@@ -155,7 +175,7 @@ POST /api/tailor  (JD text or job URL)
 ### Prerequisites
 
 - Node.js 18+
-- Docker (for local Postgres + Redis)
+- Docker (for local Postgres)
 - [Tectonic](https://tectonic-typesetting.github.io/) — `brew install tectonic`
 - OpenAI API key
 - Resend API key
@@ -167,7 +187,7 @@ POST /api/tailor  (JD text or job URL)
 # Install dependencies
 npm install
 
-# Start Postgres + Redis
+# Start Postgres
 docker-compose up -d
 
 # Copy env vars
@@ -187,7 +207,6 @@ npm run dev --workspace=packages/web
 
 ```bash
 DATABASE_URL=postgresql://jobagent:jobagent@localhost:5432/job_agent
-REDIS_URL=redis://localhost:6379
 
 OPENAI_API_KEY=sk-...
 
@@ -216,7 +235,7 @@ Two separate Railway services, same GitHub repo, different Dockerfiles:
 | `agent` | `Dockerfile` | Scraper + AI pipeline + Express API |
 | `web` | `Dockerfile.web` | Next.js web app |
 
-Both services share the same Railway Postgres and Redis instances. Set `WEB_URL` on the agent service to the web service's Railway URL, and `NEXT_PUBLIC_AGENT_URL` on the web service to the agent's Railway URL.
+Both services share the same Railway Postgres instance. Set `WEB_URL` on the agent service to the web service's Railway URL, and `NEXT_PUBLIC_AGENT_URL` on the web service to the agent's Railway URL.
 
 ---
 
@@ -226,7 +245,5 @@ Both services share the same Railway Postgres and Redis instances. Set `WEB_URL`
 
 **generate → critique → revise loop** — A single tailoring pass produces inconsistent quality. Running a separate critic model that scores the draft and returns a fix list, then revising, reliably pushes output quality above a useful threshold.
 
-
-**BullMQ over direct async calls** — Multiple jobs dropping simultaneously need concurrent processing without race conditions. BullMQ's Redis-backed queue handles per-domain concurrency limits cleanly.
 
 **No auth** — Single user, private Railway URL. Adding auth would add overhead with zero security benefit in this setup.
