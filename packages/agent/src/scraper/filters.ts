@@ -1,30 +1,31 @@
-import { FILTERS } from "../config";
+import { FILTERS, Preferences } from "../config";
 import { JobListing } from "./playwright";
+
+let activePrefs: Preferences = FILTERS;
+
+export function applyPreferences(prefs: Preferences): void {
+  activePrefs = prefs;
+}
 
 export function matchesFilters(title: string): boolean {
   const lower = title.toLowerCase();
 
-  // All requiredKeywords must appear as whole words
-  if (FILTERS.requiredKeywords.some((kw) => !new RegExp(`\\b${kw}\\b`, "i").test(title))) return false;
+  if (activePrefs.requiredKeywords.some((kw) => !new RegExp(`\\b${kw}\\b`, "i").test(title))) return false;
+  if (activePrefs.termFilter && !lower.includes(activePrefs.termFilter.toLowerCase())) return false;
+  return activePrefs.titleKeywords.some((kw) => lower.includes(kw.toLowerCase()));
+}
 
-  // termFilter must appear if set
-  if (FILTERS.termFilter && !lower.includes(FILTERS.termFilter.toLowerCase())) return false;
-
-  // At least one titleKeyword must appear
-  return FILTERS.titleKeywords.some((kw) => lower.includes(kw.toLowerCase()));
+// Extract the city portion from a stored preference like "New York, New York" or legacy "new york"
+function cityToken(pref: string): string {
+  return pref.toLowerCase().split(",")[0].trim();
 }
 
 export function matchesLocation(location: string): boolean {
-  // No location specified — let it through, we can't be sure it's wrong
   if (!location || location.trim() === "") return true;
 
   const lower = location.toLowerCase();
-
-  // Remote is always fine
   if (lower.includes("remote") || lower.includes("anywhere")) return true;
-
-  // Must match at least one target city
-  return FILTERS.targetLocations.some((city) => lower.includes(city));
+  return activePrefs.targetLocations.some((pref) => lower.includes(cityToken(pref)));
 }
 
 const AI_ROLE_KEYWORDS = [
@@ -50,20 +51,17 @@ export function scoreJob(job: JobListing): number {
   const location = (job.location ?? "").toLowerCase();
   let score = 0;
 
-  // Role tier
   if (AI_ROLE_KEYWORDS.some((kw) => title.includes(kw))) score += 50;
   else if (SWE_ROLE_KEYWORDS.some((kw) => title.includes(kw))) score += 35;
   else score += 20;
 
-  // Priority company bonus
-  if (FILTERS.priorityCompanies.map((c) => c.toLowerCase()).includes(job.company.toLowerCase())) {
+  if (activePrefs.priorityCompanies.map((c) => c.toLowerCase()).includes(job.company.toLowerCase())) {
     score += 30;
   }
 
-  // Target location bonus
   if (location === "" || location.includes("remote")) {
     score += 10;
-  } else if (FILTERS.targetLocations.some((city) => location.includes(city))) {
+  } else if (activePrefs.targetLocations.some((pref) => location.includes(cityToken(pref)))) {
     score += 20;
   }
 

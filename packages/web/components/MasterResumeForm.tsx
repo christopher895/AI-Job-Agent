@@ -154,7 +154,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               ...exp,
               bullets: [
                 ...exp.bullets,
-                { id: `new-${Date.now()}-${Math.random()}`, text: "", tech: [], metrics: [], tags: [] },
+                { id: crypto.randomUUID(), text: "", tech: [], metrics: [], tags: [] },
               ],
             }
       ),
@@ -166,6 +166,29 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       experience: prev.experience.map((exp, i) =>
         i !== ei ? exp : { ...exp, bullets: exp.bullets.filter((_, j) => j !== bi) }
       ),
+    }));
+  }
+  function addExperience() {
+    setResume((prev) => ({
+      ...prev,
+      experience: [
+        ...prev.experience,
+        {
+          id: `new-${Date.now()}-${Math.random()}`,
+          company: "",
+          title: "",
+          location: "",
+          start: "",
+          end: "",
+          bullets: [],
+        },
+      ],
+    }));
+  }
+  function removeExperience(ei: number) {
+    setResume((prev) => ({
+      ...prev,
+      experience: prev.experience.filter((_, i) => i !== ei),
     }));
   }
 
@@ -198,7 +221,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               ...p,
               bullets: [
                 ...p.bullets,
-                { id: `new-${Date.now()}-${Math.random()}`, text: "", tech: [], metrics: [], tags: [] },
+                { id: crypto.randomUUID(), text: "", tech: [], metrics: [], tags: [] },
               ],
             }
       ),
@@ -210,6 +233,30 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       projects: prev.projects.map((p, i) =>
         i !== pi ? p : { ...p, bullets: p.bullets.filter((_, j) => j !== bi) }
       ),
+    }));
+  }
+  function addProject() {
+    setResume((prev) => ({
+      ...prev,
+      projects: [
+        ...prev.projects,
+        {
+          id: `new-${Date.now()}-${Math.random()}`,
+          name: "",
+          tech: [],
+          start: "",
+          end: "",
+          link: "",
+          repo: "",
+          bullets: [],
+        },
+      ],
+    }));
+  }
+  function removeProject(pi: number) {
+    setResume((prev) => ({
+      ...prev,
+      projects: prev.projects.filter((_, i) => i !== pi),
     }));
   }
 
@@ -242,7 +289,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               ...e,
               bullets: [
                 ...e.bullets,
-                { id: `new-${Date.now()}-${Math.random()}`, text: "", tech: [], metrics: [], tags: [] },
+                { id: crypto.randomUUID(), text: "", tech: [], metrics: [], tags: [] },
               ],
             }
       ),
@@ -386,7 +433,8 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white resize-none"
               />
             </div>
-            <p className="text-xs text-green-600 mt-4">&#x2022; Last saved recently</p>
+            {saved && <p className="text-xs text-green-600 mt-4">&#x2022; Saved</p>}
+            {saving && <p className="text-xs text-gray-400 mt-4">&#x2022; Saving…</p>}
           </div>
         )}
 
@@ -394,8 +442,20 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
         {activeSection === "Experience" && (
           <div>
             <SectionHeader title="Experience" />
+            {resume.experience.length === 0 && (
+              <p className="text-sm text-gray-400">No experience entries yet.</p>
+            )}
             {resume.experience.map((exp, ei) => (
               <div key={exp.id} className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                <div className="flex justify-end -mt-1 -mr-1 mb-1">
+                  <button
+                    onClick={() => removeExperience(ei)}
+                    className="text-xs text-gray-300 hover:text-red-500 transition-colors"
+                    title="Remove experience"
+                  >
+                    Remove experience ×
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div><Label>Company</Label><TextInput value={exp.company} onChange={(v) => setExpField(ei, "company", v)} /></div>
                   <div><Label>Title</Label><TextInput value={exp.title} onChange={(v) => setExpField(ei, "title", v)} /></div>
@@ -414,6 +474,12 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                 />
               </div>
             ))}
+            <button
+              onClick={addExperience}
+              className="w-full border border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
+            >
+              + Add experience
+            </button>
           </div>
         )}
 
@@ -421,8 +487,20 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
         {activeSection === "Projects" && (
           <div>
             <SectionHeader title="Projects" />
+            {resume.projects.length === 0 && (
+              <p className="text-sm text-gray-400">No projects yet.</p>
+            )}
             {resume.projects.map((proj, pi) => (
               <div key={proj.id} className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                <div className="flex justify-end -mt-1 -mr-1 mb-1">
+                  <button
+                    onClick={() => removeProject(pi)}
+                    className="text-xs text-gray-300 hover:text-red-500 transition-colors"
+                    title="Remove project"
+                  >
+                    Remove project ×
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <div><Label>Name</Label><TextInput value={proj.name} onChange={(v) => setProjField(pi, "name", v)} /></div>
                   <div>
@@ -446,6 +524,12 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                 />
               </div>
             ))}
+            <button
+              onClick={addProject}
+              className="w-full border border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
+            >
+              + Add project
+            </button>
           </div>
         )}
 

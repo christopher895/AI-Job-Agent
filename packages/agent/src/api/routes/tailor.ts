@@ -18,9 +18,15 @@ router.post("/", async (req, res) => {
   let fetchMethod: string | undefined;
 
   if (!jd && jobUrl) {
-    const fetched = await fetchJd(jobUrl).catch(() => ({ text: "", method: "failed" as const }));
-    jd = fetched.text;
-    fetchMethod = fetched.method;
+    try {
+      const fetched = await fetchJd(jobUrl);
+      jd = fetched.text;
+      fetchMethod = fetched.method;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Invalid URL";
+      res.status(400).json({ error: message });
+      return;
+    }
   }
 
   if (!jd) {
@@ -40,14 +46,21 @@ router.post("/", async (req, res) => {
     return;
   }
 
-  const row = await createTailoredResume({
-    jobTitle,
-    company,
-    jobUrl,
-    jdText: jd,
-    markdown: result.markdown,
-    criticScore: result.critic.finalScore,
-  });
+  let row;
+  try {
+    row = await createTailoredResume({
+      jobTitle,
+      company,
+      jobUrl,
+      jdText: jd,
+      markdown: result.markdown,
+      criticScore: result.critic.finalScore,
+    });
+  } catch (err) {
+    console.error("[tailor] db error:", err);
+    res.status(500).json({ error: "Failed to save resume — database error." });
+    return;
+  }
 
   // Render PDF in the background — /pdf endpoint generates on-demand if not ready yet
   renderPdf(result.markdown)
@@ -61,7 +74,14 @@ router.post("/", async (req, res) => {
 router.post("/fetch-jd", async (req, res) => {
   const { url } = req.body as { url?: string };
   if (!url) { res.status(400).json({ error: "url is required" }); return; }
-  const result = await fetchJd(url).catch(() => ({ text: "", method: "failed" as const }));
+  let result;
+  try {
+    result = await fetchJd(url);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid URL";
+    res.status(400).json({ error: message, method: "failed" });
+    return;
+  }
   if (result.method === "failed") {
     res.status(400).json({ error: "Could not fetch job description from this URL", method: "failed" });
     return;

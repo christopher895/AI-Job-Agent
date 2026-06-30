@@ -8,6 +8,33 @@ export type FetchJdResult = {
 const MIN_LENGTH = 200;
 const TIMEOUT_MS = 15_000;
 
+// Blocks SSRF: private IPs, localhost, cloud metadata endpoints
+function validateUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("Invalid URL");
+  }
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("URL must use http or https");
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (
+    host === "localhost" ||
+    host === "::1" ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+    /^169\.254\./.test(host) ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal")
+  ) {
+    throw new Error("URL targets a private or internal address");
+  }
+}
+
 const CONTAINER_SELECTORS = [
   '[class*="job-description"]',
   '[id*="job-description"]',
@@ -54,6 +81,8 @@ async function tryPlaywright(url: string): Promise<string> {
 }
 
 export async function fetchJd(url: string): Promise<FetchJdResult> {
+  validateUrl(url); // throws on invalid scheme or private IP
+
   try {
     const cheerioText = await tryCheerio(url);
     if (cheerioText.length >= MIN_LENGTH) return { text: cheerioText, method: "cheerio" };

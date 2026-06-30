@@ -65,6 +65,7 @@ const navLinks = [
   { href: "/tailor", label: "Tailor Resume", Icon: SparklesIcon },
   { href: "/resume/master", label: "Master Resume", Icon: FileTextIcon },
   { href: "/applied", label: "Applied", Icon: ClipboardCheckIcon },
+  { href: "/preferences", label: "Preferences", Icon: SettingsIcon },
 ];
 
 export default function Sidebar() {
