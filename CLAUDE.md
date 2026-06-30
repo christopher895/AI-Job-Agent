@@ -12,7 +12,7 @@ Owner: **Christopher Zhang** (Summer 2026 build)
 - **Alert emails** — Resend email listing new jobs (title, company, link) — needs "Tailor resume" link added per job
 - **AI tailoring pipeline** — `generateBestResume(jd)` in `packages/agent/src/ai/chain.ts`: generate → critique → revise loop (up to 3 passes), outputs ATS-safe Markdown
 - **Master resume** — structured JSON in `packages/agent/src/ai/master-resume.ts` — to be moved to DB so web app can edit it
-- **Cron + BullMQ queue** — scraper runs every 15 min
+- **Scheduler** — node-cron runs the scraper every 15 min (in-process, no queue)
 
 ## What's Being Built (full scope)
 
@@ -78,11 +78,8 @@ agent/src/
 ├── notifications/
 │   ├── email.ts            # Resend — job alert emails
 │   └── sms.ts              # Twilio (not currently used in main flow)
-├── queue/
-│   ├── worker.ts           # BullMQ worker
-│   └── producer.ts         # BullMQ producer
 ├── cron/
-│   └── scheduler.ts        # node-cron — every 15 min
+│   └── scheduler.ts        # node-cron — runs runAllCompanyScrapes() every 15 min
 ├── db/
 │   ├── pool.ts             # pg Pool
 │   ├── schema.ts           # CREATE TABLE statements
@@ -117,7 +114,7 @@ web/
 - Next.js 14 (App Router), TypeScript, Tailwind CSS, Shadcn/ui
 
 ### Backend
-- Node.js + Express (API server in `packages/agent`), PostgreSQL, Redis + BullMQ, node-cron
+- Node.js + Express (API server in `packages/agent`), PostgreSQL, node-cron (in-process scheduler)
 
 ### Scraping
 - Playwright (JS-rendered pages), Cheerio (static HTML), custom snapshot diffing via hash sets
@@ -139,7 +136,7 @@ web/
 - None — private URL, single user (Christopher only)
 
 ### Infra
-- Railway (deployment), Docker Compose (local Postgres + Redis)
+- Railway (deployment), Docker Compose (local Postgres)
 
 ## Database Schema
 
@@ -186,9 +183,9 @@ applied_jobs (
 
 ### Scraping → Alert
 ```
-cron (every 15 min)
-  → BullMQ producer
-    → BullMQ worker
+node-cron (every 15 min)
+  → runAllCompanyScrapes()
+    → Promise.allSettled(COMPANIES.map(processCompany))   # parallel, in-process
       → Playwright/Cheerio scrape per company
         → diff.ts (new job hashes)
           → filter by location + keyword score
@@ -217,7 +214,6 @@ POST /api/applied (resume_id, status, applied_at)
 
 ```
 DATABASE_URL
-REDIS_URL
 OPENAI_API_KEY
 RESEND_API_KEY
 YOUR_EMAIL
@@ -242,12 +238,72 @@ Use these proactively:
 - `/verify` — run after any feature to confirm it works end-to-end
 - `/run` — launch the agent or dashboard to test changes live
 
+## gstack
+
+Use the `/browse` skill from gstack for **all web browsing** — never use `mcp__claude-in-chrome__*` tools directly.
+
+Available gstack skills:
+- `/office-hours` — YC Office Hours mode
+- `/plan-ceo-review` — CEO/founder-mode plan review
+- `/plan-eng-review` — Eng manager-mode plan review
+- `/plan-design-review` — Designer's eye plan review
+- `/design-consultation` — Full design system proposal
+- `/design-shotgun` — Generate + compare multiple design variants
+- `/design-html` — Production-quality HTML/CSS finalization
+- `/review` — Code review
+- `/ship` — Ship workflow (merge, test, bump version, PR)
+- `/land-and-deploy` — Land and deploy workflow
+- `/canary` — Post-deploy canary monitoring
+- `/benchmark` — Performance regression detection
+- `/browse` — Fast headless browser for QA and site testing
+- `/connect-chrome` — Launch AI-controlled Chromium with sidebar extension
+- `/qa` — Systematically QA test and fix bugs
+- `/qa-only` — Report-only QA testing
+- `/design-review` — Visual design audit
+- `/setup-browser-cookies` — Import cookies into headless browse session
+- `/setup-deploy` — Configure deployment settings
+- `/setup-gbrain` — Set up gbrain local knowledge base
+- `/retro` — Weekly engineering retrospective
+- `/investigate` — Systematic debugging with root cause investigation
+- `/document-release` — Post-ship documentation update
+- `/document-generate` — Generate missing documentation
+- `/codex` — OpenAI Codex CLI wrapper
+- `/cso` — Chief Security Officer mode
+- `/autoplan` — Auto-review pipeline (CEO + design + eng + DX)
+- `/plan-devex-review` — Developer experience plan review
+- `/devex-review` — Live developer experience audit
+- `/careful` — Safety guardrails for destructive commands
+- `/freeze` — Restrict file edits to a specific directory
+- `/guard` — Full safety mode
+- `/unfreeze` — Clear directory freeze
+- `/gstack-upgrade` — Upgrade gstack to latest version
+- `/learn` — Manage project learnings
+
 ## Dev Notes
 
-- Local infra: `docker-compose up` (Postgres + Redis)
+- Local infra: `docker-compose up` (Postgres)
 - Scraper uses 2–5s random delays; respects robots.txt
-- BullMQ concurrency limits prevent hammering domains
+- Companies are scraped in parallel via `Promise.allSettled`; one failure doesn't abort the run
 - All LLM outputs validated with Zod; retry on failed calls
 - Master resume is the single source of truth — the AI may only select/rephrase facts that exist in it, never invent
 - Alert score threshold: top-ranked jobs by keyword score, capped at `FILTERS.maxPerEmail`
 - PDF design: plain text / ATS-safe for now; will match a specific template in a later pass
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
+
+Key routing rules:
+- Product ideas/brainstorming → invoke /office-hours
+- Strategy/scope → invoke /plan-ceo-review
+- Architecture → invoke /plan-eng-review
+- Design system/plan review → invoke /design-consultation or /plan-design-review
+- Full review pipeline → invoke /autoplan
+- Bugs/errors → invoke /investigate
+- QA/testing site behavior → invoke /qa or /qa-only
+- Code review/diff check → invoke /review
+- Visual polish → invoke /design-review
+- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Save progress → invoke /context-save
+- Resume context → invoke /context-restore
+- Author a backlog-ready spec/issue → invoke /spec
