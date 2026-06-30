@@ -43,11 +43,11 @@ router.patch("/resume/:id", async (req, res) => {
 
 // GET /api/resume/:id/pdf  — stream PDF, generate on-demand if not yet stored
 router.get("/resume/:id/pdf", async (req, res) => {
-  let pdf = await getPdf(req.params.id);
+  const row = await getTailoredResume(req.params.id);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
 
+  let pdf = await getPdf(req.params.id);
   if (!pdf) {
-    const row = await getTailoredResume(req.params.id);
-    if (!row) { res.status(404).json({ error: "Not found" }); return; }
     try {
       pdf = await renderPdf(row.markdown);
       await storePdf(req.params.id, pdf);
@@ -58,8 +58,7 @@ router.get("/resume/:id/pdf", async (req, res) => {
     }
   }
 
-  const row = await getTailoredResume(req.params.id);
-  const slug = [row?.company, row?.job_title]
+  const slug = [row.company, row.job_title]
     .filter(Boolean)
     .join("-")
     .replace(/[^a-z0-9-]/gi, "-")
@@ -87,15 +86,21 @@ router.post("/resume/:id/email", async (req, res) => {
     }
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) { res.status(500).json({ error: "RESEND_API_KEY is not configured" }); return; }
+  const toEmail = process.env.YOUR_EMAIL;
+  if (!toEmail) { res.status(500).json({ error: "YOUR_EMAIL is not configured" }); return; }
+
+  const resend = new Resend(resendKey);
   const subject =
     row.job_title && row.company
       ? `${row.company} — ${row.job_title} resume`
       : "Your tailored resume";
 
+  const from = process.env.EMAIL_FROM ?? "Job Agent <onboarding@resend.dev>";
   await resend.emails.send({
-    from: "Job Agent <onboarding@resend.dev>",
-    to: process.env.YOUR_EMAIL!,
+    from,
+    to: toEmail,
     subject,
     html: `<p>Tailored resume for <strong>${row.job_title ?? "this role"}</strong> at <strong>${row.company ?? "this company"}</strong>.</p>`,
     attachments: [{ filename: `${subject}.pdf`, content: pdf }],

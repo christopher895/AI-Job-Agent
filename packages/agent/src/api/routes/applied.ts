@@ -34,7 +34,7 @@ router.post("/", async (req, res) => {
   res.status(201).json(row);
 
   // Sync to Google Sheets in the background — don't block the response
-  const appUrl = process.env.APP_URL ?? "http://localhost:3001";
+  const appUrl = process.env.WEB_URL ?? process.env.APP_URL ?? "http://localhost:3000";
   appendRow({
     appliedAt: row.applied_at,
     company: row.company,

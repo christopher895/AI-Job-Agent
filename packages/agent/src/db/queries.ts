@@ -1,5 +1,6 @@
 import { pool } from "./pool";
 import { MasterResume, MasterResumeSchema } from "../ai/types";
+import { Preferences, FILTERS } from "../config";
 
 export type TailoredResumeRow = {
   id: string;
@@ -12,6 +13,8 @@ export type TailoredResumeRow = {
   created_at: Date;
   updated_at: Date;
 };
+
+export type ResumeListItem = Omit<TailoredResumeRow, "jd_text" | "markdown">;
 
 export type AppliedJobRow = {
   id: string;
@@ -95,6 +98,27 @@ export async function updateMasterResume(data: MasterResume): Promise<void> {
   );
 }
 
+// ── Preferences ───────────────────────────────────────────────────────────────
+
+export async function getPreferences(): Promise<Preferences> {
+  const { rows } = await pool.query("SELECT data FROM preferences WHERE id = 1");
+  if (rows.length === 0) {
+    await pool.query(
+      "INSERT INTO preferences (id, data) VALUES (1, $1) ON CONFLICT (id) DO NOTHING",
+      [JSON.stringify(FILTERS)]
+    );
+    return FILTERS;
+  }
+  return rows[0].data as Preferences;
+}
+
+export async function updatePreferences(data: Preferences): Promise<void> {
+  await pool.query(
+    "UPDATE preferences SET data = $1, updated_at = NOW() WHERE id = 1",
+    [JSON.stringify(data)]
+  );
+}
+
 // ── Tailored resumes ───────────────────────────────────────────────────────────
 
 export async function createTailoredResume(fields: {
@@ -124,9 +148,9 @@ export async function getTailoredResume(id: string): Promise<TailoredResumeRow |
   return rows[0] ?? null;
 }
 
-export async function listTailoredResumes(): Promise<TailoredResumeRow[]> {
+export async function listTailoredResumes(): Promise<ResumeListItem[]> {
   const { rows } = await pool.query(
-    `SELECT id, job_title, company, job_url, jd_text, markdown, critic_score, created_at, updated_at
+    `SELECT id, job_title, company, job_url, critic_score, created_at, updated_at
      FROM tailored_resumes ORDER BY created_at DESC`
   );
   return rows;

@@ -66,6 +66,15 @@ export type EducationEntry = {
   notes: string[];
 };
 
+export type Preferences = {
+  titleKeywords: string[];
+  requiredKeywords: string[];
+  termFilter: string | null;
+  targetLocations: string[];
+  maxPerEmail: number;
+  priorityCompanies: string[];
+};
+
 export type MasterResume = {
   basics: {
     name: string;
@@ -150,6 +159,10 @@ export const api = {
   }) => request<AppliedJob>("POST", "/applied", body),
   patchApplied: (id: string, status: string) =>
     request<AppliedJob>("PATCH", `/applied/${id}`, { status }),
+  getPlaces: (q: string) =>
+    request<{ name: string }[]>("GET", `/places?q=${encodeURIComponent(q)}`),
+  getPreferences: () => request<Preferences>("GET", "/preferences"),
+  putPreferences: (data: Preferences) => request<{ updated: boolean }>("PUT", "/preferences", data),
   pdfUrl: (id: string) => `${API}/resume/${id}/pdf`,
   getPdfBlob: (id: string) => requestBlob("GET", `/resume/${id}/pdf`),
   previewMasterResumePdf: (data: MasterResume) =>

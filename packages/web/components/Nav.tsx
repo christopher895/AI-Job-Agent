@@ -65,6 +65,7 @@ const navLinks = [
   { href: "/tailor", label: "Tailor Resume", Icon: SparklesIcon },
   { href: "/resume/master", label: "Master Resume", Icon: FileTextIcon },
   { href: "/applied", label: "Applied", Icon: ClipboardCheckIcon },
+  { href: "/preferences", label: "Preferences", Icon: SettingsIcon },
 ];
 
 export default function Sidebar() {
@@ -105,21 +106,6 @@ export default function Sidebar() {
           </Link>
         ))}
       </nav>
-
-      {/* Settings */}
-      <div className="px-2 pb-2">
-        <Link
-          href="/settings"
-          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-            pathname === "/settings"
-              ? "bg-violet-600 text-white"
-              : "text-gray-400 hover:bg-gray-800 hover:text-white"
-          }`}
-        >
-          <SettingsIcon />
-          Settings
-        </Link>
-      </div>
 
       {/* User profile */}
       <div className="px-4 py-4 border-t border-gray-800 flex items-center gap-2.5">

@@ -7,8 +7,8 @@ import { scrapeGreenhouse } from "./adapters/greenhouse";
 import { scrapeAshby } from "./adapters/ashby";
 import { scrapeLever } from "./adapters/lever";
 import { scrapeAmazon } from "./adapters/amazon";
-import { matchesLocation, scoreJob } from "./filters";
-import { FILTERS } from "../config";
+import { matchesLocation, scoreJob, applyPreferences } from "./filters";
+import { getPreferences } from "../db/queries";
 
 async function scrapeCompany(company: Company): Promise<JobListing[]> {
   switch (company.platform) {
@@ -22,8 +22,18 @@ async function scrapeCompany(company: Company): Promise<JobListing[]> {
   }
 }
 
+function getCareerUrl(company: Company): string {
+  switch (company.platform) {
+    case "greenhouse": return `https://boards.greenhouse.io/${company.slug}`;
+    case "ashby":      return `https://jobs.ashbyhq.com/${company.slug}`;
+    case "lever":      return `https://jobs.lever.co/${company.slug}`;
+    case "amazon":     return "https://www.amazon.jobs/";
+    default:           return `https://${company.platform}/${company.slug}`;
+  }
+}
+
 async function processCompany(company: Company): Promise<JobListing[]> {
-  const record = await getOrCreateCompany(company.name, `https://${company.platform}/${company.slug}`, company.platform);
+  const record = await getOrCreateCompany(company.name, getCareerUrl(company), company.platform);
 
   const currentJobs = await scrapeCompany(company);
 
@@ -51,6 +61,9 @@ async function processCompany(company: Company): Promise<JobListing[]> {
 }
 
 export async function runAllCompanyScrapes(): Promise<void> {
+  const prefs = await getPreferences();
+  applyPreferences(prefs);
+
   console.log(`[scraper] Scanning ${COMPANIES.length} companies...`);
 
   const results = await Promise.allSettled(COMPANIES.map(processCompany));
@@ -70,7 +83,7 @@ export async function runAllCompanyScrapes(): Promise<void> {
   const scored = allNewJobs
     .map((job) => ({ job, score: scoreJob(job) }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, FILTERS.maxPerEmail);
+    .slice(0, prefs.maxPerEmail);
 
   const topJobs = scored.map((s) => s.job);
 
