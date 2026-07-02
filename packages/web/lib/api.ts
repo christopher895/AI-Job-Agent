@@ -6,6 +6,8 @@ export type ResumeListItem = {
   company: string | null;
   job_url: string | null;
   critic_score: number | null;
+  /** Error from the most recent PDF render attempt; null if the last attempt succeeded. */
+  pdf_error: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -129,10 +131,14 @@ export const api = {
   listResumes: () => request<ResumeListItem[]>("GET", "/resumes"),
   getResume: (id: string) => request<Resume>("GET", `/resume/${id}`),
   patchResume: (id: string, markdown: string) =>
-    request<{ updatedAt: string }>("PATCH", `/resume/${id}`, { markdown }),
+    request<{ updatedAt: string; pdfError: string | null }>("PATCH", `/resume/${id}`, { markdown }),
   emailResume: (id: string) => request<{ sent: boolean }>("POST", `/resume/${id}/email`),
   fetchJd: (url: string) =>
-    request<{ text: string; method: string }>("POST", "/tailor/fetch-jd", { url }),
+    request<{ text: string; method: string; title?: string; company?: string }>(
+      "POST",
+      "/tailor/fetch-jd",
+      { url }
+    ),
   tailorResume: (body: {
     jdText?: string;
     jobUrl?: string;
