@@ -27,8 +27,10 @@ export default function TailorForm({
     setFetchStatus("fetching");
     setError(null);
     try {
-      const { text } = await api.fetchJd(trimmed);
+      const { text, title: fetchedTitle, company: fetchedCompany } = await api.fetchJd(trimmed);
       setJdText(text);
+      setTitle((current) => (current.trim() ? current : fetchedTitle ?? current));
+      setCompany((current) => (current.trim() ? current : fetchedCompany ?? current));
       setFetchStatus("done");
     } catch {
       setFetchStatus("failed");
