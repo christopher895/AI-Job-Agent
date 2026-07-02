@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { generateBestResume } from "../../ai/chain";
-import { createTailoredResume, storePdf, setPdfError } from "../../db/queries";
+import { createTailoredResume, storePdf } from "../../db/queries";
 import { fetchJd } from "../../scraper/fetch-jd";
 import { renderPdf } from "../../ai/render-pdf";
 
@@ -69,11 +69,7 @@ router.post("/", async (req, res) => {
   // Render PDF in the background — /pdf endpoint generates on-demand if not ready yet
   renderPdf(result.markdown)
     .then((pdf) => storePdf(row.id, pdf))
-    .catch((err) => {
-      console.error("[tailor] pdf render failed:", err);
-      const message = err instanceof Error ? err.message : String(err);
-      setPdfError(row.id, message).catch(() => {});
-    });
+    .catch((err) => console.error("[tailor] pdf render failed:", err));
 
   res.json({ id: row.id, markdown: result.markdown, criticScore: result.critic.finalScore, fetchMethod });
 });
