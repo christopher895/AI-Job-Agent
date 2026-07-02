@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import { zodToJsonSchema as zodToJsonSchemaImpl } from "zod-to-json-schema";
 
 /**
  * Headless `claude -p` backend for completeJSON(), authenticated via
@@ -8,6 +8,20 @@ import { zodToJsonSchema } from "zod-to-json-schema";
  */
 
 const STDIN_INSTRUCTION = "Follow the system prompt using the content provided on stdin.";
+
+/**
+ * zod-to-json-schema's exported type signature recurses through zod's
+ * generic ZodType structure deeply enough to hit TS2589 ("Type
+ * instantiation is excessively deep and possibly infinite") under
+ * zod 3.25.x + strict mode, even for trivial schemas. The function's
+ * *runtime* behavior is unaffected; we just widen its type once, here,
+ * to stop TS from re-deriving the deep conditional return type on every
+ * call site.
+ */
+const zodToJsonSchema = zodToJsonSchemaImpl as unknown as (
+  schema: z.ZodTypeAny,
+  options?: unknown
+) => Record<string, unknown>;
 
 /** Pure: builds the `claude` CLI argv (excluding the binary path itself). */
 export function buildClaudeCliArgs(schema: z.ZodTypeAny, opts: { system: string; model?: string }): string[] {
