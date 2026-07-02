@@ -1,8 +1,11 @@
 FROM node:20-slim
 
 # ── Build tools ──────────────────────────────────────────────────────────────
+# poppler-utils provides pdfinfo, used by fit-page.ts to count PDF pages
+# (Tectonic's PDF 1.5 output has compressed object streams, so page count
+# can't be scraped from raw PDF bytes).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl \
+      ca-certificates curl poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # ── Tectonic (statically-linked musl binary — zero runtime deps) ─────────────
