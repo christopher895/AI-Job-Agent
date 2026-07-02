@@ -25,6 +25,12 @@ echo "CLAUDE_CODE_OAUTH_TOKEN set: ${CLAUDE_CODE_OAUTH_TOKEN:+yes}"
 # on the same service in Railway before redeploying.
 echo "TEST_VAR set: ${TEST_VAR:+yes} value=${TEST_VAR}"
 
+# Ground truth: every env var NAME actually present in this container (never
+# values) so we stop relying on the Railway UI and just read what's real.
+echo "--- all env var names in this container ---"
+env | cut -d= -f1 | sort
+echo "--- end env var names ---"
+
 echo "--- running claude -p smoke test (no --bare: bare mode ignores CLAUDE_CODE_OAUTH_TOKEN) ---"
 claude -p "Reply with exactly: OK" --output-format json
 echo "--- smoke test exit code: $? ---"
