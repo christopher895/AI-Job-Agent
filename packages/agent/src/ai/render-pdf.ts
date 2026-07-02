@@ -49,19 +49,38 @@ type ContactFields = {
   email: string;
   phone: string;
   github: string;
+  linkedin: string;
   portfolio: string;
 };
 
 function parseContactLine(line: string): ContactFields {
-  const f: ContactFields = { location: "", email: "", phone: "", github: "", portfolio: "" };
+  const f: ContactFields = { location: "", email: "", phone: "", github: "", linkedin: "", portfolio: "" };
+  const otherUrls: string[] = [];
   for (const part of line.split(" · ").map(s => s.trim())) {
     if (part.includes("@") && !part.startsWith("http")) f.email = part;
     else if (/^\(?\d{3}[\)\s.-]\s*\d{3}[\s.-]\d{4}$/.test(part)) f.phone = part;
     else if (part.includes("github.com")) f.github = part;
-    else if (part.startsWith("http") || part.startsWith("www.")) f.portfolio = part;
+    else if (part.includes("linkedin.com")) f.linkedin = part;
+    else if (part.startsWith("http") || part.startsWith("www.")) otherUrls.push(part);
     else if (!f.location) f.location = part;
   }
+  // Any remaining URLs (not github/linkedin) are portfolio links, in order of appearance.
+  // Only the first is kept — buildLatex has one portfolio slot — so nothing is silently
+  // overwritten by a later URL the way a single shared "else" bucket would.
+  if (otherUrls.length) f.portfolio = otherUrls[0];
   return f;
+}
+
+// A header line looks like "**Name** <dash> rest" or "**Name** · rest". Editors will
+// type whichever dash their keyboard/autocorrect produces (-, –, —), so accept all three
+// as long as they're a standalone token (surrounded by whitespace) — this avoids matching
+// a hyphen inside a compound word like "Full-Stack".
+const HEADER_DASH_SPLIT = /^\*\*(.+?)\*\*\s+[-–—]\s+(.+)$/;
+const HEADER_DOT_SPLIT = /^\*\*(.+?)\*\*\s*·\s*(.+)$/;
+
+/** Splits "a · b · c" respecting that any field may itself be empty. */
+function splitDots(s: string): string[] {
+  return s.split(" · ").map((p) => p.trim());
 }
 
 type ExpEntry  = { company: string; title: string; location: string; dates: string; bullets: string[] };
@@ -74,17 +93,42 @@ type ParsedDoc = {
   summary: string;
   experience: ExpEntry[];
   projects: ProjEntry[];
-  extracurriculars?: ExpEntry[];
+  extracurriculars: ExpEntry[];
   skills: string[];
   education: EduEntry[];
 };
+
+/**
+ * Parses a "**Company** — Title · Location · Start–End" style header. Used for
+ * both Experience and Extracurriculars, which share the exact same shape.
+ * Throws instead of silently dropping the line or merging its bullets into the
+ * previous entry — a malformed header should surface as a visible render error,
+ * not vanish from the PDF.
+ */
+function parseExpHeader(line: string, section: string): ExpEntry {
+  const m = line.match(HEADER_DASH_SPLIT);
+  if (!m) {
+    throw new Error(
+      `Couldn't parse ${section} entry header: "${line}" — expected ` +
+      `"**Company** — Title · Location · Start–End"`
+    );
+  }
+  const parts = splitDots(m[2]);
+  return {
+    company: m[1],
+    title: parts[0] ?? "",
+    location: parts[1] ?? "",
+    dates: parts.slice(2).join(" · ").replace(/–/g, "--"),
+    bullets: [],
+  };
+}
 
 function parseMd(md: string): ParsedDoc {
   const lines = md.split("\n");
   let i = 0;
   const doc: ParsedDoc = {
-    name: "", contact: { location: "", email: "", phone: "", github: "", portfolio: "" },
-    summary: "", experience: [], projects: [], skills: [], education: [],
+    name: "", contact: { location: "", email: "", phone: "", github: "", linkedin: "", portfolio: "" },
+    summary: "", experience: [], projects: [], extracurriculars: [], skills: [], education: [],
   };
 
   if (lines[i]?.startsWith("# ")) { doc.name = lines[i].slice(2).trim(); i++; }
@@ -103,47 +147,43 @@ function parseMd(md: string): ParsedDoc {
     const section = lines[i].slice(3).trim().toLowerCase();
     i++;
 
-    if (section === "experience") {
+    if (section === "experience" || section === "extracurriculars") {
+      const bucket = section === "experience" ? doc.experience : doc.extracurriculars;
       let cur: ExpEntry | null = null;
       while (i < lines.length && !lines[i].startsWith("## ")) {
         const l = lines[i].trim();
-        if (l.startsWith("**") && l.includes("—")) {
-          if (cur) doc.experience.push(cur);
-          const m = l.match(/^\*\*(.+?)\*\*\s*[—–]\s*(.+)$/);
-          if (m) {
-            const parts = m[2].split(" · ");
-            cur = {
-              company: m[1],
-              title: parts[0] ?? "",
-              location: parts[1] ?? "",
-              dates: parts.slice(2).join(" · ").replace(/–/g, "--"),
-              bullets: [],
-            };
-          }
-        } else if (l.startsWith("- ") && cur) {
+        if (l.startsWith("**")) {
+          if (cur) bucket.push(cur);
+          cur = parseExpHeader(l, section);
+        } else if (l.startsWith("- ")) {
+          if (!cur) throw new Error(`Bullet "${l}" appears before any ${section} header`);
           cur.bullets.push(l.slice(2));
         }
         i++;
       }
-      if (cur) doc.experience.push(cur);
+      if (cur) bucket.push(cur);
 
     } else if (section === "projects") {
       let cur: ProjEntry | null = null;
       while (i < lines.length && !lines[i].startsWith("## ")) {
         const l = lines[i].trim();
-        if (l.startsWith("**") && !l.startsWith("- ")) {
+        if (l.startsWith("**")) {
           if (cur) doc.projects.push(cur);
-          const m = l.match(/^\*\*(.+?)\*\*\s*·\s*(.+)$/);
-          if (m) {
-            const parts = m[2].split(" · ");
-            const dates = (parts.pop() ?? "").replace(/–/g, "--");
-            cur = { name: m[1], tech: parts.join(", "), dates, link: "", bullets: [] };
-          } else {
-            cur = { name: l.replace(/\*/g, ""), tech: "", dates: "", link: "", bullets: [] };
+          const m = l.match(HEADER_DOT_SPLIT);
+          if (!m) {
+            throw new Error(
+              `Couldn't parse project entry header: "${l}" — expected ` +
+              `"**Name** · Tech · Start–End"`
+            );
           }
-        } else if ((l.startsWith("http") || l.startsWith("www.")) && cur && !cur.link) {
-          cur.link = l;
-        } else if (l.startsWith("- ") && cur) {
+          const parts = splitDots(m[2]);
+          const dates = (parts.pop() ?? "").replace(/–/g, "--");
+          cur = { name: m[1], tech: parts.join(", "), dates, link: "", bullets: [] };
+        } else if ((l.startsWith("http") || l.startsWith("www.")) && !l.startsWith("- ")) {
+          if (!cur) throw new Error(`Project link "${l}" appears before any project header`);
+          if (!cur.link) cur.link = l;
+        } else if (l.startsWith("- ")) {
+          if (!cur) throw new Error(`Bullet "${l}" appears before any project header`);
           cur.bullets.push(l.slice(2));
         }
         i++;
@@ -163,12 +203,17 @@ function parseMd(md: string): ParsedDoc {
         const l = lines[i].trim();
         if (l.startsWith("**")) {
           if (cur) doc.education.push(cur);
-          const m = l.match(/^\*\*(.+?)\*\*\s*[—–]\s*(.+)$/);
-          if (m) {
-            const parts = m[2].split(" · ");
-            cur = { school: m[1], degrees: parts[0] ?? "", location: parts[1] ?? "", graduation: parts.slice(2).join(" · ") };
+          const m = l.match(HEADER_DASH_SPLIT);
+          if (!m) {
+            throw new Error(
+              `Couldn't parse education entry header: "${l}" — expected ` +
+              `"**School** — Degrees · Location · Graduation"`
+            );
           }
-        } else if (l.startsWith("GPA:") && cur) {
+          const parts = splitDots(m[2]);
+          cur = { school: m[1], degrees: parts[0] ?? "", location: parts[1] ?? "", graduation: parts.slice(2).join(" · ") };
+        } else if (l.startsWith("GPA:")) {
+          if (!cur) throw new Error(`"${l}" appears before any education header`);
           cur.gpa = l.slice(4).trim();
         }
         i++;
@@ -191,6 +236,7 @@ function buildLatex(doc: ParsedDoc): string {
   if (c.email)    addrParts.push(`\\href{mailto:${texUrl(c.email)}}{${tex(c.email)}}`);
   if (c.phone)    addrParts.push(tex(c.phone));
   if (c.github)   addrParts.push(`\\href{${texUrl(c.github)}}{${tex(c.github.replace(/^https?:\/\//, ""))}}`);
+  if (c.linkedin) addrParts.push(`\\href{${texUrl(c.linkedin)}}{${tex(c.linkedin.replace(/^https?:\/\//, ""))}}`);
   if (c.portfolio) addrParts.push(`\\href{${texUrl(c.portfolio)}}{${tex(c.portfolio.replace(/^https?:\/\//, ""))}}`);
 
   const lines: string[] = [];
@@ -384,6 +430,7 @@ function masterResumeToDoc(mr: MasterResume): ParsedDoc {
       email: b.email,
       phone: b.phone,
       github: b.github,
+      linkedin: b.linkedin,
       portfolio: b.portfolio,
     },
     summary: b.summary,

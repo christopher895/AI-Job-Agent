@@ -72,12 +72,21 @@ export function renderMarkdown(master: MasterResume, tailored: TailoredResume): 
   ];
   lines.push("", "## Skills", ordered.join(" · "));
 
-  // Education (untailored — facts are fixed).
+  // Education (untailored — facts are fixed, never seen by the tailorer).
   if (master.education.length) {
     lines.push("", "## Education");
     for (const ed of master.education) {
       lines.push("", `**${ed.school}** — ${ed.degrees.join(", ")} · ${ed.location} · ${ed.graduation}`);
       if (ed.gpa) lines.push(`GPA: ${ed.gpa}`);
+    }
+  }
+
+  // Extracurriculars (untailored — copied verbatim, never seen by the tailorer).
+  if (master.extracurriculars.length) {
+    lines.push("", "## Extracurriculars");
+    for (const ex of master.extracurriculars) {
+      lines.push("", `**${ex.company}** — ${ex.title} · ${ex.location} · ${ex.start}–${ex.end}`);
+      for (const bullet of ex.bullets) lines.push(`- ${bullet.text}`);
     }
   }
 

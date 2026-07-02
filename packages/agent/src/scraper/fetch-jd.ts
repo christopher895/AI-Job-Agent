@@ -62,6 +62,40 @@ const NOISE_SELECTORS = [
 
 const TITLE_SEPARATORS = [" | ", " — ", " - ", " · ", " • "];
 
+// Third-party ATS/job-board hosts — their domain isn't the employer's name,
+// so never guess a company from these (e.g. "tal.net" is not the company).
+const ATS_HOST_FRAGMENTS = [
+  "greenhouse.io", "lever.co", "ashbyhq.com", "myworkdayjobs.com",
+  "icims.com", "tal.net", "smartrecruiters.com", "workable.com",
+  "bamboohr.com", "jobvite.com", "taleo.net", "successfactors.com",
+  "breezy.hr", "recruitee.com", "personio.com", "wd1.myworkdaysite.com",
+];
+
+const HOST_SUBDOMAIN_PREFIXES = ["www", "jobs", "careers", "apply", "join", "join-us", "hiring"];
+
+// Last-resort company guess from the URL's registrable domain, e.g.
+// "www.optiver.com" -> "Optiver". Used when the page has no title/og/JSON-LD
+// signal to extract a company name from at all.
+function companyFromHost(url: string): string | undefined {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+  if (ATS_HOST_FRAGMENTS.some((frag) => host.includes(frag))) return undefined;
+
+  const labels = host.split(".").filter(Boolean);
+  while (labels.length > 2 && HOST_SUBDOMAIN_PREFIXES.includes(labels[0])) {
+    labels.shift();
+  }
+  if (labels.length < 2) return undefined;
+
+  const sld = labels[labels.length - 2];
+  if (!sld) return undefined;
+  return sld.charAt(0).toUpperCase() + sld.slice(1);
+}
+
 function normalize(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
@@ -94,6 +128,9 @@ function extractTitleCompany($: CheerioAPI): { title?: string; company?: string 
 export function extractFromHtml(html: string, url: string): { text: string; title?: string; company?: string } {
   const $ = cheerio.load(html);
   const titleCompany = extractTitleCompany($);
+  if (!titleCompany.company) {
+    titleCompany.company = companyFromHost(url);
+  }
 
   $(NOISE_SELECTORS).remove();
   const cleanedHtml = $.html();

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ResumeListItem, api } from "../lib/api";
+import { ResumeListItem } from "../lib/api";
 
 function ScoreCircle({ score }: { score: number }) {
   const r = 22;
@@ -79,17 +79,15 @@ export default function ResumeCard({
         )}
 
         <div className="flex items-center gap-2">
-          <a
-            href={api.pdfUrl(resume.id)}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href={`/resume/${resume.id}?view=split`}
             className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-300 px-2.5 py-1.5 rounded-lg transition-colors"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
             </svg>
             View PDF
-          </a>
+          </Link>
           <Link
             href={`/resume/${resume.id}`}
             className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 border border-violet-200 hover:border-violet-400 px-2.5 py-1.5 rounded-lg transition-colors"

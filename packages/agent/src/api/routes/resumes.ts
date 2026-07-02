@@ -6,8 +6,13 @@ import {
   updateTailoredResume,
   getPdf,
   storePdf,
+  setPdfError,
 } from "../../db/queries";
 import { renderPdf } from "../../ai/render-pdf";
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
 
 const router = Router();
 
@@ -24,7 +29,7 @@ router.get("/resume/:id", async (req, res) => {
   res.json(row);
 });
 
-// PATCH /api/resume/:id  — save editor content, re-render PDF in background
+// PATCH /api/resume/:id  — save editor content, re-render PDF, report render failures
 router.patch("/resume/:id", async (req, res) => {
   const { markdown } = req.body as { markdown?: string };
   if (typeof markdown !== "string") {
@@ -34,11 +39,20 @@ router.patch("/resume/:id", async (req, res) => {
   const updated = await updateTailoredResume(req.params.id, markdown);
   if (!updated) { res.status(404).json({ error: "Not found" }); return; }
 
-  renderPdf(markdown)
-    .then((pdf) => storePdf(req.params.id, pdf))
-    .catch((err) => console.error("[resume] pdf re-render failed:", err));
+  // Awaited (not fire-and-forget): the editor needs to know synchronously whether the
+  // edit it just saved still renders, so a broken edit surfaces immediately instead of
+  // leaving a stale PDF served silently by the on-demand routes below.
+  let pdfError: string | null = null;
+  try {
+    const pdf = await renderPdf(markdown);
+    await storePdf(req.params.id, pdf);
+  } catch (err) {
+    pdfError = errorMessage(err);
+    await setPdfError(req.params.id, pdfError);
+    console.error("[resume] pdf re-render failed:", err);
+  }
 
-  res.json({ updatedAt: updated.updated_at });
+  res.json({ updatedAt: updated.updated_at, pdfError });
 });
 
 // GET /api/resume/:id/pdf  — stream PDF, generate on-demand if not yet stored
@@ -52,8 +66,10 @@ router.get("/resume/:id/pdf", async (req, res) => {
       pdf = await renderPdf(row.markdown);
       await storePdf(req.params.id, pdf);
     } catch (err) {
+      const message = errorMessage(err);
+      await setPdfError(req.params.id, message);
       console.error("[resume] on-demand pdf failed:", err);
-      res.status(500).json({ error: "PDF generation failed" });
+      res.status(500).json({ error: `PDF generation failed: ${message}` });
       return;
     }
   }
@@ -80,8 +96,10 @@ router.post("/resume/:id/email", async (req, res) => {
       pdf = await renderPdf(row.markdown);
       await storePdf(req.params.id, pdf);
     } catch (err) {
+      const message = errorMessage(err);
+      await setPdfError(req.params.id, message);
       console.error("[resume] email pdf failed:", err);
-      res.status(500).json({ error: "PDF generation failed" });
+      res.status(500).json({ error: `PDF generation failed: ${message}` });
       return;
     }
   }
