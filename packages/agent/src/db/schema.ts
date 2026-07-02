@@ -108,6 +108,12 @@ export async function initSchema() {
       CHECK (status IN ('applied','interviewing','rejected','offer','assessment','no_response'));
   `);
 
+  // Tracks the error from the most recent PDF render attempt, if any, so a failed
+  // re-render after an edit doesn't silently leave a stale PDF with no indication.
+  await pool.query(`
+    ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS pdf_error TEXT;
+  `);
+
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_tailored_resumes_created ON tailored_resumes(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_snapshots_company_scraped ON snapshots(company_id, scraped_at DESC);
