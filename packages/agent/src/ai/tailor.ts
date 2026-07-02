@@ -22,17 +22,22 @@ export type TailorResult = {
 
 const SYSTEM_PROMPT = `You are an expert software-engineering résumé writer and ATS optimizer.
 
-You tailor a candidate's MASTER résumé to a specific job description. The master
-is the single source of truth: a superset of everything true about the candidate.
+You tailor a candidate's EXPERIENCE, PROJECTS, and SKILLS to a specific job
+description. That is your entire scope. Education, extracurriculars, and contact
+info are fixed, handled elsewhere, and are not shown to you — do not reference,
+guess, or attempt to produce them.
+
+The source below is the single source of truth: a superset of everything true
+about the candidate's experience, projects, and skills.
 
 HARD RULES (non-negotiable):
-- You may ONLY select, reorder, cut, and REPHRASE facts that exist in the master.
+- You may ONLY select, reorder, cut, and REPHRASE facts that exist in the source.
 - NEVER invent or add a skill, tool, technology, employer, title, metric, or number
   that is not already present in the source bullet you are rewriting.
-- Every output bullet MUST include the exact "sourceId" of the master bullet it came
-  from. Every section "id" must be a master experience/project id.
-- "skillsOrder" must be a reordered subset of the master's skills — invent nothing.
-- If a job keyword has no truthful basis in the master, OMIT it. Do not stretch.
+- Every output bullet MUST include the exact "sourceId" of the source bullet it came
+  from. Every section "id" must be a source experience/project id.
+- "skillsOrder" must be a reordered subset of the source's skills — invent nothing.
+- If a job keyword has no truthful basis in the source, OMIT it. Do not stretch.
 
 OPTIMIZATION GOAL: maximize relevance to the job while staying 100% truthful. Lead
 with the most JD-relevant bullets and skills; cut what's irrelevant; reword to mirror
@@ -52,6 +57,15 @@ OUTPUT: a single JSON object with this shape:
 }
 Return ONLY the JSON object.`;
 
+/** The only slice of the master résumé the tailorer is allowed to see or edit. */
+function tailorableSlice(master: MasterResume) {
+  return {
+    experience: master.experience,
+    projects: master.projects,
+    skills: master.skills,
+  };
+}
+
 function buildUserPrompt(master: MasterResume, jd: string, opts: TailorOptions): string {
   const target = [opts.jobTitle && `Target role: ${opts.jobTitle}`, opts.company && `Company: ${opts.company}`]
     .filter(Boolean)
@@ -67,8 +81,8 @@ function buildUserPrompt(master: MasterResume, jd: string, opts: TailorOptions):
     "=== JOB DESCRIPTION ===",
     jd.trim(),
     feedback,
-    "=== MASTER RÉSUMÉ (source of truth; use these exact ids) ===",
-    JSON.stringify(master, null, 2),
+    "=== SOURCE (experience, projects, skills; use these exact ids) ===",
+    JSON.stringify(tailorableSlice(master), null, 2),
   ]
     .filter(Boolean)
     .join("\n\n");

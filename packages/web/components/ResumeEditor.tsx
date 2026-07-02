@@ -107,6 +107,7 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfRenderError, setPdfRenderError] = useState<string | null>(resume.pdf_error);
   const pdfBlobUrlRef = useRef<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -116,8 +117,9 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
     async (value: string) => {
       setSaveStatus("saving");
       try {
-        await api.patchResume(resume.id, value);
+        const { pdfError: renderError } = await api.patchResume(resume.id, value);
         setSaveStatus("saved");
+        setPdfRenderError(renderError);
       } catch {
         setSaveStatus("error");
       }
@@ -272,6 +274,13 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
           {saveLabel}
         </span>
       </div>
+
+      {pdfRenderError && (
+        <div className="border-b border-red-100 bg-red-50 px-6 py-2 text-xs text-red-700 flex-shrink-0">
+          <span className="font-medium">PDF didn&apos;t update:</span> {pdfRenderError}
+          {" — "}the downloaded/emailed PDF reflects an older version until this is fixed.
+        </div>
+      )}
 
       {/* Title + score + actions */}
       <div className="border-b border-gray-200 px-6 py-4 flex items-start justify-between gap-4 flex-shrink-0">
