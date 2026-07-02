@@ -177,6 +177,7 @@ POST /api/tailor  (JD text or job URL)
 - Node.js 18+
 - Docker (for local Postgres)
 - [Tectonic](https://tectonic-typesetting.github.io/) — `brew install tectonic`
+- Poppler (`pdfinfo`) — `brew install poppler` — used to detect résumé page overflow
 - OpenAI API key
 - Resend API key
 - Google service account with Sheets API access
