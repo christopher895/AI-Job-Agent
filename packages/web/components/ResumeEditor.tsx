@@ -93,7 +93,13 @@ function PdfPane({
   );
 }
 
-export default function ResumeEditor({ resume }: { resume: Resume }) {
+export default function ResumeEditor({
+  resume,
+  initialView = "edit",
+}: {
+  resume: Resume;
+  initialView?: ViewMode;
+}) {
   const [markdown, setMarkdown] = useState(resume.markdown);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -103,7 +109,7 @@ export default function ResumeEditor({ resume }: { resume: Resume }) {
     appliedAt: new Date().toISOString().split("T")[0],
   });
   const [applyStatus, setApplyStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
-  const [viewMode, setViewMode] = useState<ViewMode>("edit");
+  const [viewMode, setViewMode] = useState<ViewMode>(initialView);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
