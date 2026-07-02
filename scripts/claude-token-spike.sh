@@ -20,6 +20,11 @@ echo "ANTHROPIC_API_KEY set: ${ANTHROPIC_API_KEY:+yes}"
 echo "ANTHROPIC_AUTH_TOKEN set: ${ANTHROPIC_AUTH_TOKEN:+yes}"
 echo "CLAUDE_CODE_OAUTH_TOKEN set: ${CLAUDE_CODE_OAUTH_TOKEN:+yes}"
 
+# Canary: proves whether Railway is injecting ANY service variables into this
+# container at all, independent of the token name/value. Set TEST_VAR=hello123
+# on the same service in Railway before redeploying.
+echo "TEST_VAR set: ${TEST_VAR:+yes} value=${TEST_VAR}"
+
 echo "--- running claude -p smoke test (no --bare: bare mode ignores CLAUDE_CODE_OAUTH_TOKEN) ---"
 claude -p "Reply with exactly: OK" --output-format json
 echo "--- smoke test exit code: $? ---"
