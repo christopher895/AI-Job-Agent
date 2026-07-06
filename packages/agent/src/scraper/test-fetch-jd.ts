@@ -69,5 +69,49 @@ function check(label: string, ok: boolean, detail?: string) {
   check("ats-host", result.company === undefined, `expected no company guess, got ${JSON.stringify(result.company)}`);
 }
 
+// Case 4: Jobright.ai job detail page — real <title> format is
+// "{Job Title} @ {Employer} | Jobright.ai". Jobright is the job discovery
+// platform the scraper itself pulls listings from (see scraper/playwright.ts),
+// not the employer, so its brand must never end up in `title` or `company`.
+{
+  const html = `<html><head><title>Artificial Intelligence Specialist @ RTX | Jobright.ai</title></head>
+    <body><main>${"Design and build AI systems for aerospace applications. ".repeat(20)}</main></body></html>`;
+  const url = "https://jobright.ai/jobs/info/6924d9adc0cefa13343e2b06";
+  const result = extractFromHtml(html, url);
+
+  console.log("[jobright-with-company] title:", result.title);
+  console.log("[jobright-with-company] company:", result.company);
+
+  check(
+    "jobright-with-company",
+    result.title === "Artificial Intelligence Specialist",
+    `title mismatch: got ${JSON.stringify(result.title)}`
+  );
+  check("jobright-with-company", result.company === "RTX", `company mismatch: got ${JSON.stringify(result.company)}`);
+}
+
+// Case 5: Jobright.ai listing with no "@ Employer" segment in the title —
+// must not fall back to "Jobright.ai" as the company.
+{
+  const html = `<html><head><title>Junior Software Engineer | Jobright.ai</title></head>
+    <body><main>${"Build and ship product features end to end. ".repeat(20)}</main></body></html>`;
+  const url = "https://jobright.ai/jobs/info/b2b_1770936109040_2";
+  const result = extractFromHtml(html, url);
+
+  console.log("[jobright-no-company] title:", result.title);
+  console.log("[jobright-no-company] company:", result.company);
+
+  check(
+    "jobright-no-company",
+    result.title === "Junior Software Engineer",
+    `title mismatch: got ${JSON.stringify(result.title)}`
+  );
+  check(
+    "jobright-no-company",
+    result.company === undefined,
+    `expected no company guess, got ${JSON.stringify(result.company)}`
+  );
+}
+
 console.log(allPass ? "\n✓ fetch-jd extraction test PASSED" : "\n✗ fetch-jd extraction test FAILED");
 process.exit(allPass ? 0 : 1);
