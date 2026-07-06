@@ -75,12 +75,19 @@ function runClaudeCliProcess(args: string[], cwd: string, input: string): Promis
     const child = spawn(CLAUDE_BIN, args, { cwd });
     let stdout = "";
     let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
     });
     child.stderr.on("data", (chunk) => {
       stderr += chunk;
     });
+    // Prevent an EPIPE (or other write error) on stdin from throwing as an
+    // uncaught exception, which would crash the whole process. The real
+    // diagnostic/rejection is produced by the `error`/`close` handlers below;
+    // this listener's only job is to swallow the stdin-specific error event.
+    child.stdin.on("error", () => {});
     child.on("error", reject);
     child.on("close", (code) => {
       if (code !== 0) {
