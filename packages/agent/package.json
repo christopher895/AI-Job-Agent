@@ -13,6 +13,7 @@
     "test:format": "tsx src/ai/test-format.ts",
     "test:critic": "tsx src/ai/test-critic.ts",
     "test:fetch-jd": "tsx src/scraper/test-fetch-jd.ts",
+    "test:claude-cli": "tsx src/ai/test-claude-cli.ts",
     "tailor": "tsx src/ai/run-tailor.ts"
   },
   "dependencies": {

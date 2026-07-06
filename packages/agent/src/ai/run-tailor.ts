@@ -1,6 +1,7 @@
 import "dotenv/config";
 import "../polyfills";
 import { generateBestResume } from "./chain";
+import { LLM_PROVIDER } from "./llm";
 
 /**
  * Live end-to-end demo of the generate → critique → revise loop.
@@ -16,8 +17,15 @@ PostgreSQL, and own parts of our CI/CD and observability stack. Experience with 
 infrastructure-as-code, and LLM-powered developer tooling is a strong plus.`;
 
 async function main() {
-  if (!process.env.OPENAI_API_KEY) {
-    console.error("OPENAI_API_KEY is not set in .env — cannot run the live loop.");
+  if (LLM_PROVIDER === "openai" && !process.env.OPENAI_API_KEY) {
+    console.error("OPENAI_API_KEY is not set in .env — cannot run the live loop with LLM_PROVIDER=openai.");
+    process.exit(1);
+  }
+  if (LLM_PROVIDER === "claude" && !process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+    console.error(
+      "CLAUDE_CODE_OAUTH_TOKEN is not set — cannot run the live loop with LLM_PROVIDER=claude (the default). " +
+        "Run `claude setup-token` and set it, or set LLM_PROVIDER=openai with OPENAI_API_KEY instead."
+    );
     process.exit(1);
   }
 
