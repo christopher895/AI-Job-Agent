@@ -12,7 +12,7 @@ Owner: **Christopher Zhang** (Summer 2026 build)
 - **Alert emails** — Resend email listing new jobs (title, company, link) — needs "Tailor resume" link added per job
 - **AI tailoring pipeline** — `generateBestResume(jd)` in `packages/agent/src/ai/chain.ts`: generate → critique → revise loop (up to 3 passes), outputs ATS-safe Markdown
 - **Master resume** — structured JSON in `packages/agent/src/ai/master-resume.ts` — to be moved to DB so web app can edit it
-- **Cron + BullMQ queue** — scraper runs every 15 min
+- **Cron scheduler** — scraper runs every 15 min, in-process (no queue layer)
 
 ## What's Being Built (full scope)
 
@@ -76,11 +76,7 @@ agent/src/
 │   └── knowledge/
 │       └── best-practices.ts
 ├── notifications/
-│   ├── email.ts            # Resend — job alert emails
-│   └── sms.ts              # Twilio (not currently used in main flow)
-├── queue/
-│   ├── worker.ts           # BullMQ worker
-│   └── producer.ts         # BullMQ producer
+│   └── email.ts            # Resend — job alert emails
 ├── cron/
 │   └── scheduler.ts        # node-cron — every 15 min
 ├── db/
@@ -117,7 +113,7 @@ web/
 - Next.js 14 (App Router), TypeScript, Tailwind CSS, Shadcn/ui
 
 ### Backend
-- Node.js + Express (API server in `packages/agent`), PostgreSQL, Redis + BullMQ, node-cron
+- Node.js + Express (API server in `packages/agent`), PostgreSQL, node-cron
 
 ### Scraping
 - Playwright (JS-rendered pages), Cheerio (static HTML), custom snapshot diffing via hash sets
@@ -139,7 +135,7 @@ web/
 - None — private URL, single user (Christopher only)
 
 ### Infra
-- Railway (deployment), Docker Compose (local Postgres + Redis)
+- Railway (deployment), Docker Compose (local Postgres)
 
 ## Database Schema
 
@@ -186,13 +182,11 @@ applied_jobs (
 
 ### Scraping → Alert
 ```
-cron (every 15 min)
-  → BullMQ producer
-    → BullMQ worker
-      → Playwright/Cheerio scrape per company
-        → diff.ts (new job hashes)
-          → filter by location + keyword score
-            → Resend email (job list + "Tailor resume" link per job)
+cron (every 15 min, in-process)
+  → Playwright/Cheerio scrape per company
+    → diff.ts (new job hashes)
+      → filter by location + keyword score
+        → Resend email (job list + "Tailor resume" link per job)
 ```
 
 ### Tailoring (triggered from web app)
@@ -217,7 +211,6 @@ POST /api/applied (resume_id, status, applied_at)
 
 ```
 DATABASE_URL
-REDIS_URL
 OPENAI_API_KEY
 RESEND_API_KEY
 YOUR_EMAIL
@@ -244,9 +237,8 @@ Use these proactively:
 
 ## Dev Notes
 
-- Local infra: `docker-compose up` (Postgres + Redis)
+- Local infra: `docker-compose up` (Postgres)
 - Scraper uses 2–5s random delays; respects robots.txt
-- BullMQ concurrency limits prevent hammering domains
 - All LLM outputs validated with Zod; retry on failed calls
 - Master resume is the single source of truth — the AI may only select/rephrase facts that exist in it, never invent
 - Alert score threshold: top-ranked jobs by keyword score, capped at `FILTERS.maxPerEmail`
