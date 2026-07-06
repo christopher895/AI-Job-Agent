@@ -60,13 +60,16 @@ export async function completeJSON<T>(
         ? user
         : `${user}\n\nYour previous reply failed validation: ${lastError}\nReturn ONLY valid JSON matching the requested schema.`;
 
+    const startedAt = Date.now();
     try {
       const parsed =
         LLM_PROVIDER === "openai"
           ? JSON.parse(await callOpenAIOnce(system, userContent, model ?? DEFAULT_MODEL, temperature))
           : await callClaudeCli(schema, { system, user: userContent, model: model ?? process.env.CLAUDE_MODEL });
+      console.log(`[llm] provider=${LLM_PROVIDER} attempt=${attempt + 1} ok in ${Date.now() - startedAt}ms`);
       return schema.parse(parsed);
     } catch (err) {
+      console.log(`[llm] provider=${LLM_PROVIDER} attempt=${attempt + 1} FAILED in ${Date.now() - startedAt}ms`);
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
