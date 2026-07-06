@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { buildClaudeCliArgs } from "./claude-cli";
+import { buildClaudeCliArgs, parseClaudeCliOutput } from "./claude-cli";
 
 let allPass = true;
 function check(label: string, ok: boolean, detail?: string) {
@@ -32,6 +32,39 @@ function check(label: string, ok: boolean, detail?: string) {
     "args-model-flag-when-set",
     args.includes("--model") && args[args.indexOf("--model") + 1] === "claude-sonnet-5"
   );
+}
+
+// --- parseClaudeCliOutput ---
+{
+  const out = parseClaudeCliOutput(JSON.stringify({ is_error: false, structured_output: { foo: "bar" } }));
+  check("parse-success", JSON.stringify(out) === JSON.stringify({ foo: "bar" }), `got: ${JSON.stringify(out)}`);
+}
+{
+  let threw = false;
+  try {
+    parseClaudeCliOutput(JSON.stringify({ is_error: true, result: "auth failed" }));
+  } catch (e) {
+    threw = e instanceof Error && e.message.includes("auth failed");
+  }
+  check("parse-is-error-throws", threw, "expected a throw mentioning the error result");
+}
+{
+  let threw = false;
+  try {
+    parseClaudeCliOutput(JSON.stringify({ is_error: false }));
+  } catch (e) {
+    threw = e instanceof Error && e.message.includes("structured_output");
+  }
+  check("parse-missing-structured-output-throws", threw);
+}
+{
+  let threw = false;
+  try {
+    parseClaudeCliOutput("not json");
+  } catch (e) {
+    threw = e instanceof Error;
+  }
+  check("parse-malformed-json-throws", threw);
 }
 
 console.log(allPass ? "\n✓ claude-cli test PASSED" : "\n✗ claude-cli test FAILED");

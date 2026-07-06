@@ -39,3 +39,26 @@ export function buildClaudeCliArgs(schema: z.ZodTypeAny, opts: { system: string;
   if (opts.model) args.push("--model", opts.model);
   return args;
 }
+
+type ClaudeCliResponse = {
+  is_error?: boolean;
+  result?: string;
+  structured_output?: unknown;
+};
+
+/** Pure: parses the CLI's raw stdout, or throws a descriptive Error. */
+export function parseClaudeCliOutput(stdout: string): unknown {
+  let response: ClaudeCliResponse;
+  try {
+    response = JSON.parse(stdout);
+  } catch {
+    throw new Error(`claude CLI returned non-JSON output: ${stdout.slice(0, 500)}`);
+  }
+  if (response.is_error) {
+    throw new Error(`claude CLI returned an error: ${response.result ?? "unknown error"}`);
+  }
+  if (response.structured_output === undefined) {
+    throw new Error("claude CLI response had no structured_output field");
+  }
+  return response.structured_output;
+}
