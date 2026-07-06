@@ -1,3 +1,7 @@
+import { spawn } from "child_process";
+import * as fs from "fs/promises";
+import * as os from "os";
+import * as path from "path";
 import { z } from "zod";
 import { zodToJsonSchema as zodToJsonSchemaImpl } from "zod-to-json-schema";
 
@@ -61,4 +65,52 @@ export function parseClaudeCliOutput(stdout: string): unknown {
     throw new Error("claude CLI response had no structured_output field");
   }
   return response.structured_output;
+}
+
+const CLAUDE_BIN = process.env.CLAUDE_CLI_PATH || "claude";
+
+/** Impure: spawns `claude`, writes `input` to stdin, resolves stdout or rejects. */
+function runClaudeCliProcess(args: string[], cwd: string, input: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(CLAUDE_BIN, args, { cwd });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`claude CLI exited with code ${code}: ${(stderr || stdout).slice(0, 1000)}`));
+        return;
+      }
+      resolve(stdout);
+    });
+    child.stdin.write(input);
+    child.stdin.end();
+  });
+}
+
+/**
+ * Calls `claude -p` for one structured-output turn. Runs from a fresh scratch
+ * directory so Claude Code doesn't auto-load this repo's CLAUDE.md/memory/
+ * skills into every call, which otherwise inflates token usage substantially
+ * (--bare isn't usable here since it requires ANTHROPIC_API_KEY and ignores
+ * CLAUDE_CODE_OAUTH_TOKEN).
+ */
+export async function callClaudeCli(
+  schema: z.ZodTypeAny,
+  opts: { system: string; user: string; model?: string }
+): Promise<unknown> {
+  const args = buildClaudeCliArgs(schema, { system: opts.system, model: opts.model });
+  const scratchDir = await fs.mkdtemp(path.join(os.tmpdir(), "claude-cli-"));
+  try {
+    const stdout = await runClaudeCliProcess(args, scratchDir, opts.user);
+    return parseClaudeCliOutput(stdout);
+  } finally {
+    await fs.rm(scratchDir, { recursive: true, force: true }).catch(() => {});
+  }
 }
