@@ -60,7 +60,7 @@ const NOISE_SELECTORS = [
   '[class*="gdpr" i]',
 ].join(", ");
 
-const TITLE_SEPARATORS = [" | ", " — ", " - ", " · ", " • "];
+const TITLE_SEPARATORS = [" | ", " — ", " - ", " · ", " • ", " @ "];
 
 // Third-party ATS/job-board hosts — their domain isn't the employer's name,
 // so never guess a company from these (e.g. "tal.net" is not the company).
@@ -69,7 +69,41 @@ const ATS_HOST_FRAGMENTS = [
   "icims.com", "tal.net", "smartrecruiters.com", "workable.com",
   "bamboohr.com", "jobvite.com", "taleo.net", "successfactors.com",
   "breezy.hr", "recruitee.com", "personio.com", "wd1.myworkdaysite.com",
+  "jobright.ai", "linkedin.com", "indeed.com", "ziprecruiter.com",
+  "glassdoor.com", "simplyhired.com",
 ];
+
+// Job aggregator/discovery platforms append their own brand to <title>
+// (e.g. Jobright.ai renders "{Job Title} @ {Employer} | Jobright.ai"). That
+// brand is the platform surfacing the job, not the employer, so it must be
+// stripped before title/company parsing — otherwise it gets mistaken for
+// either the job title or the company.
+const JOB_BOARD_BRANDS: Record<string, string> = {
+  "jobright.ai": "Jobright.ai",
+  "linkedin.com": "LinkedIn",
+  "indeed.com": "Indeed",
+  "ziprecruiter.com": "ZipRecruiter",
+  "glassdoor.com": "Glassdoor",
+  "simplyhired.com": "SimplyHired",
+};
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function stripJobBoardBrand(text: string, url: string): string {
+  if (!text) return text;
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return text;
+  }
+  const brand = Object.entries(JOB_BOARD_BRANDS).find(([frag]) => host.includes(frag))?.[1];
+  if (!brand) return text;
+  const suffix = new RegExp(`[\\s\\-|—·•@]+${escapeRegExp(brand)}\\s*$`, "i");
+  return text.replace(suffix, "").trim();
+}
 
 const HOST_SUBDOMAIN_PREFIXES = ["www", "jobs", "careers", "apply", "join", "join-us", "hiring"];
 
@@ -100,16 +134,16 @@ function normalize(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
-function extractTitleCompany($: CheerioAPI): { title?: string; company?: string } {
-  const h1 = normalize($("h1").first().text());
-  const pageTitle = normalize($("title").first().text());
+function extractTitleCompany($: CheerioAPI, url: string): { title?: string; company?: string } {
+  const h1 = stripJobBoardBrand(normalize($("h1").first().text()), url);
+  const pageTitle = stripJobBoardBrand(normalize($("title").first().text()), url);
   if (!pageTitle) return {};
 
   // Job titles often contain " - " themselves (e.g. "X 2027 - Software Engineer"),
   // so prefer stripping the h1's own text off the front of <title> over a naive split.
   if (h1 && pageTitle.toLowerCase().startsWith(h1.toLowerCase())) {
     const rest = normalize(pageTitle.slice(h1.length));
-    const company = rest.replace(/^[\s\-|—·•]+/, "").trim();
+    const company = rest.replace(/^[\s\-|—·•@]+/, "").trim();
     return { title: h1, company: company || undefined };
   }
 
@@ -127,7 +161,7 @@ function extractTitleCompany($: CheerioAPI): { title?: string; company?: string 
 
 export function extractFromHtml(html: string, url: string): { text: string; title?: string; company?: string } {
   const $ = cheerio.load(html);
-  const titleCompany = extractTitleCompany($);
+  const titleCompany = extractTitleCompany($, url);
   if (!titleCompany.company) {
     titleCompany.company = companyFromHost(url);
   }
