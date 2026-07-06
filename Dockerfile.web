@@ -24,7 +24,9 @@ COPY --from=builder /app/packages/web/.next/static ./packages/web/.next/static
 COPY --from=builder /app/packages/web/public ./packages/web/public
 
 ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
 EXPOSE 3000
 
+# HOSTNAME must be set as a Railway service Variable, not here — container
+# runtimes auto-inject their own HOSTNAME (usually the container ID) at
+# startup, which overrides whatever ENV instruction the image declares.
 CMD ["node", "packages/web/server.js"]
