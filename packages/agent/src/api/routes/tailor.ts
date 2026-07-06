@@ -3,6 +3,7 @@ import { generateBestResume } from "../../ai/chain";
 import { createTailoredResume, storePdf, setPdfError } from "../../db/queries";
 import { fetchJd } from "../../scraper/fetch-jd";
 import { renderPdf } from "../../ai/render-pdf";
+import { LLM_PROVIDER } from "../../ai/llm";
 
 const router = Router();
 
@@ -46,7 +47,9 @@ router.post("/", async (req, res) => {
     result = await generateBestResume(jd, { jobTitle: resolvedTitle, company: resolvedCompany });
   } catch (err) {
     console.error("[tailor] pipeline error:", err);
-    res.status(500).json({ error: "Tailoring failed — check OPENAI_API_KEY and try again." });
+    const credentialHint =
+      LLM_PROVIDER === "openai" ? "check OPENAI_API_KEY" : "check CLAUDE_CODE_OAUTH_TOKEN";
+    res.status(500).json({ error: `Tailoring failed — ${credentialHint} and try again.` });
     return;
   }
 
