@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef } from "react";
 import { api, MasterResume, ExperienceEntry, ProjectEntry, EducationEntry } from "../lib/api";
+import { SortableSection, DragHandle } from "./SortableSection";
 
 const SECTIONS = ["Basics", "Experience", "Projects", "Skills", "Education", "Extracurriculars"] as const;
 type Section = (typeof SECTIONS)[number];
@@ -191,6 +192,9 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       experience: prev.experience.filter((_, i) => i !== ei),
     }));
   }
+  function reorderExperience(newOrder: ExperienceEntry[]) {
+    setResume((prev) => ({ ...prev, experience: newOrder }));
+  }
 
   // ── Projects ─────────────────────────────────────────────────────
   function setProjField(pi: number, field: keyof ProjectEntry, value: string | string[]) {
@@ -259,6 +263,9 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       projects: prev.projects.filter((_, i) => i !== pi),
     }));
   }
+  function reorderProjects(newOrder: ProjectEntry[]) {
+    setResume((prev) => ({ ...prev, projects: newOrder }));
+  }
 
   // ── Extracurriculars ─────────────────────────────────────────────
   function setExtraField(ei: number, field: keyof ExperienceEntry, value: string) {
@@ -302,6 +309,9 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
         i !== ei ? e : { ...e, bullets: e.bullets.filter((_, j) => j !== bi) }
       ),
     }));
+  }
+  function reorderExtracurriculars(newOrder: ExperienceEntry[]) {
+    setResume((prev) => ({ ...prev, extracurriculars: newOrder }));
   }
 
   // ── Education ────────────────────────────────────────────────────
@@ -445,35 +455,41 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             {resume.experience.length === 0 && (
               <p className="text-sm text-gray-400">No experience entries yet.</p>
             )}
-            {resume.experience.map((exp, ei) => (
-              <div key={exp.id} className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
-                <div className="flex justify-end -mt-1 -mr-1 mb-1">
-                  <button
-                    onClick={() => removeExperience(ei)}
-                    className="text-xs text-gray-300 hover:text-red-500 transition-colors"
-                    title="Remove experience"
-                  >
-                    Remove experience ×
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div><Label>Company</Label><TextInput value={exp.company} onChange={(v) => setExpField(ei, "company", v)} /></div>
-                  <div><Label>Title</Label><TextInput value={exp.title} onChange={(v) => setExpField(ei, "title", v)} /></div>
-                  <div><Label>Location</Label><TextInput value={exp.location} onChange={(v) => setExpField(ei, "location", v)} /></div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><Label>Start</Label><TextInput value={exp.start} onChange={(v) => setExpField(ei, "start", v)} /></div>
-                    <div><Label>End</Label><TextInput value={exp.end} onChange={(v) => setExpField(ei, "end", v)} /></div>
+            <SortableSection items={resume.experience} onReorder={reorderExperience}>
+              {(exp, _idx, drag) => {
+                const ei = resume.experience.findIndex((e) => e.id === exp.id);
+                return (
+                  <div className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                    <div className="flex justify-between items-start -mt-1 -mr-1 mb-1">
+                      <DragHandle {...drag} />
+                      <button
+                        onClick={() => removeExperience(ei)}
+                        className="text-xs text-gray-300 hover:text-red-500 transition-colors"
+                        title="Remove experience"
+                      >
+                        Remove experience ×
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div><Label>Company</Label><TextInput value={exp.company} onChange={(v) => setExpField(ei, "company", v)} /></div>
+                      <div><Label>Title</Label><TextInput value={exp.title} onChange={(v) => setExpField(ei, "title", v)} /></div>
+                      <div><Label>Location</Label><TextInput value={exp.location} onChange={(v) => setExpField(ei, "location", v)} /></div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><Label>Start</Label><TextInput value={exp.start} onChange={(v) => setExpField(ei, "start", v)} /></div>
+                        <div><Label>End</Label><TextInput value={exp.end} onChange={(v) => setExpField(ei, "end", v)} /></div>
+                      </div>
+                    </div>
+                    <Label>Bullets</Label>
+                    <BulletList
+                      bullets={exp.bullets}
+                      onUpdate={(bi, text) => setExpBullet(ei, bi, text)}
+                      onAdd={() => addExpBullet(ei)}
+                      onRemove={(bi) => removeExpBullet(ei, bi)}
+                    />
                   </div>
-                </div>
-                <Label>Bullets</Label>
-                <BulletList
-                  bullets={exp.bullets}
-                  onUpdate={(bi, text) => setExpBullet(ei, bi, text)}
-                  onAdd={() => addExpBullet(ei)}
-                  onRemove={(bi) => removeExpBullet(ei, bi)}
-                />
-              </div>
-            ))}
+                );
+              }}
+            </SortableSection>
             <button
               onClick={addExperience}
               className="w-full border border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
@@ -490,40 +506,46 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             {resume.projects.length === 0 && (
               <p className="text-sm text-gray-400">No projects yet.</p>
             )}
-            {resume.projects.map((proj, pi) => (
-              <div key={proj.id} className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
-                <div className="flex justify-end -mt-1 -mr-1 mb-1">
-                  <button
-                    onClick={() => removeProject(pi)}
-                    className="text-xs text-gray-300 hover:text-red-500 transition-colors"
-                    title="Remove project"
-                  >
-                    Remove project ×
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div><Label>Name</Label><TextInput value={proj.name} onChange={(v) => setProjField(pi, "name", v)} /></div>
-                  <div>
-                    <Label>Tech (comma-separated)</Label>
-                    <TextInput
-                      value={proj.tech.join(", ")}
-                      onChange={(v) => setProjField(pi, "tech", v.split(",").map((s) => s.trim()).filter(Boolean))}
+            <SortableSection items={resume.projects} onReorder={reorderProjects}>
+              {(proj, _idx, drag) => {
+                const pi = resume.projects.findIndex((p) => p.id === proj.id);
+                return (
+                  <div className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                    <div className="flex justify-between items-start -mt-1 -mr-1 mb-1">
+                      <DragHandle {...drag} />
+                      <button
+                        onClick={() => removeProject(pi)}
+                        className="text-xs text-gray-300 hover:text-red-500 transition-colors"
+                        title="Remove project"
+                      >
+                        Remove project ×
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div><Label>Name</Label><TextInput value={proj.name} onChange={(v) => setProjField(pi, "name", v)} /></div>
+                      <div>
+                        <Label>Tech (comma-separated)</Label>
+                        <TextInput
+                          value={proj.tech.join(", ")}
+                          onChange={(v) => setProjField(pi, "tech", v.split(",").map((s) => s.trim()).filter(Boolean))}
+                        />
+                      </div>
+                      <div><Label>Link</Label><TextInput value={proj.link} onChange={(v) => setProjField(pi, "link", v)} /></div>
+                      <div><Label>Repo</Label><TextInput value={proj.repo} onChange={(v) => setProjField(pi, "repo", v)} /></div>
+                      <div><Label>Start</Label><TextInput value={proj.start} onChange={(v) => setProjField(pi, "start", v)} /></div>
+                      <div><Label>End</Label><TextInput value={proj.end} onChange={(v) => setProjField(pi, "end", v)} /></div>
+                    </div>
+                    <Label>Bullets</Label>
+                    <BulletList
+                      bullets={proj.bullets}
+                      onUpdate={(bi, text) => setProjBullet(pi, bi, text)}
+                      onAdd={() => addProjBullet(pi)}
+                      onRemove={(bi) => removeProjBullet(pi, bi)}
                     />
                   </div>
-                  <div><Label>Link</Label><TextInput value={proj.link} onChange={(v) => setProjField(pi, "link", v)} /></div>
-                  <div><Label>Repo</Label><TextInput value={proj.repo} onChange={(v) => setProjField(pi, "repo", v)} /></div>
-                  <div><Label>Start</Label><TextInput value={proj.start} onChange={(v) => setProjField(pi, "start", v)} /></div>
-                  <div><Label>End</Label><TextInput value={proj.end} onChange={(v) => setProjField(pi, "end", v)} /></div>
-                </div>
-                <Label>Bullets</Label>
-                <BulletList
-                  bullets={proj.bullets}
-                  onUpdate={(bi, text) => setProjBullet(pi, bi, text)}
-                  onAdd={() => addProjBullet(pi)}
-                  onRemove={(bi) => removeProjBullet(pi, bi)}
-                />
-              </div>
-            ))}
+                );
+              }}
+            </SortableSection>
             <button
               onClick={addProject}
               className="w-full border border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
@@ -590,23 +612,31 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             {resume.extracurriculars.length === 0 && (
               <p className="text-sm text-gray-400">No extracurricular entries.</p>
             )}
-            {resume.extracurriculars.map((e, ei) => (
-              <div key={e.id} className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div><Label>Organization</Label><TextInput value={e.company} onChange={(v) => setExtraField(ei, "company", v)} /></div>
-                  <div><Label>Role</Label><TextInput value={e.title} onChange={(v) => setExtraField(ei, "title", v)} /></div>
-                  <div><Label>Start</Label><TextInput value={e.start} onChange={(v) => setExtraField(ei, "start", v)} /></div>
-                  <div><Label>End</Label><TextInput value={e.end} onChange={(v) => setExtraField(ei, "end", v)} /></div>
-                </div>
-                <Label>Bullets</Label>
-                <BulletList
-                  bullets={e.bullets}
-                  onUpdate={(bi, text) => setExtraBullet(ei, bi, text)}
-                  onAdd={() => addExtraBullet(ei)}
-                  onRemove={(bi) => removeExtraBullet(ei, bi)}
-                />
-              </div>
-            ))}
+            <SortableSection items={resume.extracurriculars} onReorder={reorderExtracurriculars}>
+              {(e, _idx, drag) => {
+                const ei = resume.extracurriculars.findIndex((x) => x.id === e.id);
+                return (
+                  <div className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                    <div className="flex justify-between items-start -mt-1 -mr-1 mb-1">
+                      <DragHandle {...drag} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div><Label>Organization</Label><TextInput value={e.company} onChange={(v) => setExtraField(ei, "company", v)} /></div>
+                      <div><Label>Role</Label><TextInput value={e.title} onChange={(v) => setExtraField(ei, "title", v)} /></div>
+                      <div><Label>Start</Label><TextInput value={e.start} onChange={(v) => setExtraField(ei, "start", v)} /></div>
+                      <div><Label>End</Label><TextInput value={e.end} onChange={(v) => setExtraField(ei, "end", v)} /></div>
+                    </div>
+                    <Label>Bullets</Label>
+                    <BulletList
+                      bullets={e.bullets}
+                      onUpdate={(bi, text) => setExtraBullet(ei, bi, text)}
+                      onAdd={() => addExtraBullet(ei)}
+                      onRemove={(bi) => removeExtraBullet(ei, bi)}
+                    />
+                  </div>
+                );
+              }}
+            </SortableSection>
           </div>
         )}
 
