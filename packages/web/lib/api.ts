@@ -111,6 +111,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -133,6 +134,7 @@ export const api = {
   patchResume: (id: string, markdown: string) =>
     request<{ updatedAt: string; pdfError: string | null }>("PATCH", `/resume/${id}`, { markdown }),
   emailResume: (id: string) => request<{ sent: boolean }>("POST", `/resume/${id}/email`),
+  deleteResume: (id: string) => request<void>("DELETE", `/resume/${id}`),
   fetchJd: (url: string) =>
     request<{ text: string; method: string; title?: string; company?: string }>(
       "POST",
