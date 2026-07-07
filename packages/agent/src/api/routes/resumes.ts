@@ -4,6 +4,7 @@ import {
   listTailoredResumes,
   getTailoredResume,
   updateTailoredResume,
+  deleteTailoredResume,
   getPdf,
   storePdf,
   setPdfError,
@@ -53,6 +54,13 @@ router.patch("/resume/:id", async (req, res) => {
   }
 
   res.json({ updatedAt: updated.updated_at, pdfError });
+});
+
+// DELETE /api/resume/:id
+router.delete("/resume/:id", async (req, res) => {
+  const deleted = await deleteTailoredResume(req.params.id);
+  if (!deleted) { res.status(404).json({ error: "Not found" }); return; }
+  res.status(204).end();
 });
 
 // GET /api/resume/:id/pdf  — stream PDF, generate on-demand if not yet stored

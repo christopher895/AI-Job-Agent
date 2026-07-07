@@ -1,3 +1,5 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ResumeListItem } from "../lib/api";
 
@@ -33,15 +35,39 @@ function ScoreCircle({ score }: { score: number }) {
 export default function ResumeCard({
   resume,
   editedAgo,
+  onDelete,
 }: {
   resume: ResumeListItem;
   editedAgo: string;
+  onDelete: (id: string) => void;
 }) {
   const date = new Date(resume.created_at).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
   });
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
+
+  function handleDelete() {
+    setMenuOpen(false);
+    const label = [resume.job_title, resume.company].filter(Boolean).join(" @ ") || "this resume";
+    if (window.confirm(`Delete ${label}? This can't be undone.`)) {
+      onDelete(resume.id);
+    }
+  }
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow flex flex-col gap-3">
@@ -58,11 +84,27 @@ export default function ResumeCard({
             {date} &bull; Edited {editedAgo}
           </p>
         </div>
-        <button className="text-gray-400 hover:text-gray-600 p-0.5 flex-shrink-0 mt-0.5">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
-          </svg>
-        </button>
+        <div className="relative flex-shrink-0" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="text-gray-400 hover:text-gray-600 p-0.5 mt-0.5"
+            aria-label="Resume actions"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
+            </svg>
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-full mt-1 w-32 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-10">
+              <button
+                onClick={handleDelete}
+                className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
+              >
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Bottom: score + actions */}
