@@ -78,6 +78,8 @@ export function renderMarkdown(master: MasterResume, tailored: TailoredResume): 
     for (const ed of master.education) {
       lines.push("", `**${ed.school}** — ${ed.degrees.join(", ")} · ${ed.location} · ${ed.graduation}`);
       if (ed.gpa) lines.push(`GPA: ${ed.gpa}`);
+      if (ed.notes.length) lines.push(`Notes: ${ed.notes.join(", ")}`);
+      if (ed.coursework.length) lines.push(`Coursework: ${ed.coursework.join(", ")}`);
     }
   }
 
