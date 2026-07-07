@@ -22,7 +22,7 @@ export default async function ResumePage({ params, searchParams }: Props) {
 
   const initialView = VALID_VIEWS.includes(view as (typeof VALID_VIEWS)[number])
     ? (view as (typeof VALID_VIEWS)[number])
-    : "edit";
+    : "split";
 
   return (
     <div className="h-full flex flex-col">
