@@ -4,7 +4,6 @@ import { TailoredResume } from "./types";
 
 /** A faithful tailoring: reworded but every number/id traces to the master. */
 const honest: TailoredResume = {
-  summary: "AI engineer building LLM developer platforms and DevOps automation.",
   experience: [
     {
       id: "exp-scout",
@@ -30,7 +29,6 @@ const honest: TailoredResume = {
 
 /** A cheating tailoring: fabricated metric, invented skill, bogus source id. */
 const fabricated: TailoredResume = {
-  summary: "",
   experience: [
     {
       id: "exp-scout",

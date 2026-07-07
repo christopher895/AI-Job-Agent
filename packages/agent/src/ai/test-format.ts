@@ -8,7 +8,6 @@ Python, PostgreSQL for storage, Docker for everything. You'll own CI/CD and obse
 
 /** Strong: action verbs, surfaces JD-relevant skills, faithful numbers. */
 const strong: TailoredResume = {
-  summary: "Backend-leaning AI engineer with Kubernetes/AWS and TypeScript experience.",
   experience: [
     {
       id: "exp-scout",
@@ -29,7 +28,6 @@ const strong: TailoredResume = {
 
 /** Weak: duty-language openers, surfaces almost no JD-relevant skills. */
 const weak: TailoredResume = {
-  summary: "",
   experience: [
     {
       id: "exp-scout",

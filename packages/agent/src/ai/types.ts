@@ -104,8 +104,6 @@ export const TailoredSectionSchema = z.object({
 });
 
 export const TailoredResumeSchema = z.object({
-  /** Optional tailored summary line; "" if omitted. */
-  summary: z.string().default(""),
   experience: z.array(TailoredSectionSchema),
   projects: z.array(TailoredSectionSchema),
   /** Skills reordered to front-load JD-relevant ones; must be a subset of master skills. */
