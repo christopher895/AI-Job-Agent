@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { ResumeListItem } from "../lib/api";
+import { api, ResumeListItem } from "../lib/api";
 import ResumeCard from "./ResumeCard";
 
 function timeAgo(dateStr: string): string {
@@ -31,8 +31,20 @@ export default function DashboardClient({
 }) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("newest");
+  const [items, setItems] = useState(resumes);
 
-  const filtered = resumes
+  async function handleDelete(id: string) {
+    const prev = items;
+    setItems((cur) => cur.filter((r) => r.id !== id));
+    try {
+      await api.deleteResume(id);
+    } catch {
+      setItems(prev);
+      alert("Failed to delete resume. Please try again.");
+    }
+  }
+
+  const filtered = items
     .filter((r) => {
       if (!search) return true;
       const q = search.toLowerCase();
@@ -127,7 +139,7 @@ export default function DashboardClient({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((r) => (
-              <ResumeCard key={r.id} resume={r} editedAgo={timeAgo(r.updated_at)} />
+              <ResumeCard key={r.id} resume={r} editedAgo={timeAgo(r.updated_at)} onDelete={handleDelete} />
             ))}
           </div>
         )}

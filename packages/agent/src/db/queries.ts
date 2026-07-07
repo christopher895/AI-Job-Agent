@@ -185,6 +185,12 @@ export async function setPdfError(id: string, message: string): Promise<void> {
   await pool.query("UPDATE tailored_resumes SET pdf_error = $1 WHERE id = $2", [message, id]);
 }
 
+/** Deletes a tailored resume. Any applied_jobs row referencing it keeps its row with resume_id set to NULL. */
+export async function deleteTailoredResume(id: string): Promise<boolean> {
+  const { rowCount } = await pool.query("DELETE FROM tailored_resumes WHERE id = $1", [id]);
+  return (rowCount ?? 0) > 0;
+}
+
 // ── Applied jobs ───────────────────────────────────────────────────────────────
 
 export async function createAppliedJob(fields: {
