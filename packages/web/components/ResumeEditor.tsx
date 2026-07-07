@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, Resume } from "../lib/api";
 
 type ApplyForm = { status: string; appliedAt: string };
@@ -35,14 +36,16 @@ function PdfPane({
   loading,
   error,
   onRefresh,
+  className = "",
 }: {
   blobUrl: string | null;
   loading: boolean;
   error: string | null;
   onRefresh: () => void;
+  className?: string;
 }) {
   return (
-    <div className="flex flex-col border-l border-gray-200 bg-gray-50 flex-1 min-w-0">
+    <div className={`flex flex-col border-l border-gray-200 bg-gray-50 min-w-0 ${className}`}>
       {/* Pane header */}
       <div className="px-4 py-2 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
         <span className="text-xs font-medium text-gray-600">PDF Preview</span>
@@ -432,29 +435,53 @@ export default function ResumeEditor({
       )}
 
       {/* Content: edit + preview panes */}
-      <div className="flex flex-1 min-h-0">
-        {showEdit && (
-          <textarea
-            ref={textareaRef}
-            value={markdown}
-            onChange={(e) => handleChange(e.target.value)}
-            spellCheck={false}
-            className={`resize-none font-mono text-sm leading-relaxed text-gray-800 bg-white px-10 py-8 focus:outline-none ${
-              viewMode === "edit" ? "flex-1" : "w-1/2"
-            }`}
-            style={{ fontFamily: "var(--font-geist-mono), 'Courier New', monospace" }}
-          />
-        )}
+      {viewMode === "split" ? (
+        <PanelGroup direction="horizontal" className="flex-1 min-h-0">
+          <Panel defaultSize={50} minSize={20}>
+            <textarea
+              ref={textareaRef}
+              value={markdown}
+              onChange={(e) => handleChange(e.target.value)}
+              spellCheck={false}
+              className="w-full h-full resize-none font-mono text-sm leading-relaxed text-gray-800 bg-white px-10 py-8 focus:outline-none"
+              style={{ fontFamily: "var(--font-geist-mono), 'Courier New', monospace" }}
+            />
+          </Panel>
+          <PanelResizeHandle className="w-1 bg-gray-200 hover:bg-violet-400 active:bg-violet-500 transition-colors cursor-col-resize" />
+          <Panel defaultSize={50} minSize={20}>
+            <PdfPane
+              blobUrl={pdfBlobUrl}
+              loading={pdfLoading}
+              error={pdfError}
+              onRefresh={loadPdf}
+              className="h-full"
+            />
+          </Panel>
+        </PanelGroup>
+      ) : (
+        <div className="flex flex-1 min-h-0">
+          {showEdit && (
+            <textarea
+              ref={textareaRef}
+              value={markdown}
+              onChange={(e) => handleChange(e.target.value)}
+              spellCheck={false}
+              className="flex-1 resize-none font-mono text-sm leading-relaxed text-gray-800 bg-white px-10 py-8 focus:outline-none"
+              style={{ fontFamily: "var(--font-geist-mono), 'Courier New', monospace" }}
+            />
+          )}
 
-        {showPreview && (
-          <PdfPane
-            blobUrl={pdfBlobUrl}
-            loading={pdfLoading}
-            error={pdfError}
-            onRefresh={loadPdf}
-          />
-        )}
-      </div>
+          {showPreview && (
+            <PdfPane
+              blobUrl={pdfBlobUrl}
+              loading={pdfLoading}
+              error={pdfError}
+              onRefresh={loadPdf}
+              className="flex-1"
+            />
+          )}
+        </div>
+      )}
 
       {/* Footer: word/char count (only shown when editor is visible) */}
       {showEdit && (
