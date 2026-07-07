@@ -37,8 +37,22 @@ export async function generateBestResume(jd: string, opts: GenerateOptions = {})
   const history: GenerateResult["history"] = [];
 
   for (let i = 1; i <= maxIterations; i++) {
-    const { tailored } = await tailorResume(jd, { ...opts, master, feedback });
-    const critic = await evaluate(master, tailored, jd, { model: opts.model });
+    let tailored: TailoredResume;
+    try {
+      ({ tailored } = await tailorResume(jd, { ...opts, master, feedback }));
+    } catch (err) {
+      console.error(`[chain] iteration ${i} tailor step failed:`, err);
+      throw err;
+    }
+
+    let critic: CriticResult;
+    try {
+      critic = await evaluate(master, tailored, jd, { model: opts.model });
+    } catch (err) {
+      console.error(`[chain] iteration ${i} critic step failed:`, err);
+      throw err;
+    }
+
     history.push({ iteration: i, finalScore: critic.finalScore, gated: critic.gated });
 
     if (!best || critic.finalScore > best.critic.finalScore) best = { tailored, critic };
