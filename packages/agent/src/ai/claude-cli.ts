@@ -68,13 +68,28 @@ export function parseClaudeCliOutput(stdout: string): unknown {
 }
 
 const CLAUDE_BIN = process.env.CLAUDE_CLI_PATH || "claude";
+// A hung/stalled claude CLI call (e.g. waiting on a prompt that can never be
+// answered headlessly) must not block a request forever with no feedback —
+// bound it well above normal latency (the UI's own copy says "~30s") and
+// fail loudly instead.
+const DEFAULT_TIMEOUT_MS = Number(process.env.CLAUDE_CLI_TIMEOUT_MS) || 120_000;
 
 /** Impure: spawns `claude`, writes `input` to stdin, resolves stdout or rejects. */
-function runClaudeCliProcess(args: string[], cwd: string, input: string): Promise<string> {
+function runClaudeCliProcess(args: string[], cwd: string, input: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(CLAUDE_BIN, args, { cwd });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill("SIGTERM");
+      setTimeout(() => child.kill("SIGKILL"), 5_000).unref();
+      reject(new Error(`claude CLI timed out after ${timeoutMs}ms and was killed`));
+    }, timeoutMs);
+
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -88,8 +103,16 @@ function runClaudeCliProcess(args: string[], cwd: string, input: string): Promis
     // diagnostic/rejection is produced by the `error`/`close` handlers below;
     // this listener's only job is to swallow the stdin-specific error event.
     child.stdin.on("error", () => {});
-    child.on("error", reject);
+    child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+    });
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       if (code !== 0) {
         reject(new Error(`claude CLI exited with code ${code}: ${(stderr || stdout).slice(0, 1000)}`));
         return;
