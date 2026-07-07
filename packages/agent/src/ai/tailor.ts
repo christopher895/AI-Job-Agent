@@ -47,7 +47,6 @@ ${bestPracticesPromptBlock()}
 
 OUTPUT: a single JSON object with this shape:
 {
-  "summary": string,                       // one tailored line, grounded in the master, or ""
   "experience": [{ "id": string, "bullets": [{ "sourceId": string, "text": string }] }],
   "projects":   [{ "id": string, "bullets": [{ "sourceId": string, "text": string }] }],
   "skillsOrder": string[],                 // JD-relevant master skills first

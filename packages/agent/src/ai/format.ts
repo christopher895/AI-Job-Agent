@@ -44,7 +44,6 @@ export function renderMarkdown(master: MasterResume, tailored: TailoredResume): 
   lines.push(`# ${b.name}`);
   const contact = [b.location, b.email, b.phone, b.github, b.portfolio, b.linkedin].filter(Boolean);
   if (contact.length) lines.push(contact.join(" · "));
-  if (tailored.summary) lines.push("", tailored.summary);
 
   const renderSections = (heading: string, sections: TailoredResume["experience"]) => {
     if (!sections.length) return;
@@ -190,10 +189,9 @@ export type KeywordCoverage = {
 export function keywordCoverage(master: MasterResume, tailored: TailoredResume, jd: string): KeywordCoverage {
   const vocab = masterVocabulary(master);
   const jdLower = jd.toLowerCase();
-  // Only count what the TAILORING surfaced (ordered skills + selected bullets + summary),
+  // Only count what the TAILORING surfaced (ordered skills + selected bullets),
   // not renderMarkdown's full fallback skills dump — otherwise coverage is trivially 100%.
   const surfaced = [
-    tailored.summary,
     tailored.skillsOrder.join(" "),
     tailored.keywordsCovered.join(" "),
     ...[...tailored.experience, ...tailored.projects].flatMap((s) => s.bullets.map((b) => b.text)),
