@@ -8,6 +8,7 @@ export type FetchJdResult = {
   method: "cheerio" | "playwright" | "failed";
   title?: string;
   company?: string;
+  location?: string;
 };
 
 const MIN_LENGTH = 200;
@@ -159,12 +160,56 @@ function extractTitleCompany($: CheerioAPI, url: string): { title?: string; comp
   return { title: h1 || pageTitle };
 }
 
-export function extractFromHtml(html: string, url: string): { text: string; title?: string; company?: string } {
+// Greenhouse, Lever, Ashby, and Workday all embed a schema.org JobPosting
+// block for SEO — it's the most reliable source for structured location data,
+// since scraping visible page text for "location" is brittle across ATS themes.
+function extractJsonLdLocation($: CheerioAPI): string | undefined {
+  const scripts = $('script[type="application/ld+json"]');
+  for (let i = 0; i < scripts.length; i++) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse($(scripts[i]).contents().text());
+    } catch {
+      continue;
+    }
+    const candidates = Array.isArray(parsed) ? parsed : [parsed];
+    for (const item of candidates) {
+      const obj = item as Record<string, unknown>;
+      const graph = obj["@graph"];
+      const jobPosting = Array.isArray(graph)
+        ? graph.find((g) => (g as Record<string, unknown>)["@type"] === "JobPosting")
+        : obj["@type"] === "JobPosting"
+        ? obj
+        : undefined;
+      if (!jobPosting) continue;
+
+      const jp = jobPosting as Record<string, unknown>;
+      if (jp.jobLocationType === "TELECOMMUTE") return "Remote";
+
+      const jobLocation = Array.isArray(jp.jobLocation) ? jp.jobLocation[0] : jp.jobLocation;
+      const address = (jobLocation as Record<string, unknown> | undefined)?.address as
+        | Record<string, unknown>
+        | undefined;
+      if (!address) continue;
+
+      const parts = [address.addressLocality, address.addressRegion, address.addressCountry]
+        .filter((p): p is string => typeof p === "string" && p.length > 0);
+      if (parts.length) return parts.join(", ");
+    }
+  }
+  return undefined;
+}
+
+export function extractFromHtml(
+  html: string,
+  url: string
+): { text: string; title?: string; company?: string; location?: string } {
   const $ = cheerio.load(html);
   const titleCompany = extractTitleCompany($, url);
   if (!titleCompany.company) {
     titleCompany.company = companyFromHost(url);
   }
+  const location = extractJsonLdLocation($);
 
   $(NOISE_SELECTORS).remove();
   const cleanedHtml = $.html();
@@ -192,10 +237,12 @@ export function extractFromHtml(html: string, url: string): { text: string; titl
     text = normalize($("body").text());
   }
 
-  return { text, ...titleCompany };
+  return { text, ...titleCompany, location };
 }
 
-async function tryCheerio(url: string): Promise<{ text: string; title?: string; company?: string }> {
+async function tryCheerio(
+  url: string
+): Promise<{ text: string; title?: string; company?: string; location?: string }> {
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; JobAgent/1.0)" },
     signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -205,7 +252,9 @@ async function tryCheerio(url: string): Promise<{ text: string; title?: string; 
   return extractFromHtml(html, url);
 }
 
-async function tryPlaywright(url: string): Promise<{ text: string; title?: string; company?: string }> {
+async function tryPlaywright(
+  url: string
+): Promise<{ text: string; title?: string; company?: string; location?: string }> {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch();
   try {
@@ -224,7 +273,7 @@ export async function fetchJd(url: string): Promise<FetchJdResult> {
   try {
     const r = await tryCheerio(url);
     if (r.text.length >= MIN_LENGTH) {
-      return { text: r.text, method: "cheerio", title: r.title, company: r.company };
+      return { text: r.text, method: "cheerio", title: r.title, company: r.company, location: r.location };
     }
   } catch {
     // fall through to Playwright
@@ -233,7 +282,7 @@ export async function fetchJd(url: string): Promise<FetchJdResult> {
   try {
     const r = await tryPlaywright(url);
     if (r.text.length >= MIN_LENGTH) {
-      return { text: r.text, method: "playwright", title: r.title, company: r.company };
+      return { text: r.text, method: "playwright", title: r.title, company: r.company, location: r.location };
     }
   } catch {
     // fall through to failed
