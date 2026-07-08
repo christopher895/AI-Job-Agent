@@ -90,6 +90,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const prevBlobRef = useRef<string | null>(null);
+  const hasAttemptedPreviewRef = useRef(false);
 
   async function save() {
     setSaving(true);
@@ -124,7 +125,10 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
 
   // Load the PDF preview once on mount since split view is the default.
   useEffect(() => {
-    generatePreview();
+    if (!hasAttemptedPreviewRef.current) {
+      hasAttemptedPreviewRef.current = true;
+      generatePreview();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
