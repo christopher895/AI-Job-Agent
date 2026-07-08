@@ -17,7 +17,7 @@ function allowHtmlFallback(): boolean {
 
 // ─── LaTeX escaping ──────────────────────────────────────────────────────────
 
-function tex(s: string): string {
+export function tex(s: string): string {
   return String(s ?? "")
     .replace(/\\/g, "\\textbackslash{}")
     .replace(/&/g, "\\&")
@@ -30,7 +30,12 @@ function tex(s: string): string {
     .replace(/\^/g, "\\textasciicircum{}")
     .replace(/_/g, "\\_")
     .replace(/–/g, "--")   // en-dash → LaTeX double dash
-    .replace(/—/g, "---"); // em-dash → LaTeX triple dash
+    .replace(/—/g, "---")  // em-dash → LaTeX triple dash
+    // Raw "·" (U+00B7) has no reliable glyph under this template's legacy
+    // 8-bit font stack (mathptmx + T1 fontenc, no fontspec/inputenc) and
+    // renders as mojibake (e.g. "˚u"). \textperiodcentered is the LaTeX-safe
+    // macro for the same glyph, safe under any font encoding.
+    .replace(/·/g, "\\textperiodcentered{}");
 }
 
 function texUrl(s: string): string {
@@ -53,15 +58,26 @@ type ContactFields = {
   portfolio: string;
 };
 
-function parseContactLine(line: string): ContactFields {
+// Matches US phone formats with any mix of separators around the area code,
+// including "(704)-877-1460" (paren immediately followed by a hyphen, no
+// space) — the original regex required exactly one separator char between
+// each digit group, which silently rejected that combination.
+const PHONE_RE = /^\+?1?[\s.-]?\(?\d{3}\)?[\s.-]*\d{3}[\s.-]?\d{4}$/;
+
+// A bare domain like "christopherzhang.dev" (no http/www prefix) — the kind
+// of thing a portfolio field legitimately contains once a user drops the
+// protocol while editing.
+const BARE_DOMAIN_RE = /^[\w-]+(\.[\w-]+)*\.[a-z]{2,}(\/\S*)?$/i;
+
+export function parseContactLine(line: string): ContactFields {
   const f: ContactFields = { location: "", email: "", phone: "", github: "", linkedin: "", portfolio: "" };
   const otherUrls: string[] = [];
   for (const part of line.split(" · ").map(s => s.trim())) {
     if (part.includes("@") && !part.startsWith("http")) f.email = part;
-    else if (/^\(?\d{3}[\)\s.-]\s*\d{3}[\s.-]\d{4}$/.test(part)) f.phone = part;
+    else if (PHONE_RE.test(part)) f.phone = part;
     else if (part.includes("github.com")) f.github = part;
     else if (part.includes("linkedin.com")) f.linkedin = part;
-    else if (part.startsWith("http") || part.startsWith("www.")) otherUrls.push(part);
+    else if (part.startsWith("http") || part.startsWith("www.") || BARE_DOMAIN_RE.test(part)) otherUrls.push(part);
     else if (!f.location) f.location = part;
   }
   // Any remaining URLs (not github/linkedin) are portfolio links, in order of appearance.
@@ -85,7 +101,7 @@ function splitDots(s: string): string[] {
 
 type ExpEntry  = { company: string; title: string; location: string; dates: string; bullets: string[] };
 type ProjEntry = { name: string; tech: string; dates: string; link: string; bullets: string[] };
-type EduEntry  = { school: string; degrees: string; location: string; graduation: string; gpa?: string };
+type EduEntry  = { school: string; degrees: string; location: string; graduation: string; gpa?: string; notes?: string; coursework?: string };
 
 type ParsedDoc = {
   name: string;
@@ -215,6 +231,12 @@ function parseMd(md: string): ParsedDoc {
         } else if (l.startsWith("GPA:")) {
           if (!cur) throw new Error(`"${l}" appears before any education header`);
           cur.gpa = l.slice(4).trim();
+        } else if (l.startsWith("Notes:")) {
+          if (!cur) throw new Error(`"${l}" appears before any education header`);
+          cur.notes = l.slice(6).trim();
+        } else if (l.startsWith("Coursework:")) {
+          if (!cur) throw new Error(`"${l}" appears before any education header`);
+          cur.coursework = l.slice(11).trim();
         }
         i++;
       }
@@ -259,8 +281,10 @@ function buildLatex(doc: ParsedDoc): string {
   if (doc.education.length) {
     lines.push(``, `\\begin{rSection}{Education}`, ``);
     for (const e of doc.education) {
-      lines.push(`{\\bf ${tex(e.school)},} {\\em ${tex(e.degrees)}} \\hfill {${tex(e.location)}}\\\\`);
-      if (e.gpa) lines.push(`\\textbf{GPA:} ${tex(e.gpa)} \\hfill {\\em ${tex(e.graduation)}}`);
+      lines.push(`{\\bf ${tex(e.school)},} {\\em ${tex(e.degrees)}} \\hfill \\textbf{${tex(e.location)}}\\\\`);
+      const gpaAndNotes = [e.gpa && `\\textbf{GPA:} ${tex(e.gpa)}`, e.notes && tex(e.notes)].filter(Boolean).join(", ");
+      if (gpaAndNotes) lines.push(`${gpaAndNotes} \\hfill {\\em ${tex(e.graduation)}}\\\\`);
+      if (e.coursework) lines.push(`\\textbf{Relevant Coursework:} ${tex(e.coursework)}\\\\`);
     }
     lines.push(``, `\\end{rSection}`);
   }
@@ -271,7 +295,7 @@ function buildLatex(doc: ParsedDoc): string {
     for (let idx = 0; idx < doc.experience.length; idx++) {
       const e = doc.experience[idx];
       lines.push(
-        `\\textbf{${tex(e.company)}} \\hfill {${tex(e.location)}}\\\\`,
+        `\\textbf{${tex(e.company)}} \\hfill \\textbf{${tex(e.location)}}\\\\`,
         `\\textbf{${tex(e.title)}} \\hfill {\\em ${tex(e.dates)}}`,
       );
       if (e.bullets.length) {
@@ -305,7 +329,7 @@ function buildLatex(doc: ParsedDoc): string {
     for (let idx = 0; idx < doc.extracurriculars.length; idx++) {
       const e = doc.extracurriculars[idx];
       lines.push(
-        `\\textbf{${tex(e.company)}} \\hfill {${tex(e.location)}}\\\\`,
+        `\\textbf{${tex(e.company)}} \\hfill \\textbf{${tex(e.location)}}\\\\`,
         `\\textbf{${tex(e.title)}} \\hfill {\\em ${tex(e.dates)}}`,
       );
       if (e.bullets.length) {
@@ -458,10 +482,12 @@ function masterResumeToDoc(mr: MasterResume): ParsedDoc {
     skills: skillLines,
     education: mr.education.map((edu) => ({
       school: edu.school,
-      degrees: edu.degrees.join(", "),
+      degrees: edu.degrees.join(" & "),
       location: edu.location,
       graduation: edu.graduation,
       gpa: edu.gpa,
+      notes: edu.notes.join(", "),
+      coursework: edu.coursework.join(", "),
     })),
   };
 }

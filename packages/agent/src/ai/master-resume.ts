@@ -30,7 +30,7 @@ const master: MasterResume = {
         "A.B. Business Economics",
       ],
       location: "Providence, RI",
-      gpa: "4.00/4.00",
+      gpa: "3.93/4.00",
       graduation: "Expected May 2028",
       coursework: [
         "Software Engineering",

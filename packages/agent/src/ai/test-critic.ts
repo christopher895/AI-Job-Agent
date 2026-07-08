@@ -14,7 +14,6 @@ const JD = `Backend Software Engineer. Kubernetes on AWS, services in TypeScript
 PostgreSQL, Docker. You'll own CI/CD and observability.`;
 
 const strong: TailoredResume = {
-  summary: "Backend-leaning engineer with Kubernetes/AWS and TypeScript experience.",
   experience: [
     {
       id: "exp-scout",
@@ -32,7 +31,6 @@ const strong: TailoredResume = {
 };
 
 const weak: TailoredResume = {
-  summary: "",
   experience: [
     { id: "exp-scout", bullets: [{ sourceId: "exp-scout-1", text: "Worked on an AI security assistant with Copilot Studio and Jira" }] },
   ],
