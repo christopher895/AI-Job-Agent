@@ -1,10 +1,21 @@
 import { chromium } from "playwright";
+import fs from "fs";
 import path from "path";
 import { FILTERS } from "../config";
 
 const FEED_URL = "https://jobright.ai/jobs/recommend?from=homepage";
 const AUTH_PATH = path.resolve(process.cwd(), "auth.json");
 const SCROLL_PASSES = 8;
+
+// On Railway (or any ephemeral host) auth.json isn't checked into git, so there's
+// nothing on disk after a fresh deploy. JOBRIGHT_AUTH_JSON_B64 lets the session be
+// supplied via an env var instead; written to disk once per container start.
+function ensureAuthFile() {
+  if (fs.existsSync(AUTH_PATH)) return;
+  const b64 = process.env.JOBRIGHT_AUTH_JSON_B64;
+  if (!b64) return;
+  fs.writeFileSync(AUTH_PATH, Buffer.from(b64, "base64"));
+}
 
 const BADGE_PATTERNS = [
   /^\d+ (school alumni|new applicants)/i,
@@ -58,6 +69,14 @@ function warnIfUnknownsAreHigh(jobs: JobListing[]) {
 }
 
 export async function scrapeJobright(): Promise<JobListing[]> {
+  ensureAuthFile();
+  if (!fs.existsSync(AUTH_PATH)) {
+    throw new Error(
+      "No Jobright session found — run locally: npx playwright open https://jobright.ai --save-storage=packages/agent/auth.json, " +
+      "then set JOBRIGHT_AUTH_JSON_B64 (base64 of that file) wherever this is deployed."
+    );
+  }
+
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ storageState: AUTH_PATH });
   const page = await context.newPage();
@@ -67,7 +86,8 @@ export async function scrapeJobright(): Promise<JobListing[]> {
   if (page.url().includes("/login")) {
     await browser.close();
     throw new Error(
-      "Jobright session expired — re-run: npx playwright open https://jobright.ai --save-storage=packages/agent/auth.json"
+      "Jobright session expired — re-run: npx playwright open https://jobright.ai --save-storage=packages/agent/auth.json, " +
+      "then update JOBRIGHT_AUTH_JSON_B64 with the new file's base64 contents."
     );
   }
 

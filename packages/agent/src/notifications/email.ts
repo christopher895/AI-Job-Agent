@@ -10,7 +10,7 @@ function getResend() {
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function buildEmailHtml(jobs: JobListing[]): string {
+function buildEmailHtml(jobs: JobListing[], source: string): string {
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
 
   const rows = jobs
@@ -42,7 +42,7 @@ function buildEmailHtml(jobs: JobListing[]): string {
         ${jobs.length} new internship${jobs.length > 1 ? "s" : ""} detected
       </h2>
       <p style="color:#666; font-size:13px; margin-top:0;">
-        Found via Jobright · ${new Date().toLocaleString()}
+        Found via ${esc(source)} · ${new Date().toLocaleString()}
       </p>
       <table style="width:100%; border-collapse:collapse;">
         ${rows}
@@ -51,7 +51,7 @@ function buildEmailHtml(jobs: JobListing[]): string {
   `;
 }
 
-export async function sendJobEmail(jobs: JobListing[]) {
+export async function sendJobEmail(jobs: JobListing[], source: string = "Jobright") {
   if (jobs.length === 0) return;
 
   const toEmail = process.env.YOUR_EMAIL;
@@ -67,6 +67,6 @@ export async function sendJobEmail(jobs: JobListing[]) {
     from,
     to: toEmail,
     subject,
-    html: buildEmailHtml(jobs),
+    html: buildEmailHtml(jobs, source),
   });
 }
