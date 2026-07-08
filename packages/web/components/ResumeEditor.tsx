@@ -96,6 +96,26 @@ function PdfPane({
   );
 }
 
+function JdPanel({ jdText, onClose }: { jdText: string | null; onClose: () => void }) {
+  return (
+    <div className="fixed inset-y-0 right-0 w-full max-w-md border-l border-gray-200 bg-gray-50 shadow-xl z-20 flex flex-col">
+      <div className="px-4 py-2 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
+        <span className="text-xs font-medium text-gray-600">Job Description</span>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-700 transition-colors" aria-label="Close">
+          ✕
+        </button>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
+        {jdText ? (
+          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{jdText}</p>
+        ) : (
+          <p className="text-sm text-gray-400">No job description saved for this resume.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ResumeEditor({
   resume,
   initialView = "edit",
@@ -113,6 +133,7 @@ export default function ResumeEditor({
   });
   const [applyStatus, setApplyStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [viewMode, setViewMode] = useState<ViewMode>(initialView);
+  const [showJdPanel, setShowJdPanel] = useState(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -194,6 +215,16 @@ export default function ResumeEditor({
       if (pdfBlobUrlRef.current) URL.revokeObjectURL(pdfBlobUrlRef.current);
     };
   }, []);
+
+  // Close the JD panel on Escape
+  useEffect(() => {
+    if (!showJdPanel) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setShowJdPanel(false);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showJdPanel]);
 
   async function handleDownload() {
     try {
@@ -329,6 +360,18 @@ export default function ResumeEditor({
             ))}
           </div>
 
+          <button
+            onClick={() => setShowJdPanel(true)}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6" />
+              <path d="M16 13H8" />
+              <path d="M16 17H8" />
+            </svg>
+            View JD
+          </button>
           <button
             onClick={handleDownload}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
@@ -494,6 +537,8 @@ export default function ResumeEditor({
           </span>
         </div>
       )}
+
+      {showJdPanel && <JdPanel jdText={resume.jd_text} onClose={() => setShowJdPanel(false)} />}
     </div>
   );
 }
