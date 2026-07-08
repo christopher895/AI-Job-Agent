@@ -1,5 +1,6 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, MasterResume, ExperienceEntry, ProjectEntry, EducationEntry } from "../lib/api";
 import { SortableSection, DragHandle } from "./SortableSection";
 
@@ -84,7 +85,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<Section>("Basics");
-  const [showPreview, setShowPreview] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -120,6 +121,12 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       setPreviewLoading(false);
     }
   }
+
+  // Load the PDF preview once on mount since split view is the default.
+  useEffect(() => {
+    generatePreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Basics ──────────────────────────────────────────────────────
   function setBasics(field: keyof MasterResume["basics"], value: string) {
@@ -358,9 +365,10 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       </div>
 
       {/* Content + optional preview panel */}
-      <div className={`flex flex-1 min-w-0 ${showPreview ? "divide-x divide-gray-200" : ""}`}>
+      <PanelGroup direction="horizontal" className="flex-1 min-w-0">
+        <Panel id="form-content" order={1} defaultSize={50} minSize={20}>
         {/* Form content */}
-        <div className={`px-8 py-8 overflow-y-auto ${showPreview ? "w-1/2" : "flex-1"}`}>
+        <div className="h-full px-8 py-8 overflow-y-auto">
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
@@ -639,22 +647,14 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             </SortableSection>
           </div>
         )}
-
-          {/* Bottom save */}
-          <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
-            <button
-              onClick={save}
-              disabled={saving}
-              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg disabled:opacity-50 transition-colors"
-            >
-              {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
-            </button>
-          </div>
         </div>
+        </Panel>
 
-        {/* PDF preview panel */}
         {showPreview && (
-          <div className="w-1/2 flex flex-col bg-gray-50">
+          <>
+            <PanelResizeHandle className="w-1 bg-gray-200 hover:bg-violet-400 active:bg-violet-500 transition-colors cursor-col-resize" />
+            <Panel id="pdf-preview" order={2} defaultSize={50} minSize={20}>
+            <div className="h-full flex flex-col bg-gray-50">
             <div className="px-4 py-2.5 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
               <span className="text-xs font-medium text-gray-600">PDF Preview</span>
               <span className="text-xs text-gray-400">
@@ -690,9 +690,11 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                 />
               )}
             </div>
-          </div>
+            </div>
+            </Panel>
+          </>
         )}
-      </div>
+      </PanelGroup>
     </div>
   );
 }
