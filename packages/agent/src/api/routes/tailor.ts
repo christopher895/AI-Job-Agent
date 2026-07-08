@@ -97,7 +97,13 @@ router.post("/fetch-jd", async (req, res) => {
     res.status(400).json({ error: "Could not fetch job description from this URL", method: "failed" });
     return;
   }
-  res.json({ text: result.text, method: result.method, title: result.title, company: result.company });
+  res.json({
+    text: result.text,
+    method: result.method,
+    title: result.title,
+    company: result.company,
+    location: result.location,
+  });
 });
 
 export default router;

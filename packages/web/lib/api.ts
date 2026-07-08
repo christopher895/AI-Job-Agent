@@ -136,7 +136,7 @@ export const api = {
   emailResume: (id: string) => request<{ sent: boolean }>("POST", `/resume/${id}/email`),
   deleteResume: (id: string) => request<void>("DELETE", `/resume/${id}`),
   fetchJd: (url: string) =>
-    request<{ text: string; method: string; title?: string; company?: string }>(
+    request<{ text: string; method: string; title?: string; company?: string; location?: string }>(
       "POST",
       "/tailor/fetch-jd",
       { url }
