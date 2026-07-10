@@ -308,7 +308,7 @@ function buildLatex(doc: ParsedDoc): string {
     for (let idx = 0; idx < doc.experience.length; idx++) {
       const e = doc.experience[idx];
       lines.push(
-        `\\textbf{${tex(e.company)}} \\hfill {${tex(e.location)}}\\\\`,
+        `\\textbf{${tex(e.company)}} \\hfill \\textbf{${tex(e.location)}}\\\\`,
         `\\textbf{${tex(e.title)}} \\hfill {\\em ${tex(e.dates)}}`,
       );
       if (e.bullets.length) {
@@ -342,7 +342,7 @@ function buildLatex(doc: ParsedDoc): string {
     for (let idx = 0; idx < doc.extracurriculars.length; idx++) {
       const e = doc.extracurriculars[idx];
       lines.push(
-        `\\textbf{${tex(e.company)}} \\hfill {${tex(e.location)}}\\\\`,
+        `\\textbf{${tex(e.company)}} \\hfill \\textbf{${tex(e.location)}}\\\\`,
         `\\textbf{${tex(e.title)}} \\hfill {\\em ${tex(e.dates)}}`,
       );
       if (e.bullets.length) {
