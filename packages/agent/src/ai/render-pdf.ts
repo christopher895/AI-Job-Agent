@@ -280,11 +280,24 @@ function buildLatex(doc: ParsedDoc): string {
   // Education
   if (doc.education.length) {
     lines.push(``, `\\begin{rSection}{Education}`, ``);
-    for (const e of doc.education) {
-      lines.push(`{\\bf ${tex(e.school)},} {\\em ${tex(e.degrees)}} \\hfill {${tex(e.location)}}\\\\`);
+    for (let idx = 0; idx < doc.education.length; idx++) {
+      const e = doc.education[idx];
+      const isLastEntry = idx === doc.education.length - 1;
+      const fields: string[] = [
+        `{\\bf ${tex(e.school)},} {\\em ${tex(e.degrees)}} \\hfill {${tex(e.location)}}`,
+      ];
       const gpaAndNotes = [e.gpa && `\\textbf{GPA:} ${tex(e.gpa)}`, e.notes && tex(e.notes)].filter(Boolean).join(", ");
-      if (gpaAndNotes) lines.push(`${gpaAndNotes} \\hfill {\\em ${tex(e.graduation)}}`);
-      if (e.coursework) lines.push(`\\textbf{Relevant Coursework:} ${tex(e.coursework)}\\\\`);
+      if (gpaAndNotes) fields.push(`${gpaAndNotes} \\hfill {\\em ${tex(e.graduation)}}`);
+      if (e.coursework) fields.push(`\\textbf{Relevant Coursework:} ${tex(e.coursework)}`);
+      // Every field forces a line break except the last field of the last
+      // entry: a trailing "\\" right before "\end{rSection}" doubles the
+      // gap to the next section (the "\\" break plus the blank-line
+      // paragraph break both add vertical space) — every other section
+      // ends with "\end{itemize}" instead, which has no such trailing break.
+      fields.forEach((field, fieldIdx) => {
+        const isLastField = isLastEntry && fieldIdx === fields.length - 1;
+        lines.push(isLastField ? field : `${field}\\\\`);
+      });
     }
     lines.push(``, `\\end{rSection}`);
   }
