@@ -63,7 +63,7 @@ const master: MasterResume = {
         {
           id: "exp-scout-2",
           text: "Architected an AI developer platform using MCP and LLM orchestration, cutting Scout app deployment time by 75%",
-          tech: ["MCP", "LLM orchestration"],
+          tech: ["MCP", "LLM orchestration", "GitHub Actions"],
           metrics: ["75% deployment time reduction"],
           tags: ["ai", "platform", "devops"],
         },
@@ -301,9 +301,10 @@ const master: MasterResume = {
   ],
 
   skills: {
-    languages: ["Java", "Python", "JavaScript", "TypeScript", "C++"],
+    languages: ["Java", "Python", "JavaScript", "TypeScript", "C++", "SQL"],
     frameworks: [
       "React",
+      "Next.js",
       "Node.js",
       "Express.js",
       "FastAPI",
@@ -311,16 +312,27 @@ const master: MasterResume = {
       "NumPy",
       "PyTorch",
       "TensorFlow",
+      "OpenCV",
+      "MediaPipe",
     ],
     tools: [
       "Docker",
       "AWS EKS",
       "Kubernetes",
       "PostgreSQL",
+      "Firebase",
       "Git",
       "Argo CD",
+      "Kargo",
       "Crossplane",
       "Datadog",
+      "Vercel",
+      "Clerk",
+      "Jira",
+      "Copilot Studio",
+      "MCP",
+      "GitHub Actions",
+      "REST APIs",
     ],
     interests: [
       "Piano",
