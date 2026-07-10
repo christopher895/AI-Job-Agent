@@ -78,74 +78,86 @@ export async function scrapeJobright(): Promise<JobListing[]> {
   }
 
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ storageState: AUTH_PATH });
-  const page = await context.newPage();
+  try {
+    const context = await browser.newContext({ storageState: AUTH_PATH });
+    const page = await context.newPage();
 
-  await page.goto(FEED_URL, { waitUntil: "load", timeout: 30000 });
+    await page.goto(FEED_URL, { waitUntil: "load", timeout: 30000 });
 
-  if (page.url().includes("/login")) {
-    await browser.close();
-    throw new Error(
-      "Jobright session expired — re-run: npx playwright open https://jobright.ai --save-storage=packages/agent/auth.json, " +
-      "then update JOBRIGHT_AUTH_JSON_B64 with the new file's base64 contents."
-    );
-  }
+    if (page.url().includes("/login")) {
+      throw new Error(
+        "Jobright session expired — re-run: npx playwright open https://jobright.ai --save-storage=packages/agent/auth.json, " +
+        "then update JOBRIGHT_AUTH_JSON_B64 with the new file's base64 contents."
+      );
+    }
 
-  await page.waitForSelector('[data-tut="jobs-card-match-score"]', { timeout: 15000 });
+    try {
+      await page.waitForSelector('[data-tut="jobs-card-match-score"]', { timeout: 30000 });
+    } catch (err) {
+      // Timeout alone doesn't say whether this is a slow render or Jobright serving
+      // something else entirely (rate-limit/bot-check page) to a datacenter IP —
+      // log enough of the page to tell the two apart next time this fires.
+      const preview = await page.evaluate(() => document.body?.innerText?.slice(0, 300) ?? "");
+      console.error(
+        `[jobright] job cards never appeared — url=${page.url()} title=${await page.title()} bodyPreview=${JSON.stringify(preview)}`
+      );
+      throw err;
+    }
 
-  for (let i = 0; i < SCROLL_PASSES; i++) {
-    await page.evaluate(() => {
-      const el = document.getElementById("jobs-page-main-content");
-      if (el) el.scrollTop += 1200;
-    });
-    await page.waitForTimeout(600);
-  }
-
-  const raw = await page.evaluate(() => {
-    const cards = document.querySelectorAll('[data-tut="jobs-card-match-score"]');
-    const results: { text: string; url: string }[] = [];
-
-    cards.forEach((card) => {
-      const link = card.querySelector('a[href^="/jobs/info/"]');
-      if (!link) return;
-      const href = link.getAttribute("href") ?? "";
-      results.push({
-        text: (card as HTMLElement).innerText,
-        url: `https://jobright.ai${href}`,
+    for (let i = 0; i < SCROLL_PASSES; i++) {
+      await page.evaluate(() => {
+        const el = document.getElementById("jobs-page-main-content");
+        if (el) el.scrollTop += 1200;
       });
+      await page.waitForTimeout(600);
+    }
+
+    const raw = await page.evaluate(() => {
+      const cards = document.querySelectorAll('[data-tut="jobs-card-match-score"]');
+      const results: { text: string; url: string }[] = [];
+
+      cards.forEach((card) => {
+        const link = card.querySelector('a[href^="/jobs/info/"]');
+        if (!link) return;
+        const href = link.getAttribute("href") ?? "";
+        results.push({
+          text: (card as HTMLElement).innerText,
+          url: `https://jobright.ai${href}`,
+        });
+      });
+
+      return results;
     });
 
-    return results;
-  });
+    // Deduplicate by URL
+    const seen = new Set<string>();
+    const jobs: JobListing[] = [];
 
-  await browser.close();
+    for (const { text, url } of raw) {
+      if (seen.has(url)) continue;
+      seen.add(url);
 
-  // Deduplicate by URL
-  const seen = new Set<string>();
-  const jobs: JobListing[] = [];
+      const { title, company, location } = parseCard(text);
 
-  for (const { text, url } of raw) {
-    if (seen.has(url)) continue;
-    seen.add(url);
+      // Must be an internship
+      if (!/intern/i.test(title)) continue;
 
-    const { title, company, location } = parseCard(text);
+      // Must match at least one keyword from config
+      const titleLower = title.toLowerCase();
+      const matchesKeyword = FILTERS.titleKeywords.some((kw) =>
+        titleLower.includes(kw.toLowerCase())
+      );
+      if (!matchesKeyword) continue;
 
-    // Must be an internship
-    if (!/intern/i.test(title)) continue;
+      // Optional term filter
+      if (FILTERS.termFilter && !title.includes(FILTERS.termFilter)) continue;
 
-    // Must match at least one keyword from config
-    const titleLower = title.toLowerCase();
-    const matchesKeyword = FILTERS.titleKeywords.some((kw) =>
-      titleLower.includes(kw.toLowerCase())
-    );
-    if (!matchesKeyword) continue;
+      jobs.push({ title, company, location, url });
+    }
 
-    // Optional term filter
-    if (FILTERS.termFilter && !title.includes(FILTERS.termFilter)) continue;
-
-    jobs.push({ title, company, location, url });
+    warnIfUnknownsAreHigh(jobs);
+    return jobs;
+  } finally {
+    await browser.close();
   }
-
-  warnIfUnknownsAreHigh(jobs);
-  return jobs;
 }
