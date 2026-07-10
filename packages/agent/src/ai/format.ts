@@ -59,17 +59,23 @@ export function renderMarkdown(master: MasterResume, tailored: TailoredResume): 
   renderSections("Experience", tailored.experience);
   renderSections("Projects", tailored.projects);
 
-  // Skills: front-load the tailored order, then any remaining master skills.
-  const allSkills = [
-    ...master.skills.languages,
-    ...master.skills.frameworks,
-    ...master.skills.tools,
+  // Skills: 4 fixed categories, never flattened together. Within each category,
+  // front-load whichever items the tailoring pass ranked as JD-relevant — but
+  // never mix languages/frameworks/tools across category lines, and never let
+  // tailoring touch interests (rendered verbatim from master, unconditionally).
+  const orderWithinCategory = (category: string[]) => [
+    ...tailored.skillsOrder.filter((o) => category.some((c) => c.toLowerCase() === o.toLowerCase())),
+    ...category.filter((c) => !tailored.skillsOrder.some((o) => o.toLowerCase() === c.toLowerCase())),
   ];
-  const ordered = [
-    ...tailored.skillsOrder,
-    ...allSkills.filter((s) => !tailored.skillsOrder.some((o) => o.toLowerCase() === s.toLowerCase())),
-  ];
-  lines.push("", "## Skills", ordered.join(" · "));
+  lines.push("", "## Skills");
+  if (master.skills.languages.length)
+    lines.push(`**Languages:** ${orderWithinCategory(master.skills.languages).join(", ")}`);
+  if (master.skills.frameworks.length)
+    lines.push(`**Frameworks & Libraries:** ${orderWithinCategory(master.skills.frameworks).join(", ")}`);
+  if (master.skills.tools.length)
+    lines.push(`**Tools & Technologies:** ${orderWithinCategory(master.skills.tools).join(", ")}`);
+  if (master.skills.interests.length)
+    lines.push(`**Interests:** ${master.skills.interests.join(", ")}`);
 
   // Education (untailored — facts are fixed, never seen by the tailorer).
   if (master.education.length) {
