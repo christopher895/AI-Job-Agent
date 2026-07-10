@@ -16,8 +16,11 @@ export default function TailorForm({
   const [jdText, setJdText] = useState("");
   const [title, setTitle] = useState(initialTitle);
   const [company, setCompany] = useState(initialCompany);
+  const [location, setLocation] = useState("");
   const [fetchStatus, setFetchStatus] = useState<"idle" | "fetching" | "done" | "failed">("idle");
   const [generating, setGenerating] = useState(false);
+  const [logging, setLogging] = useState(false);
+  const [logStatus, setLogStatus] = useState<"idle" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -27,14 +30,40 @@ export default function TailorForm({
     setFetchStatus("fetching");
     setError(null);
     try {
-      const { text, title: fetchedTitle, company: fetchedCompany } = await api.fetchJd(trimmed);
+      const { text, title: fetchedTitle, company: fetchedCompany, location: fetchedLocation } =
+        await api.fetchJd(trimmed);
       setJdText(text);
       setTitle((current) => (current.trim() ? current : fetchedTitle ?? current));
       setCompany((current) => (current.trim() ? current : fetchedCompany ?? current));
+      setLocation((current) => (current.trim() ? current : fetchedLocation ?? current));
       setFetchStatus("done");
     } catch {
       setFetchStatus("failed");
       setError("Couldn't fetch this page — paste the job description below.");
+    }
+  }
+
+  async function handleAddToLog() {
+    if (!company.trim() || !title.trim()) {
+      setError("Enter a job title and company before adding to the log.");
+      return;
+    }
+    setLogging(true);
+    setError(null);
+    try {
+      await api.postApplied({
+        company: company.trim(),
+        jobTitle: title.trim(),
+        location: location.trim() || undefined,
+        jobUrl: jobUrl.trim() || undefined,
+        appliedAt: new Date().toISOString().split("T")[0],
+      });
+      setLogStatus("done");
+      setTimeout(() => setLogStatus("idle"), 3000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't add to the log. Try again.");
+    } finally {
+      setLogging(false);
     }
   }
 
@@ -138,6 +167,18 @@ export default function TailorForm({
           />
         </div>
 
+        {/* Location */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">Location</label>
+          <input
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="San Francisco, CA"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+          />
+        </div>
+
         {/* Job Description */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Job Description</label>
@@ -156,23 +197,35 @@ export default function TailorForm({
           </div>
         )}
 
-        {/* Generate button */}
-        <button
-          onClick={handleGenerate}
-          disabled={generating}
-          className="w-full bg-violet-600 hover:bg-violet-700 text-white font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {generating ? (
-            <>
-              <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-              </svg>
-              Generating… (this takes ~30s)
-            </>
-          ) : (
-            "Generate Tailored Resume ✨"
-          )}
-        </button>
+        <div className="flex gap-3">
+          {/* Add to Log — logs the application to Google Sheets without generating a resume */}
+          <button
+            onClick={handleAddToLog}
+            disabled={logging || logStatus === "done"}
+            title="Log this application to Google Sheets without generating a resume"
+            className="flex-1 border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white"
+          >
+            {logging ? "Adding…" : logStatus === "done" ? "Added to log ✓" : "Add to Log"}
+          </button>
+
+          {/* Generate button */}
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="flex-[2] bg-violet-600 hover:bg-violet-700 text-white font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {generating ? (
+              <>
+                <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+                Generating… (this takes ~30s)
+              </>
+            ) : (
+              "Generate Tailored Resume ✨"
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

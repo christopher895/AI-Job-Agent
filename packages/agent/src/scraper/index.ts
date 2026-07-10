@@ -92,7 +92,7 @@ export async function runAllCompanyScrapes(): Promise<void> {
     scored.map((s) => `  [${s.score}] ${s.job.title} @ ${s.job.company}`).join("\n")
   );
 
-  await sendJobEmail(topJobs);
+  await sendJobEmail(topJobs, "company career pages");
 }
 
 export async function runJobrightScrape(): Promise<JobListing[]> {
