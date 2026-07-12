@@ -68,24 +68,66 @@ export const ATS_FORMATTING_RULES = [
 ];
 
 /**
- * The target grader's rubric. The critic loop scores drafts against this; the
- * tailorer optimizes for the levers it can move truthfully.
+ * Resume-Worded-style rubric. The critic loop scores drafts against this;
+ * the tailorer optimizes for the levers it can move truthfully. Unlike the
+ * hiring-agent rubric this replaces, every bucket here is something a
+ * rewrite can actually change — it does not score which credentials the
+ * candidate happens to have.
  */
-export const HIRING_AGENT_RUBRIC = {
+export const RESUME_QUALITY_RUBRIC = {
   buckets: [
-    { name: "Open source", weight: 35, rewards: "PRs to OTHERS' repos, popular projects (1000+ stars), GSoC. Personal repos do NOT count." },
-    { name: "Self projects", weight: 30, rewards: "Complex, real-world, advanced architecture, multiple technologies. A working link is decisive." },
-    { name: "Production", weight: 25, rewards: "Real internship/work experience; founder / early-employee credit." },
-    { name: "Technical skills", weight: 10, rewards: "Language and tool breadth demonstrated across work and projects." },
-  ],
-  bonuses: ["GSoC +5", "Founder +3–5", "Early engineer +2–3", "Portfolio site +2", "Tech blog +1–3", "LinkedIn +1"],
-  penalties: [
-    "Project without a link: −3 to −5 each (the single biggest lever).",
-    "Tutorial-grade project (todo/calculator/weather/basic CRUD): −2 to −5.",
-    "Generic project name: −1 each.",
+    { name: "Weak roles", weight: 60, rewards: "Each role/project tells a specific, credible, impactful story — not a duty list. Reward concrete scope, ownership, and outcome; penalize generic or interchangeable-sounding bullets." },
+    { name: "Brevity & Style", weight: 40, rewards: "Concise, active voice, no buzzword/cliché/filler pile-up, easy to scan." },
   ],
   ignored: ["name", "gender", "college/university", "GPA", "city/location"],
 } as const;
+
+/** Self-praise clichés — distinct from FILLER_WORDS below (these oversell, filler pads). */
+export const BUZZWORDS_CLICHES = [
+  "team player", "results-driven", "results-oriented", "synergy", "detail-oriented",
+  "self-starter", "go-getter", "proven track record", "think outside the box",
+  "hardworking", "dynamic", "passionate", "motivated individual", "excellent communication skills",
+];
+
+/** Structural padding — hedge words and throat-clearing, not self-praise. */
+export const FILLER_WORDS = [
+  "very", "really", "just", "basically", "actually", "in order to", "a lot of",
+  "numerous", "various", "successfully", "efficiently", "effectively",
+];
+
+/** First-person pronouns — resume bullets use implied first person; zero-tolerance. Regex source strings (compiled per-use with the `i` flag). */
+export const PERSONAL_PRONOUNS = ["\\bi\\b", "\\bme\\b", "\\bmy\\b", "\\bmyself\\b"];
+
+/** Non-standard glyphs an ATS text-extraction pass may drop, mis-split, or choke on. Safe set: hyphen, standard "•" bullet (already what renderMarkdown emits). */
+export const ATS_UNSAFE_GLYPHS = /[★➤◆♦▶✦""'']|[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+
+/** Resume Worded's own stated bar: best-performing resumes quantify 75%+ of bullets. */
+export const QUANTIFICATION_TARGET_RATIO = 0.75;
+
+/** A leading verb shouldn't open more than this many bullets resume-wide (LinkedIn Career Advice consensus). */
+export const VERB_REPEAT_CAP = 2;
+
+/** Common typos, curated (no spellchecking dependency) — same shape/spirit as ACRONYM_EXPANSIONS above. */
+export const COMMON_MISSPELLINGS: Record<string, string> = {
+  "recieve": "receive",
+  "seperate": "separate",
+  "definately": "definitely",
+  "occured": "occurred",
+  "managment": "management",
+  "enviroment": "environment",
+  "acheive": "achieve",
+  "acheived": "achieved",
+  "buisness": "business",
+  "collaberate": "collaborate",
+  "sucessful": "successful",
+  "publically": "publicly",
+  "thier": "their",
+  "recomend": "recommend",
+  "developement": "development",
+  "excelent": "excellent",
+  "committment": "commitment",
+  "occassion": "occasion",
+};
 
 /**
  * Renders the rules into a prompt block the tailorer/critic can consume.
@@ -111,7 +153,7 @@ export function bestPracticesPromptBlock(): string {
     "Reorder bullets and skills so the JD-most-relevant lead; cut what's irrelevant. Mirror the JD's exact terminology where the underlying fact supports it — but a keyword earns nothing past a few honest mentions, so don't stuff.",
     `When truthful, spell out acronyms once (e.g. ${Object.keys(ACRONYM_EXPANSIONS).slice(0, 5).join(", ")}) so exact-string matchers connect them.`,
     "",
-    `Target grader weights: ${HIRING_AGENT_RUBRIC.buckets.map((b) => `${b.name} ${b.weight}`).join(", ")}. It ignores ${HIRING_AGENT_RUBRIC.ignored.join("/")}.`,
+    `Target grader weights: ${RESUME_QUALITY_RUBRIC.buckets.map((b) => `${b.name} ${b.weight}`).join(", ")}. It ignores ${RESUME_QUALITY_RUBRIC.ignored.join("/")}.`,
     "ATS formatting: " + ATS_FORMATTING_RULES.join(" "),
   ].join("\n");
 }
