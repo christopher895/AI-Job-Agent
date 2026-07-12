@@ -9,7 +9,7 @@ import { RESUME_QUALITY_RUBRIC } from "./knowledge/best-practices";
  * The critic scores a tailored résumé. It is deliberately NOT a lone LLM number:
  *   - It judges the RENDERED résumé (the artifact a grader sees), never the
  *     tailorer's own reasoning.
- *   - It is anchored to the real hiring-agent rubric, structured + Zod-validated.
+ *   - It is anchored to a résumé-quality rubric (writing quality, not candidate credentials), structured + Zod-validated.
  *   - Deterministic signals (grounding, format lint, JD keyword coverage) are
  *     blended in and act as HARD GATES the LLM cannot override — a grounding
  *     failure caps the score no matter how the model scores it.
@@ -63,7 +63,7 @@ export function gatherSignals(master: MasterResume, tailored: TailoredResume, jd
 }
 
 const SYSTEM_PROMPT = `You are a rigorous technical recruiter scoring a software-engineering résumé
-against a specific hiring rubric. Be critical and concrete — reward evidence, penalize fluff.
+against a specific résumé-quality rubric. Be critical and concrete — reward evidence, penalize fluff.
 
 RUBRIC (max points per bucket):
 ${RESUME_QUALITY_RUBRIC.buckets.map((b) => `- ${b.name} (${b.weight}): ${b.rewards}`).join("\n")}
@@ -77,7 +77,7 @@ Return ONLY JSON:
   "buckets": [{ "name": string, "score": number, "max": number, "reasons": string[] }],
   "jdMatch": { "score": number, "max": 100, "missingKeywords": string[] },
   "overall": number,            // 0-100 holistic
-  "topFixes": string[]          // concrete, ordered, e.g. "Add a live link to Travel Planner"
+  "topFixes": string[]          // concrete, ordered, e.g. "Quantify the 'Automated provisioning' bullet with the hours saved"
 }`;
 
 function signalSummary(s: Signals): string {
