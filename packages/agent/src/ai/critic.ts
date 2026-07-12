@@ -3,7 +3,7 @@ import { completeJSON } from "./llm";
 import { MasterResume, TailoredResume } from "./types";
 import { checkGrounding, GroundingReport } from "./grounding";
 import { lintFormat, keywordCoverage, renderMarkdown, FormatReport, KeywordCoverage } from "./format";
-import { HIRING_AGENT_RUBRIC } from "./knowledge/best-practices";
+import { RESUME_QUALITY_RUBRIC } from "./knowledge/best-practices";
 
 /**
  * The critic scores a tailored résumé. It is deliberately NOT a lone LLM number:
@@ -66,9 +66,8 @@ const SYSTEM_PROMPT = `You are a rigorous technical recruiter scoring a software
 against a specific hiring rubric. Be critical and concrete — reward evidence, penalize fluff.
 
 RUBRIC (max points per bucket):
-${HIRING_AGENT_RUBRIC.buckets.map((b) => `- ${b.name} (${b.weight}): ${b.rewards}`).join("\n")}
-Penalties: ${HIRING_AGENT_RUBRIC.penalties.join(" ")}
-Explicitly IGNORE (do not let these affect score): ${HIRING_AGENT_RUBRIC.ignored.join(", ")}.
+${RESUME_QUALITY_RUBRIC.buckets.map((b) => `- ${b.name} (${b.weight}): ${b.rewards}`).join("\n")}
+Explicitly IGNORE (do not let these affect score): ${RESUME_QUALITY_RUBRIC.ignored.join(", ")}.
 
 You are given DETERMINISTIC signals already computed (grounding, formatting, keyword
 coverage). Treat them as ground truth; do not contradict them.
@@ -113,7 +112,16 @@ export async function evaluate(
 
   // Merge actionable fixes: deterministic gaps first (they're certain), then the LLM's.
   // Errors always; plus a curated set of warnings the tailorer can act on truthfully.
-  const ACTIONABLE_WARNINGS = new Set(["no-metric", "keyword-overuse"]);
+  const ACTIONABLE_WARNINGS = new Set([
+    "quantification-low",
+    "keyword-overuse",
+    "verb-repetition",
+    "wrong-tense",
+    "buzzword",
+    "filler-word",
+    "passive-voice",
+    "ats-glyph",
+  ]);
   const fixes = [
     ...signals.grounding.violations.map((v) => `Remove fabrication: ${v.detail}`),
     ...signals.coverage.missing.map((k) => `Surface JD-relevant skill you have: ${k}`),
