@@ -77,7 +77,11 @@ export async function scrapeJobright(): Promise<JobListing[]> {
     );
   }
 
-  const browser = await chromium.launch({ headless: true });
+  // Docker containers default /dev/shm to 64MB, which Chromium's renderer can
+  // exhaust on a JS-heavy infinite-scroll page like Jobright — surfaces as a bare
+  // "Page crashed" error. --disable-dev-shm-usage makes it fall back to /tmp instead.
+  // Doesn't reproduce locally since the host's shared memory isn't constrained the same way.
+  const browser = await chromium.launch({ headless: true, args: ["--disable-dev-shm-usage"] });
   try {
     const context = await browser.newContext({ storageState: AUTH_PATH });
     const page = await context.newPage();
