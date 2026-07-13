@@ -92,7 +92,7 @@ function buildUserPrompt(master: MasterResume, jd: string, opts: TailorOptions):
     jd.trim(),
     feedback,
     "=== SOURCE (experience, projects, skills; use these exact ids) ===",
-    JSON.stringify(tailorableSlice(master), null, 2),
+    JSON.stringify(tailorableSlice(master)),
   ]
     .filter(Boolean)
     .join("\n\n");
