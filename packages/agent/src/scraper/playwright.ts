@@ -84,9 +84,13 @@ export async function scrapeJobright(): Promise<JobListing[]> {
 
     await page.goto(FEED_URL, { waitUntil: "load", timeout: 30000 });
 
-    if (page.url().includes("/login")) {
+    // An expired session doesn't always land on /login — Jobright sometimes redirects
+    // straight to the logged-out marketing homepage instead. Checking for "not the feed
+    // URL we asked for" catches both, rather than assuming one specific redirect target.
+    if (!page.url().startsWith(FEED_URL.split("?")[0])) {
       throw new Error(
-        "Jobright session expired — re-run: npx playwright open https://jobright.ai --save-storage=packages/agent/auth.json, " +
+        `Jobright session expired — landed on ${page.url()} instead of the jobs feed. ` +
+        "Re-run: npx playwright open https://jobright.ai --save-storage=packages/agent/auth.json, " +
         "then update JOBRIGHT_AUTH_JSON_B64 with the new file's base64 contents."
       );
     }
