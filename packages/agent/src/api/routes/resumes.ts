@@ -8,8 +8,10 @@ import {
   getPdf,
   storePdf,
   setPdfError,
+  getMasterResume,
 } from "../../db/queries";
 import { renderPdf } from "../../ai/render-pdf";
+import { buildResumeFilename } from "../../utils/filename";
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -82,14 +84,11 @@ router.get("/resume/:id/pdf", async (req, res) => {
     }
   }
 
-  const slug = [row.company, row.job_title]
-    .filter(Boolean)
-    .join("-")
-    .replace(/[^a-z0-9-]/gi, "-")
-    .toLowerCase() || "resume";
+  const master = await getMasterResume();
+  const filename = buildResumeFilename(master.basics.name, row.company, row.job_title);
 
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="${slug}.pdf"`);
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.send(pdf);
 });
 
@@ -123,13 +122,16 @@ router.post("/resume/:id/email", async (req, res) => {
       ? `${row.company} — ${row.job_title} resume`
       : "Your tailored resume";
 
+  const master = await getMasterResume();
+  const filename = buildResumeFilename(master.basics.name, row.company, row.job_title);
+
   const from = process.env.EMAIL_FROM ?? "Job Agent <onboarding@resend.dev>";
   await resend.emails.send({
     from,
     to: toEmail,
     subject,
     html: `<p>Tailored resume for <strong>${row.job_title ?? "this role"}</strong> at <strong>${row.company ?? "this company"}</strong>.</p>`,
-    attachments: [{ filename: `${subject}.pdf`, content: pdf }],
+    attachments: [{ filename, content: pdf }],
   });
 
   res.json({ sent: true });
