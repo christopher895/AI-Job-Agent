@@ -50,9 +50,10 @@ export default function TailorForm({
     try {
       const result = await api.tailorResume({
         jdText: jd || undefined,
-        jobUrl: !jd && url ? url : undefined,
+        jobUrl: url || undefined,
         jobTitle: title.trim() || undefined,
         company: company.trim() || undefined,
+        location: location.trim() || undefined,
       });
       if (result.fetchMethod === "failed") {
         setError("Couldn't fetch the job page — paste the job description below.");

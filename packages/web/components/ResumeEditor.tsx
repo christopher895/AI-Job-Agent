@@ -258,6 +258,7 @@ export default function ResumeEditor({
       await api.postApplied({
         company: resume.company ?? "",
         jobTitle: resume.job_title ?? "",
+        location: resume.location ?? undefined,
         jobUrl: resume.job_url ?? undefined,
         status: applyForm.status,
         appliedAt: applyForm.appliedAt,
@@ -414,44 +415,53 @@ export default function ResumeEditor({
 
       {/* Apply form */}
       {showApplyForm && (
-        <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center gap-4 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-600 font-medium">Status</label>
-            <select
-              value={applyForm.status}
-              onChange={(e) => setApplyForm((f) => ({ ...f, status: e.target.value }))}
-              className="border border-gray-300 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+        <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex flex-col gap-2 flex-shrink-0">
+          {(!resume.location || !resume.job_url) && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+              Missing {[!resume.location && "location", !resume.job_url && "job URL"].filter(Boolean).join(" and ")} on
+              this resume — the applied-jobs log and Google Sheet row will have blank cells for{" "}
+              {resume.location || resume.job_url ? "it" : "them"}.
+            </p>
+          )}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-600 font-medium">Status</label>
+              <select
+                value={applyForm.status}
+                onChange={(e) => setApplyForm((f) => ({ ...f, status: e.target.value }))}
+                className="border border-gray-300 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+              >
+                <option value="applied">Applied</option>
+                <option value="interviewing">Interviewing</option>
+                <option value="assessment">Assessment</option>
+                <option value="no_response">No Response</option>
+                <option value="offer">Offer</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-600 font-medium">Date</label>
+              <input
+                type="date"
+                value={applyForm.appliedAt}
+                onChange={(e) => setApplyForm((f) => ({ ...f, appliedAt: e.target.value }))}
+                className="border border-gray-300 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+              />
+            </div>
+            <button
+              onClick={handleApply}
+              disabled={applyStatus === "saving"}
+              className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 transition-colors"
             >
-              <option value="applied">Applied</option>
-              <option value="interviewing">Interviewing</option>
-              <option value="assessment">Assessment</option>
-              <option value="no_response">No Response</option>
-              <option value="offer">Offer</option>
-              <option value="rejected">Rejected</option>
-            </select>
+              {applyStatus === "saving" ? "Saving…" : applyStatus === "error" ? "Failed" : "Confirm"}
+            </button>
+            <button
+              onClick={() => setShowApplyForm(false)}
+              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              Cancel
+            </button>
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-600 font-medium">Date</label>
-            <input
-              type="date"
-              value={applyForm.appliedAt}
-              onChange={(e) => setApplyForm((f) => ({ ...f, appliedAt: e.target.value }))}
-              className="border border-gray-300 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500"
-            />
-          </div>
-          <button
-            onClick={handleApply}
-            disabled={applyStatus === "saving"}
-            className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 transition-colors"
-          >
-            {applyStatus === "saving" ? "Saving…" : applyStatus === "error" ? "Failed" : "Confirm"}
-          </button>
-          <button
-            onClick={() => setShowApplyForm(false)}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            Cancel
-          </button>
         </div>
       )}
 

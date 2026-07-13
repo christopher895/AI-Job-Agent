@@ -4,6 +4,7 @@ export type ResumeListItem = {
   id: string;
   job_title: string | null;
   company: string | null;
+  location: string | null;
   job_url: string | null;
   critic_score: number | null;
   /** Error from the most recent PDF render attempt; null if the last attempt succeeded. */
@@ -146,6 +147,7 @@ export const api = {
     jobUrl?: string;
     jobTitle?: string;
     company?: string;
+    location?: string;
   }) =>
     request<{ id: string; markdown: string; criticScore: number; fetchMethod?: string }>(
       "POST",

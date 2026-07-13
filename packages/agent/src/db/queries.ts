@@ -6,6 +6,7 @@ export type TailoredResumeRow = {
   id: string;
   job_title: string | null;
   company: string | null;
+  location: string | null;
   job_url: string | null;
   jd_text: string | null;
   markdown: string;
@@ -126,16 +127,17 @@ export async function updatePreferences(data: Preferences): Promise<void> {
 export async function createTailoredResume(fields: {
   jobTitle?: string;
   company?: string;
+  location?: string;
   jobUrl?: string;
   jdText?: string;
   markdown: string;
   criticScore?: number;
 }): Promise<TailoredResumeRow> {
   const { rows } = await pool.query(
-    `INSERT INTO tailored_resumes (job_title, company, job_url, jd_text, markdown, critic_score)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, job_title, company, job_url, jd_text, markdown, critic_score, pdf_error, created_at, updated_at`,
-    [fields.jobTitle ?? null, fields.company ?? null, fields.jobUrl ?? null,
+    `INSERT INTO tailored_resumes (job_title, company, location, job_url, jd_text, markdown, critic_score)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, created_at, updated_at`,
+    [fields.jobTitle ?? null, fields.company ?? null, fields.location ?? null, fields.jobUrl ?? null,
      fields.jdText ?? null, fields.markdown, fields.criticScore ?? null]
   );
   return rows[0];
@@ -143,7 +145,7 @@ export async function createTailoredResume(fields: {
 
 export async function getTailoredResume(id: string): Promise<TailoredResumeRow | null> {
   const { rows } = await pool.query(
-    `SELECT id, job_title, company, job_url, jd_text, markdown, critic_score, pdf_error, created_at, updated_at
+    `SELECT id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, created_at, updated_at
      FROM tailored_resumes WHERE id = $1`,
     [id]
   );
@@ -152,7 +154,7 @@ export async function getTailoredResume(id: string): Promise<TailoredResumeRow |
 
 export async function listTailoredResumes(): Promise<ResumeListItem[]> {
   const { rows } = await pool.query(
-    `SELECT id, job_title, company, job_url, critic_score, pdf_error, created_at, updated_at
+    `SELECT id, job_title, company, location, job_url, critic_score, pdf_error, created_at, updated_at
      FROM tailored_resumes ORDER BY created_at DESC`
   );
   return rows;
@@ -162,7 +164,7 @@ export async function updateTailoredResume(id: string, markdown: string): Promis
   const { rows } = await pool.query(
     `UPDATE tailored_resumes SET markdown = $1, updated_at = NOW()
      WHERE id = $2
-     RETURNING id, job_title, company, job_url, jd_text, markdown, critic_score, pdf_error, created_at, updated_at`,
+     RETURNING id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, created_at, updated_at`,
     [markdown, id]
   );
   return rows[0] ?? null;

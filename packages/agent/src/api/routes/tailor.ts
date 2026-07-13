@@ -8,17 +8,19 @@ import { LLM_PROVIDER } from "../../ai/llm";
 const router = Router();
 
 router.post("/", async (req, res) => {
-  const { jdText, jobUrl, jobTitle, company } = req.body as {
+  const { jdText, jobUrl, jobTitle, company, location } = req.body as {
     jdText?: string;
     jobUrl?: string;
     jobTitle?: string;
     company?: string;
+    location?: string;
   };
 
   let jd = jdText?.trim() ?? "";
   let fetchMethod: string | undefined;
   let resolvedTitle = jobTitle;
   let resolvedCompany = company;
+  let resolvedLocation = location;
 
   if (!jd && jobUrl) {
     try {
@@ -27,6 +29,7 @@ router.post("/", async (req, res) => {
       fetchMethod = fetched.method;
       resolvedTitle = resolvedTitle || fetched.title;
       resolvedCompany = resolvedCompany || fetched.company;
+      resolvedLocation = resolvedLocation || fetched.location;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Invalid URL";
       res.status(400).json({ error: message });
@@ -58,6 +61,7 @@ router.post("/", async (req, res) => {
     row = await createTailoredResume({
       jobTitle: resolvedTitle,
       company: resolvedCompany,
+      location: resolvedLocation,
       jobUrl,
       jdText: jd,
       markdown: result.markdown,

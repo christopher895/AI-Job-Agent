@@ -60,6 +60,7 @@ export async function initSchema() {
       id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       job_title    TEXT,
       company      TEXT,
+      location     TEXT,
       job_url      TEXT,
       jd_text      TEXT,
       markdown     TEXT NOT NULL DEFAULT '',
@@ -112,6 +113,12 @@ export async function initSchema() {
   // re-render after an edit doesn't silently leave a stale PDF with no indication.
   await pool.query(`
     ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS pdf_error TEXT;
+  `);
+
+  // Job location — captured alongside title/company but was missing from the original
+  // table, so it never made it into the Google Sheets applied-jobs row.
+  await pool.query(`
+    ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS location TEXT;
   `);
 
   await pool.query(`
