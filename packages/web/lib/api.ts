@@ -129,6 +129,24 @@ async function requestBlob(method: string, path: string, body?: unknown): Promis
   return res.blob();
 }
 
+function filenameFromContentDisposition(res: Response): string | null {
+  const header = res.headers.get("Content-Disposition");
+  const match = header?.match(/filename="?([^"]+)"?/);
+  return match ? match[1] : null;
+}
+
+async function requestBlobWithFilename(
+  method: string,
+  path: string,
+): Promise<{ blob: Blob; filename: string | null }> {
+  const res = await fetch(`${API}${path}`, { method });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return { blob: await res.blob(), filename: filenameFromContentDisposition(res) };
+}
+
 export const api = {
   listResumes: () => request<ResumeListItem[]>("GET", "/resumes"),
   getResume: (id: string) => request<Resume>("GET", `/resume/${id}`),
@@ -175,6 +193,7 @@ export const api = {
   putPreferences: (data: Preferences) => request<{ updated: boolean }>("PUT", "/preferences", data),
   pdfUrl: (id: string) => `${API}/resume/${id}/pdf`,
   getPdfBlob: (id: string) => requestBlob("GET", `/resume/${id}/pdf`),
+  getPdfBlobWithFilename: (id: string) => requestBlobWithFilename("GET", `/resume/${id}/pdf`),
   previewMasterResumePdf: (data: MasterResume) =>
     requestBlob("POST", "/master-resume/preview-pdf", data),
 };

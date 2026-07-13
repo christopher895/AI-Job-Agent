@@ -197,11 +197,11 @@ export default function ResumeEditor({
 
   async function handleDownload() {
     try {
-      const blob = await api.getPdfBlob(resume.id);
+      const { blob, filename } = await api.getPdfBlobWithFilename(resume.id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${resume.company ?? "resume"}-${resume.job_title ?? "resume"}.pdf`;
+      a.download = filename ?? "resume.pdf";
       a.click();
       URL.revokeObjectURL(url);
     } catch {
