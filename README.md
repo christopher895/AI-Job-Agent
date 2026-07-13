@@ -246,5 +246,6 @@ Both services share the same Railway Postgres instance. Set `WEB_URL` on the age
 
 **generate → critique → revise loop** — A single tailoring pass produces inconsistent quality. Running a separate critic model that scores the draft and returns a fix list, then revising, reliably pushes output quality above a useful threshold.
 
+**Resume-Worded-style critic rubric** — `critic_score` is a blend of an LLM holistic score (60%, graded against a Weak-roles/Brevity-&-Style rubric), a deterministic format score (25%, quantified-impact ratio, weak/repeated verbs, verb tenses, buzzwords/filler/pronouns, passive voice, spelling, readability/ATS-glyph safety), and JD keyword coverage (15%), with a hard grounding gate that caps the score at 25 on any fabricated claim. It intentionally does not score candidate credentials (open-source contributions, prior employers, portfolio links) — those can't be changed by rewriting a bullet, so scoring them just adds noise the tailoring loop can't act on. Only signals a rewrite can actually move are scored.
 
 **No auth** — Single user, private Railway URL. Adding auth would add overhead with zero security benefit in this setup.

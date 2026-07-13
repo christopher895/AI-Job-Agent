@@ -3,13 +3,13 @@ import { completeJSON } from "./llm";
 import { MasterResume, TailoredResume } from "./types";
 import { checkGrounding, GroundingReport } from "./grounding";
 import { lintFormat, keywordCoverage, renderMarkdown, FormatReport, KeywordCoverage } from "./format";
-import { HIRING_AGENT_RUBRIC } from "./knowledge/best-practices";
+import { RESUME_QUALITY_RUBRIC } from "./knowledge/best-practices";
 
 /**
  * The critic scores a tailored résumé. It is deliberately NOT a lone LLM number:
  *   - It judges the RENDERED résumé (the artifact a grader sees), never the
  *     tailorer's own reasoning.
- *   - It is anchored to the real hiring-agent rubric, structured + Zod-validated.
+ *   - It is anchored to a résumé-quality rubric (writing quality, not candidate credentials), structured + Zod-validated.
  *   - Deterministic signals (grounding, format lint, JD keyword coverage) are
  *     blended in and act as HARD GATES the LLM cannot override — a grounding
  *     failure caps the score no matter how the model scores it.
@@ -63,12 +63,11 @@ export function gatherSignals(master: MasterResume, tailored: TailoredResume, jd
 }
 
 const SYSTEM_PROMPT = `You are a rigorous technical recruiter scoring a software-engineering résumé
-against a specific hiring rubric. Be critical and concrete — reward evidence, penalize fluff.
+against a specific résumé-quality rubric. Be critical and concrete — reward evidence, penalize fluff.
 
 RUBRIC (max points per bucket):
-${HIRING_AGENT_RUBRIC.buckets.map((b) => `- ${b.name} (${b.weight}): ${b.rewards}`).join("\n")}
-Penalties: ${HIRING_AGENT_RUBRIC.penalties.join(" ")}
-Explicitly IGNORE (do not let these affect score): ${HIRING_AGENT_RUBRIC.ignored.join(", ")}.
+${RESUME_QUALITY_RUBRIC.buckets.map((b) => `- ${b.name} (${b.weight}): ${b.rewards}`).join("\n")}
+Explicitly IGNORE (do not let these affect score): ${RESUME_QUALITY_RUBRIC.ignored.join(", ")}.
 
 You are given DETERMINISTIC signals already computed (grounding, formatting, keyword
 coverage). Treat them as ground truth; do not contradict them.
@@ -78,7 +77,7 @@ Return ONLY JSON:
   "buckets": [{ "name": string, "score": number, "max": number, "reasons": string[] }],
   "jdMatch": { "score": number, "max": 100, "missingKeywords": string[] },
   "overall": number,            // 0-100 holistic
-  "topFixes": string[]          // concrete, ordered, e.g. "Add a live link to Travel Planner"
+  "topFixes": string[]          // concrete, ordered, e.g. "Quantify the 'Automated provisioning' bullet with the hours saved"
 }`;
 
 function signalSummary(s: Signals): string {
@@ -113,7 +112,16 @@ export async function evaluate(
 
   // Merge actionable fixes: deterministic gaps first (they're certain), then the LLM's.
   // Errors always; plus a curated set of warnings the tailorer can act on truthfully.
-  const ACTIONABLE_WARNINGS = new Set(["no-metric", "keyword-overuse"]);
+  const ACTIONABLE_WARNINGS = new Set([
+    "quantification-low",
+    "keyword-overuse",
+    "verb-repetition",
+    "wrong-tense",
+    "buzzword",
+    "filler-word",
+    "passive-voice",
+    "ats-glyph",
+  ]);
   const fixes = [
     ...signals.grounding.violations.map((v) => `Remove fabrication: ${v.detail}`),
     ...signals.coverage.missing.map((k) => `Surface JD-relevant skill you have: ${k}`),

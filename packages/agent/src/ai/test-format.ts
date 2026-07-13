@@ -44,6 +44,110 @@ const weak: TailoredResume = {
   reasoning: "",
 };
 
+// --- New deterministic checks (Resume-Worded-style rubric) ---
+
+const quantificationHeavy: TailoredResume = {
+  ...weak,
+  experience: [{ id: "exp-scout", bullets: [
+    { sourceId: "exp-scout-1", text: "Automated infrastructure provisioning on AWS EKS, saving 5 hrs per week" },
+    { sourceId: "exp-scout-2", text: "Architected an AI developer platform, cutting deployment time 75%" },
+  ] }],
+};
+const quantificationLight: TailoredResume = {
+  ...weak,
+  experience: [{ id: "exp-scout", bullets: [
+    { sourceId: "exp-scout-1", text: "Automated infrastructure provisioning on AWS EKS" },
+    { sourceId: "exp-scout-2", text: "Architected an AI developer platform for internal use" },
+  ] }],
+};
+
+const verbRepetitionMessy: TailoredResume = {
+  ...weak,
+  experience: [{ id: "exp-scout", bullets: [
+    { sourceId: "exp-scout-1", text: "Built an internal dashboard for infrastructure metrics" },
+    { sourceId: "exp-scout-2", text: "Built a CI/CD pipeline for the platform team" },
+    { sourceId: "exp-scout-3", text: "Built a Slack bot for on-call alerting" },
+  ] }],
+};
+
+const tenseMessy: TailoredResume = {
+  ...weak,
+  experience: [{ id: "exp-scout", bullets: [
+    { sourceId: "exp-scout-1", text: "Built an internal dashboard for infrastructure metrics" },
+    { sourceId: "exp-scout-2", text: "Automated the CI/CD pipeline for faster releases" },
+    { sourceId: "exp-scout-3", text: "Leading the migration to a new cloud provider" },
+  ] }],
+};
+
+const buzzwordMessy: TailoredResume = {
+  ...weak,
+  experience: [{ id: "exp-scout", bullets: [
+    { sourceId: "exp-scout-1", text: "Recognized as a team player with a proven track record of results" },
+  ] }],
+};
+
+const fillerMessy: TailoredResume = {
+  ...weak,
+  experience: [{ id: "exp-scout", bullets: [
+    { sourceId: "exp-scout-1", text: "Successfully and efficiently managed a very large number of tickets" },
+  ] }],
+};
+
+const pronounMessy: TailoredResume = {
+  ...weak,
+  experience: [{ id: "exp-scout", bullets: [
+    { sourceId: "exp-scout-1", text: "I led the migration of my team's services to Kubernetes" },
+  ] }],
+};
+
+const passiveMessy: TailoredResume = {
+  ...weak,
+  experience: [{ id: "exp-scout", bullets: [
+    { sourceId: "exp-scout-1", text: "The infrastructure migration was completed by the platform team" },
+  ] }],
+};
+
+const spellingMessy: TailoredResume = {
+  ...weak,
+  experience: [{ id: "exp-scout", bullets: [
+    { sourceId: "exp-scout-1", text: "Helped the team recieve feedback and seperate concerns cleanly" },
+  ] }],
+};
+
+const glyphMessy: TailoredResume = {
+  ...weak,
+  experience: [{ id: "exp-scout", bullets: [
+    { sourceId: "exp-scout-1", text: "★ Migrated services to Kubernetes for faster releases" },
+  ] }],
+};
+
+const lintQuantHeavy = lintFormat(MASTER_RESUME, quantificationHeavy);
+const lintQuantLight = lintFormat(MASTER_RESUME, quantificationLight);
+const lintVerbRep = lintFormat(MASTER_RESUME, verbRepetitionMessy);
+const lintTense = lintFormat(MASTER_RESUME, tenseMessy);
+const lintBuzzword = lintFormat(MASTER_RESUME, buzzwordMessy);
+const lintFiller = lintFormat(MASTER_RESUME, fillerMessy);
+const lintPronoun = lintFormat(MASTER_RESUME, pronounMessy);
+const lintPassive = lintFormat(MASTER_RESUME, passiveMessy);
+const lintSpelling = lintFormat(MASTER_RESUME, spellingMessy);
+const lintGlyph = lintFormat(MASTER_RESUME, glyphMessy);
+
+const newChecksPass =
+  lintQuantHeavy.score > lintQuantLight.score &&
+  lintQuantLight.issues.some((i) => i.rule === "quantification-low") &&
+  lintVerbRep.issues.some((i) => i.rule === "verb-repetition") &&
+  lintTense.issues.some((i) => i.rule === "wrong-tense") &&
+  lintBuzzword.issues.some((i) => i.rule === "buzzword") &&
+  lintFiller.issues.some((i) => i.rule === "filler-word") &&
+  lintPronoun.issues.some((i) => i.rule === "personal-pronoun") &&
+  lintPassive.issues.some((i) => i.rule === "passive-voice") &&
+  lintSpelling.issues.some((i) => i.rule === "spelling") &&
+  lintGlyph.issues.some((i) => i.rule === "ats-glyph");
+
+console.log(
+  `NEW CHECKS quant(${lintQuantHeavy.score}v${lintQuantLight.score}) verbRep:${lintVerbRep.issues.some((i) => i.rule === "verb-repetition")} tense:${lintTense.issues.some((i) => i.rule === "wrong-tense")} buzzword:${lintBuzzword.issues.some((i) => i.rule === "buzzword")} filler:${lintFiller.issues.some((i) => i.rule === "filler-word")} pronoun:${lintPronoun.issues.some((i) => i.rule === "personal-pronoun")} passive:${lintPassive.issues.some((i) => i.rule === "passive-voice")} spelling:${lintSpelling.issues.some((i) => i.rule === "spelling")} glyph:${lintGlyph.issues.some((i) => i.rule === "ats-glyph")}`
+);
+
 // --- Format safety of the rendered document ---
 const md = renderMarkdown(MASTER_RESUME, strong);
 const hasStandardHeadings = ["## Experience", "## Skills", "## Education"].every((h) => md.includes(h));
@@ -76,7 +180,8 @@ const pass =
   weakHasWeakOpenerError &&
   covStrong.ratio > covWeak.ratio &&
   sigStrong.grounding.ok &&
-  sigWeak.grounding.ok;
+  sigWeak.grounding.ok &&
+  newChecksPass;
 
 console.log(pass ? "\n✓ format + signal-discrimination test PASSED" : "\n✗ test FAILED");
 process.exit(pass ? 0 : 1);

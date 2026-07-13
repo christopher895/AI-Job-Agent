@@ -4,6 +4,13 @@ import {
   ACRONYM_EXPANSIONS,
   BULLET_GUIDELINES,
   KEYWORD_REPEAT_CAP,
+  BUZZWORDS_CLICHES,
+  FILLER_WORDS,
+  PERSONAL_PRONOUNS,
+  ATS_UNSAFE_GLYPHS,
+  QUANTIFICATION_TARGET_RATIO,
+  VERB_REPEAT_CAP,
+  COMMON_MISSPELLINGS,
 } from "./knowledge/best-practices";
 
 /**
@@ -107,65 +114,264 @@ function wordCount(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length;
 }
 
-/** Deterministic ATS/format checks over the tailored bullets. */
-export function lintFormat(master: MasterResume, tailored: TailoredResume): FormatReport {
-  const meta = buildMeta(master);
+/** First word of a bullet, lowercased — used as the "leading verb" for repetition/tense checks. */
+function leadingVerb(text: string): string {
+  const match = text.trim().match(/^[A-Za-z]+/);
+  return match ? match[0].toLowerCase() : "";
+}
+
+const IRREGULAR_PAST_VERBS = new Set([
+  "built", "led", "sold", "shown", "given", "driven", "spent", "sent", "kept",
+  "met", "held", "ran", "grew", "wrote", "spoke", "chose", "taught", "brought",
+  "caught", "sought", "won", "cut", "set", "began",
+]);
+
+function isPastTense(verb: string): boolean {
+  return verb.endsWith("ed") || IRREGULAR_PAST_VERBS.has(verb);
+}
+
+type TailoredSections = TailoredResume["experience"];
+
+function allBullets(sections: TailoredSections) {
+  return sections.flatMap((s) => s.bullets);
+}
+
+/** Bucket: quantify impact — 30% weight. Resume-wide bullet quantification ratio vs. a 75% target. */
+function quantificationScore(sections: TailoredSections): { score: number; issues: FormatIssue[] } {
   const issues: FormatIssue[] = [];
-  const sections = [...tailored.experience, ...tailored.projects];
-  const allText = sections.flatMap((s) => s.bullets.map((x) => x.text)).join("\n");
+  const bullets = allBullets(sections);
+  const quantified = bullets.filter((b) => /\d/.test(b.text));
+  const ratio = bullets.length ? quantified.length / bullets.length : 1;
+  if (ratio < QUANTIFICATION_TARGET_RATIO) {
+    issues.push({
+      level: "warning",
+      rule: "quantification-low",
+      detail: `${quantified.length} of ${bullets.length} bullets quantified (target ${Math.round(QUANTIFICATION_TARGET_RATIO * 100)}%) — add a number where one truthfully exists`,
+    });
+  }
+  const score = Math.min(100, Math.round((ratio / QUANTIFICATION_TARGET_RATIO) * 100));
+  return { score, issues };
+}
 
-  let bulletCount = 0;
-  for (const s of sections) {
-    let sectionHasMetric = false;
-    for (const { text } of s.bullets) {
-      bulletCount++;
-      const lower = text.toLowerCase();
-
-      // Duty-language openers are an unambiguous anti-pattern → deterministic.
-      // Verb *strength* beyond this is a quality judgment left to the LLM critic.
-      const weak = WEAK_PHRASES.find((p) => lower.startsWith(p));
-      if (weak) issues.push({ level: "error", rule: "weak-opener", detail: `bullet starts with "${weak}": "${text}"` });
-
-      const words = wordCount(text);
-      if (words > 45) issues.push({ level: "error", rule: "bullet-too-long", detail: `${words} words (>2 lines): "${text}"` });
-      else if (words > BULLET_GUIDELINES.idealWordRange[1] + 14)
-        issues.push({ level: "warning", rule: "bullet-long", detail: `${words} words: "${text}"` });
-
-      if (/\d/.test(text)) sectionHasMetric = true;
+/** Bucket: weak verbs & repetition — 15% weight. Duty-language openers + same-verb-opens->cap. */
+function weakVerbsAndRepetitionScore(sections: TailoredSections): { score: number; issues: FormatIssue[] } {
+  const issues: FormatIssue[] = [];
+  const bullets = allBullets(sections);
+  let weakCount = 0;
+  for (const { text } of bullets) {
+    const lower = text.toLowerCase();
+    const weak = WEAK_PHRASES.find((p) => lower.startsWith(p));
+    if (weak) {
+      weakCount++;
+      issues.push({ level: "error", rule: "weak-opener", detail: `bullet starts with "${weak}": "${text}"` });
     }
-    // XYZ formula: a whole role/project with no quantified result anywhere reads as duty-list.
-    if (s.bullets.length && !sectionHasMetric)
-      issues.push({ level: "warning", rule: "no-metric", detail: `section "${s.id}" has no quantified result in any bullet (add a number where one truthfully exists)` });
+  }
+  const verbCounts = new Map<string, number>();
+  for (const { text } of bullets) {
+    const verb = leadingVerb(text);
+    if (verb) verbCounts.set(verb, (verbCounts.get(verb) ?? 0) + 1);
+  }
+  let repeatedVerbs = 0;
+  for (const [verb, count] of verbCounts) {
+    if (count > VERB_REPEAT_CAP) {
+      repeatedVerbs++;
+      issues.push({
+        level: "warning",
+        rule: "verb-repetition",
+        detail: `"${verb}" opens ${count} bullets (cap ${VERB_REPEAT_CAP}) — vary the action verb`,
+      });
+    }
+  }
+  const score = Math.max(0, 100 - weakCount * 25 - repeatedVerbs * 20);
+  return { score, issues };
+}
+
+/** Bucket: verb tenses — 10% weight. Flags bullets whose leading-verb tense disagrees with the majority within the same section. */
+function verbTenseScore(sections: TailoredSections): { score: number; issues: FormatIssue[] } {
+  const issues: FormatIssue[] = [];
+  let mismatches = 0;
+  for (const s of sections) {
+    const verbs = s.bullets.map((b) => leadingVerb(b.text)).filter(Boolean);
+    if (verbs.length < 2) continue;
+    const pastCount = verbs.filter(isPastTense).length;
+    const majorityPast = pastCount >= verbs.length / 2;
+    for (const b of s.bullets) {
+      const verb = leadingVerb(b.text);
+      if (!verb) continue;
+      if (isPastTense(verb) !== majorityPast) {
+        mismatches++;
+        issues.push({
+          level: "warning",
+          rule: "wrong-tense",
+          detail: `section "${s.id}" bullet opens with "${verb}", inconsistent with the section's ${majorityPast ? "past" : "non-past"}-tense majority: "${b.text}"`,
+        });
+      }
+    }
+  }
+  const score = Math.max(0, 100 - mismatches * 25);
+  return { score, issues };
+}
+
+/** Bucket: buzzwords, filler & pronouns — 15% weight. Three related word-choice-hygiene word-lists, one bucket. */
+function wordChoiceScore(sections: TailoredSections): { score: number; issues: FormatIssue[] } {
+  const issues: FormatIssue[] = [];
+  const allText = allBullets(sections).map((b) => b.text).join("\n").toLowerCase();
+
+  let buzzwordHits = 0;
+  for (const phrase of BUZZWORDS_CLICHES) {
+    if (allText.includes(phrase)) {
+      buzzwordHits++;
+      issues.push({ level: "warning", rule: "buzzword", detail: `contains cliché phrase "${phrase}"` });
+    }
   }
 
-  // Acronyms used should appear spelled-out somewhere at least once.
+  let fillerHits = 0;
+  for (const word of FILLER_WORDS) {
+    const re = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+    if (re.test(allText)) {
+      fillerHits++;
+      issues.push({ level: "warning", rule: "filler-word", detail: `contains filler word/phrase "${word}"` });
+    }
+  }
+
+  let pronounHits = 0;
+  for (const pattern of PERSONAL_PRONOUNS) {
+    if (new RegExp(pattern, "i").test(allText)) {
+      pronounHits++;
+      issues.push({ level: "error", rule: "personal-pronoun", detail: `contains a first-person pronoun (pattern /${pattern}/)` });
+    }
+  }
+
+  const score = Math.max(0, 100 - buzzwordHits * 10 - fillerHits * 5 - pronounHits * 15);
+  return { score, issues };
+}
+
+/** Bucket: passive voice — 10% weight. Regex heuristic over be-verb + past participle. */
+const PASSIVE_VOICE_RE = /\b(was|were|is|are|been|being)\s+\w+ed\b/i;
+const IRREGULAR_PAST_PARTICIPLES = ["built", "written", "shown", "given", "driven", "spoken", "chosen", "taught", "brought", "sold", "held", "run", "grown"];
+
+function passiveVoiceScore(sections: TailoredSections): { score: number; issues: FormatIssue[] } {
+  const issues: FormatIssue[] = [];
+  let hits = 0;
+  for (const { text } of allBullets(sections)) {
+    const regexHit = PASSIVE_VOICE_RE.test(text);
+    const irregularHit = IRREGULAR_PAST_PARTICIPLES.some((p) => new RegExp(`\\b(was|were|is|are|been|being)\\s+${p}\\b`, "i").test(text));
+    if (regexHit || irregularHit) {
+      hits++;
+      issues.push({ level: "warning", rule: "passive-voice", detail: `passive construction: "${text}"` });
+    }
+  }
+  const score = Math.max(0, 100 - hits * 20);
+  return { score, issues };
+}
+
+/** Bucket: spelling — 10% weight. Curated misspelling list, no spellchecking dependency. */
+function spellingScore(sections: TailoredSections): { score: number; issues: FormatIssue[] } {
+  const issues: FormatIssue[] = [];
+  const allText = allBullets(sections).map((b) => b.text).join(" ").toLowerCase();
+  let hits = 0;
+  for (const [misspelling, correction] of Object.entries(COMMON_MISSPELLINGS)) {
+    if (new RegExp(`\\b${misspelling}\\b`, "i").test(allText)) {
+      hits++;
+      issues.push({ level: "error", rule: "spelling", detail: `"${misspelling}" should be "${correction}"` });
+    }
+  }
+  const score = Math.max(0, 100 - hits * 25);
+  return { score, issues };
+}
+
+/** Bucket: readability & ATS glyphs — 10% weight. Bullet length + non-standard glyphs + acronym expansion + keyword-stuffing cap + one-page budget. */
+function readabilityAtsScore(master: MasterResume, sections: TailoredSections): { score: number; issues: FormatIssue[] } {
+  const issues: FormatIssue[] = [];
+  let severe = 0;
+  let minor = 0;
+  const bullets = allBullets(sections);
+  const allText = bullets.map((b) => b.text).join("\n");
+
+  for (const { text } of bullets) {
+    const words = wordCount(text);
+    if (words > 45) {
+      severe++;
+      issues.push({ level: "error", rule: "bullet-too-long", detail: `${words} words (>2 lines): "${text}"` });
+    } else if (words > BULLET_GUIDELINES.idealWordRange[1] + 14) {
+      minor++;
+      issues.push({ level: "warning", rule: "bullet-long", detail: `${words} words: "${text}"` });
+    }
+    if (ATS_UNSAFE_GLYPHS.test(text)) {
+      minor++;
+      issues.push({ level: "warning", rule: "ats-glyph", detail: `non-standard glyph/emoji in: "${text}"` });
+    }
+  }
+
   for (const [acr, expansion] of Object.entries(ACRONYM_EXPANSIONS)) {
     const re = new RegExp(`\\b${acr.replace("/", "\\/")}\\b`, "i");
-    if (re.test(allText) && !allText.toLowerCase().includes(expansion.toLowerCase()))
+    if (re.test(allText) && !allText.toLowerCase().includes(expansion.toLowerCase())) {
+      minor++;
       issues.push({ level: "warning", rule: "acronym-unexpanded", detail: `"${acr}" used without spelling out "${expansion}" once` });
+    }
   }
 
-  // hiring-agent's biggest lever: included projects should carry a link.
-  for (const p of tailored.projects) {
-    if (!meta.get(p.id)?.link)
-      issues.push({ level: "warning", rule: "project-no-link", detail: `project "${p.id}" has no link (hiring-agent −30–50%)` });
-  }
-
-  // Keyword-stuffing guard: no single tech term should appear more than the cap.
   const haystack = allText.toLowerCase();
   for (const term of masterVocabulary(master)) {
-    if (term.length < 3) continue; // skip noisy short tokens (e.g. "go", "ai")
+    if (term.length < 3) continue;
     const count = haystack.split(term).length - 1;
-    if (count > KEYWORD_REPEAT_CAP)
+    if (count > KEYWORD_REPEAT_CAP) {
+      minor++;
       issues.push({ level: "warning", rule: "keyword-overuse", detail: `"${term}" repeated ${count}× (cap ${KEYWORD_REPEAT_CAP}) — reads as stuffing, not signal` });
+    }
   }
 
-  // One-page budget heuristic.
-  if (bulletCount > 18) issues.push({ level: "warning", rule: "length-budget", detail: `${bulletCount} bullets — likely exceeds one page` });
+  if (bullets.length > 18) {
+    minor++;
+    issues.push({ level: "warning", rule: "length-budget", detail: `${bullets.length} bullets — likely exceeds one page` });
+  }
 
-  const errors = issues.filter((i) => i.level === "error").length;
-  const warnings = issues.filter((i) => i.level === "warning").length;
-  const score = Math.max(0, 100 - errors * 15 - warnings * 3);
+  const score = Math.max(0, 100 - severe * 20 - minor * 8);
+  return { score, issues };
+}
+
+const BUCKET_WEIGHTS = {
+  quantification: 0.30,
+  weakVerbs: 0.15,
+  tenses: 0.10,
+  wordChoice: 0.15,
+  passive: 0.10,
+  spelling: 0.10,
+  readability: 0.10,
+} as const;
+
+/** Deterministic ATS/format checks over the tailored bullets — weighted bucket sum. */
+export function lintFormat(master: MasterResume, tailored: TailoredResume): FormatReport {
+  const sections = [...tailored.experience, ...tailored.projects];
+
+  const quantification = quantificationScore(sections);
+  const weakVerbs = weakVerbsAndRepetitionScore(sections);
+  const tenses = verbTenseScore(sections);
+  const wordChoice = wordChoiceScore(sections);
+  const passive = passiveVoiceScore(sections);
+  const spelling = spellingScore(sections);
+  const readability = readabilityAtsScore(master, sections);
+
+  const score = Math.round(
+    quantification.score * BUCKET_WEIGHTS.quantification +
+    weakVerbs.score * BUCKET_WEIGHTS.weakVerbs +
+    tenses.score * BUCKET_WEIGHTS.tenses +
+    wordChoice.score * BUCKET_WEIGHTS.wordChoice +
+    passive.score * BUCKET_WEIGHTS.passive +
+    spelling.score * BUCKET_WEIGHTS.spelling +
+    readability.score * BUCKET_WEIGHTS.readability
+  );
+
+  const issues = [
+    ...quantification.issues,
+    ...weakVerbs.issues,
+    ...tenses.issues,
+    ...wordChoice.issues,
+    ...passive.issues,
+    ...spelling.issues,
+    ...readability.issues,
+  ];
+
   return { score, issues };
 }
 
