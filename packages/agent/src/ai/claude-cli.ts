@@ -70,9 +70,12 @@ export function parseClaudeCliOutput(stdout: string): unknown {
 const CLAUDE_BIN = process.env.CLAUDE_CLI_PATH || "claude";
 // A hung/stalled claude CLI call (e.g. waiting on a prompt that can never be
 // answered headlessly) must not block a request forever with no feedback —
-// bound it well above normal latency (the UI's own copy says "~30s") and
-// fail loudly instead.
-const DEFAULT_TIMEOUT_MS = Number(process.env.CLAUDE_CLI_TIMEOUT_MS) || 120_000;
+// bound it well above normal latency and fail loudly instead. Measured: a
+// single tailoring call (full best-practices system prompt + master resume)
+// takes ~80s on its own on a clean run, and revision passes send an even
+// larger prompt (critic feedback appended) — 120s left ~zero margin and was
+// killing legitimate in-flight generations, not actual hangs.
+const DEFAULT_TIMEOUT_MS = Number(process.env.CLAUDE_CLI_TIMEOUT_MS) || 240_000;
 
 /** Impure: spawns `claude`, writes `input` to stdin, resolves stdout or rejects. */
 function runClaudeCliProcess(args: string[], cwd: string, input: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string> {
