@@ -397,7 +397,7 @@ async function renderHtmlFallback(markdown: string): Promise<Buffer> {
     li{font-size:10.5pt;margin:1px 0}
     strong{font-weight:bold}
   </style></head><body>${markdownToHtml(markdown)}</body></html>`;
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: ["--disable-dev-shm-usage"] });
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "networkidle" });
