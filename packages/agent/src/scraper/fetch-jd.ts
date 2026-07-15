@@ -256,7 +256,7 @@ async function tryPlaywright(
   url: string
 ): Promise<{ text: string; title?: string; company?: string; location?: string }> {
   const { chromium } = await import("playwright");
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: ["--disable-dev-shm-usage"] });
   try {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "networkidle", timeout: TIMEOUT_MS });
