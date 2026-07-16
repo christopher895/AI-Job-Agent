@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
 import { FILTERS } from "../config";
+import { closeBrowserSafely } from "./browser-utils";
 
 const FEED_URL = "https://jobright.ai/jobs/recommend?from=homepage";
 const AUTH_PATH = path.resolve(process.cwd(), "auth.json");
@@ -166,6 +167,6 @@ export async function scrapeJobright(): Promise<JobListing[]> {
     warnIfUnknownsAreHigh(jobs);
     return jobs;
   } finally {
-    await browser.close();
+    await closeBrowserSafely(browser);
   }
 }
