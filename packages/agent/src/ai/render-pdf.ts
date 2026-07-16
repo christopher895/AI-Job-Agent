@@ -387,6 +387,7 @@ function markdownToHtml(md: string): string {
 
 async function renderHtmlFallback(markdown: string): Promise<Buffer> {
   const { chromium } = await import("playwright");
+  const { closeBrowserSafely } = await import("../scraper/browser-utils");
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Times New Roman',Times,serif;font-size:11pt;color:#000;padding:0.65in 0.75in;line-height:1.35}
@@ -404,7 +405,7 @@ async function renderHtmlFallback(markdown: string): Promise<Buffer> {
     const pdf = await page.pdf({ format: "Letter", margin: { top: "0", bottom: "0", left: "0", right: "0" }, printBackground: false });
     return Buffer.from(pdf);
   } finally {
-    await browser.close();
+    await closeBrowserSafely(browser);
   }
 }
 
