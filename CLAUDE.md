@@ -137,6 +137,21 @@ web/
 ### Infra
 - Railway (deployment), Docker Compose (local Postgres)
 
+## Deployment
+
+Railway project `AI-Job-Agent`, two environments, each with its own Postgres (separate from local docker-compose):
+
+| Environment | Web app | Agent API |
+|---|---|---|
+| production | https://web-production-d867c.up.railway.app | https://job-agentagent-production.up.railway.app |
+| staging | https://web-staging-f1cd.up.railway.app | https://job-agentagent-staging.up.railway.app |
+
+**Master resume is edited on production, not locally.** `/resume/master` writes straight to whatever `DATABASE_URL` the running app has — local (`docker-compose`) and Railway are independent databases with no sync between them. To keep one source of truth, always edit master resume at:
+
+https://web-production-d867c.up.railway.app/resume/master
+
+Local `docker-compose` Postgres is for scraper/tailoring dev work, not for master resume edits.
+
 ## Database Schema
 
 ```sql
