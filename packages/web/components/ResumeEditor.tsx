@@ -104,6 +104,8 @@ export default function ResumeEditor({
   initialView?: ViewMode;
 }) {
   const [markdown, setMarkdown] = useState(resume.markdown);
+  const [jobTitle, setJobTitle] = useState(resume.job_title ?? "");
+  const [company, setCompany] = useState(resume.company ?? "");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [showApplyForm, setShowApplyForm] = useState(false);
@@ -119,6 +121,7 @@ export default function ResumeEditor({
   const [pdfRenderError, setPdfRenderError] = useState<string | null>(resume.pdf_error);
   const pdfBlobUrlRef = useRef<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const metaDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasAttemptedLoadRef = useRef(false);
 
@@ -126,7 +129,7 @@ export default function ResumeEditor({
     async (value: string) => {
       setSaveStatus("saving");
       try {
-        const { pdfError: renderError } = await api.patchResume(resume.id, value);
+        const { pdfError: renderError } = await api.patchResume(resume.id, { markdown: value });
         setSaveStatus("saved");
         setPdfRenderError(renderError);
       } catch {
@@ -141,6 +144,33 @@ export default function ResumeEditor({
     setSaveStatus("unsaved");
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => autoSave(value), 1000);
+  }
+
+  const autoSaveMeta = useCallback(
+    async (fields: { jobTitle?: string; company?: string }) => {
+      setSaveStatus("saving");
+      try {
+        await api.patchResume(resume.id, fields);
+        setSaveStatus("saved");
+      } catch {
+        setSaveStatus("error");
+      }
+    },
+    [resume.id]
+  );
+
+  function handleTitleChange(value: string) {
+    setJobTitle(value);
+    setSaveStatus("unsaved");
+    if (metaDebounceRef.current) clearTimeout(metaDebounceRef.current);
+    metaDebounceRef.current = setTimeout(() => autoSaveMeta({ jobTitle: value }), 800);
+  }
+
+  function handleCompanyChange(value: string) {
+    setCompany(value);
+    setSaveStatus("unsaved");
+    if (metaDebounceRef.current) clearTimeout(metaDebounceRef.current);
+    metaDebounceRef.current = setTimeout(() => autoSaveMeta({ company: value }), 800);
   }
 
   function insertMarkdown(before: string, after = "") {
@@ -225,8 +255,8 @@ export default function ResumeEditor({
     setApplyStatus("saving");
     try {
       await api.postApplied({
-        company: resume.company ?? "",
-        jobTitle: resume.job_title ?? "",
+        company: company,
+        jobTitle: jobTitle,
         location: resume.location ?? undefined,
         jobUrl: resume.job_url ?? undefined,
         status: applyForm.status,
@@ -249,7 +279,7 @@ export default function ResumeEditor({
       ? "Unsaved"
       : "Auto-saved";
 
-  const title = [resume.job_title, resume.company].filter(Boolean).join(" – ");
+  const title = [jobTitle, company].filter(Boolean).join(" – ");
   const wordCount = markdown.trim() ? markdown.trim().split(/\s+/).length : 0;
   const charCount = markdown.length;
 
@@ -294,8 +324,21 @@ export default function ResumeEditor({
 
       {/* Title + score + actions */}
       <div className="border-b border-gray-200 px-6 py-4 flex items-start justify-between gap-4 flex-shrink-0">
-        <div>
-          <h1 className="text-lg font-semibold text-gray-900">{title || "Untitled"}</h1>
+        <div className="min-w-0">
+          <input
+            value={jobTitle}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            placeholder="Untitled"
+            aria-label="Job title"
+            className="block w-full text-lg font-semibold text-gray-900 bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 -mx-1 outline-none focus:ring-1 focus:ring-violet-300 transition-colors"
+          />
+          <input
+            value={company}
+            onChange={(e) => handleCompanyChange(e.target.value)}
+            placeholder="Company"
+            aria-label="Company"
+            className="block w-full text-sm text-gray-500 bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 -mx-1 outline-none focus:ring-1 focus:ring-violet-300 transition-colors mt-0.5"
+          />
           <p className="text-xs text-gray-400 mt-0.5">
             {new Date(resume.created_at).toLocaleDateString("en-US", {
               month: "long",

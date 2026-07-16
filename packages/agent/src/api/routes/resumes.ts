@@ -32,30 +32,55 @@ router.get("/resume/:id", async (req, res) => {
   res.json(row);
 });
 
-// PATCH /api/resume/:id  — save editor content, re-render PDF, report render failures
+// PATCH /api/resume/:id  — save editor content and/or rename (job title / company), re-render PDF on markdown changes
 router.patch("/resume/:id", async (req, res) => {
-  const { markdown } = req.body as { markdown?: string };
-  if (typeof markdown !== "string") {
-    res.status(400).json({ error: "markdown string required" });
+  const { markdown, jobTitle, company } = req.body as {
+    markdown?: string;
+    jobTitle?: string;
+    company?: string;
+  };
+  if (markdown !== undefined && typeof markdown !== "string") {
+    res.status(400).json({ error: "markdown must be a string" });
     return;
   }
-  const updated = await updateTailoredResume(req.params.id, markdown);
+  if (jobTitle !== undefined && typeof jobTitle !== "string") {
+    res.status(400).json({ error: "jobTitle must be a string" });
+    return;
+  }
+  if (company !== undefined && typeof company !== "string") {
+    res.status(400).json({ error: "company must be a string" });
+    return;
+  }
+  if (markdown === undefined && jobTitle === undefined && company === undefined) {
+    res.status(400).json({ error: "markdown, jobTitle, or company required" });
+    return;
+  }
+
+  const updated = await updateTailoredResume(req.params.id, { markdown, jobTitle, company });
   if (!updated) { res.status(404).json({ error: "Not found" }); return; }
 
   // Awaited (not fire-and-forget): the editor needs to know synchronously whether the
   // edit it just saved still renders, so a broken edit surfaces immediately instead of
-  // leaving a stale PDF served silently by the on-demand routes below.
+  // leaving a stale PDF served silently by the on-demand routes below. Only markdown
+  // changes affect the rendered PDF, so a rename alone skips re-rendering.
   let pdfError: string | null = null;
-  try {
-    const pdf = await renderPdf(markdown);
-    await storePdf(req.params.id, pdf);
-  } catch (err) {
-    pdfError = errorMessage(err);
-    await setPdfError(req.params.id, pdfError);
-    console.error("[resume] pdf re-render failed:", err);
+  if (markdown !== undefined) {
+    try {
+      const pdf = await renderPdf(markdown);
+      await storePdf(req.params.id, pdf);
+    } catch (err) {
+      pdfError = errorMessage(err);
+      await setPdfError(req.params.id, pdfError);
+      console.error("[resume] pdf re-render failed:", err);
+    }
   }
 
-  res.json({ updatedAt: updated.updated_at, pdfError });
+  res.json({
+    updatedAt: updated.updated_at,
+    pdfError,
+    jobTitle: updated.job_title,
+    company: updated.company,
+  });
 });
 
 // DELETE /api/resume/:id

@@ -150,8 +150,12 @@ async function requestBlobWithFilename(
 export const api = {
   listResumes: () => request<ResumeListItem[]>("GET", "/resumes"),
   getResume: (id: string) => request<Resume>("GET", `/resume/${id}`),
-  patchResume: (id: string, markdown: string) =>
-    request<{ updatedAt: string; pdfError: string | null }>("PATCH", `/resume/${id}`, { markdown }),
+  patchResume: (id: string, fields: { markdown?: string; jobTitle?: string; company?: string }) =>
+    request<{ updatedAt: string; pdfError: string | null; jobTitle: string | null; company: string | null }>(
+      "PATCH",
+      `/resume/${id}`,
+      fields
+    ),
   emailResume: (id: string) => request<{ sent: boolean }>("POST", `/resume/${id}/email`),
   deleteResume: (id: string) => request<void>("DELETE", `/resume/${id}`),
   fetchJd: (url: string) =>
