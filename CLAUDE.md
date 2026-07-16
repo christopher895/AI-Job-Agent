@@ -8,13 +8,18 @@ Owner: **Christopher Zhang** (Summer 2026 build)
 
 ## What's Already Built
 
-- **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon adapters; snapshot diffing; location filtering; keyword scoring
-- **Alert emails** — Resend email listing new jobs (title, company, link) — needs "Tailor resume" link added per job
-- **AI tailoring pipeline** — `generateBestResume(jd)` in `packages/agent/src/ai/chain.ts`: generate → critique → revise loop (up to 3 passes), outputs ATS-safe Markdown
-- **Master resume** — structured JSON in `packages/agent/src/ai/master-resume.ts` — to be moved to DB so web app can edit it
-- **Cron scheduler** — scraper runs every 15 min, in-process (no queue layer)
+Everything below is implemented and running in production, not aspirational — this used to be a "what's being built" roadmap; it has since shipped.
 
-## What's Being Built (full scope)
+- **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon adapters (20+ companies) *plus* a Playwright-scraped Jobright.ai recommendation feed as a second job source; snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
+- **Alert emails** — Resend email listing new jobs (title, company, link) with a "Tailor resume" link per job → `/tailor?jobUrl=...&title=...&company=...`
+- **AI tailoring pipeline** — `generateBestResume(jd)` in `packages/agent/src/ai/chain.ts`: generate → critique → revise loop (up to 3 passes), scored against a resume-worded-style rubric, outputs ATS-safe Markdown
+- **LLM provider** — Claude by default, via the headless `claude -p` CLI (`packages/agent/src/ai/claude-cli.ts`), authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing). OpenAI/GPT-4o is a manual fallback (`LLM_PROVIDER=openai`)
+- **Master resume** — source facts live in `packages/agent/src/ai/master-resume.ts`, seeded once into the `master_resume` DB table; `/resume/master` reads and writes the DB copy directly (see Deployment below — always edit on production, not locally)
+- **PDF generation** — Markdown → LaTeX → PDF via Tectonic + the custom `Resume_Template/czresume.cls` template, for both tailored resumes and the master resume preview
+- **Web app** — `/`, `/tailor`, `/resume/[id]`, `/resume/master`, `/applied`, `/preferences` all built (see table below)
+- **Cron scheduler** — scraper runs every 15 min, in-process (no queue layer), guarded against overlapping ticks
+
+## Core Flows
 
 ### Email alert flow
 1. Scraper detects new jobs → sends alert email
@@ -28,14 +33,15 @@ Owner: **Christopher Zhang** (Summer 2026 build)
 | `/` | History dashboard — all generated resumes, listed by company/role/date, with download + edit links |
 | `/tailor` | Paste a JD or a job URL (auto-fetched); optional title/company; Generate button |
 | `/resume/[id]` | Google Doc-style inline text editor — auto-saves, Download PDF, Email to me |
-| `/resume/master` | Edit master resume fields directly (basics, experience, projects, skills) |
+| `/resume/master` | Edit master resume fields directly (basics, experience, projects, skills, drag-to-reorder sections) |
 | `/applied` | Application log table — mirrors Google Sheet (date applied, company, location, URL, status, resume link) |
+| `/preferences` | Edit scraper filters (title/required keywords, target locations, priority companies, max alerts per email) — backed by the `preferences` DB table and `/api/preferences` |
 
 ### JD auto-fetch
 When a job URL is submitted, the backend fetches the page with Playwright (JS-heavy) or Cheerio (static) and extracts the job description text. Falls back to a paste box if the page is blocked or returns no useful content.
 
 ### PDF generation
-Every tailored or edited resume is rendered to PDF and stored in the database alongside the resume record. Downloadable from the editor and the dashboard. Attached when "Email to me" is clicked. Design: clean plain text for now; will match a specific template later.
+Every tailored or edited resume, and the master resume preview, is rendered to PDF via Tectonic (LaTeX) using `Resume_Template/czresume.cls`, and stored in the database alongside the resume record. Downloadable from the editor and the dashboard. Attached when "Email to me" is clicked.
 
 ### Google Sheets sync
 When Christopher marks a job as "applied" (from `/applied` or the resume editor), a row is written/updated in his Google Sheet:
@@ -57,36 +63,45 @@ job-hunting-agent/
 ```
 agent/src/
 ├── scraper/
-│   ├── index.ts            # Orchestrator — scrapes all companies, emails new jobs
-│   ├── playwright.ts       # JS-rendered pages (Jobright)
+│   ├── index.ts            # Orchestrator — scrapes all companies + Jobright, emails new jobs
+│   ├── playwright.ts       # JS-rendered pages (Jobright.ai recommendation feed)
 │   ├── cheerio.ts          # Static HTML pages
+│   ├── fetch-jd.ts         # Auto-fetch JD text from a job URL (Cheerio → Playwright fallback)
 │   ├── diff.ts             # Snapshot diffing (hash sets)
-│   ├── filters.ts          # Location + keyword scoring
-│   ├── companies.ts        # Hardcoded company list
+│   ├── filters.ts          # Location + keyword scoring (reads `preferences` table)
+│   ├── companies.ts        # Hardcoded company list (Greenhouse/Ashby/Lever/Amazon)
 │   └── adapters/           # greenhouse.ts, ashby.ts, lever.ts, amazon.ts
 ├── ai/
-│   ├── chain.ts            # generate → critique → revise loop (ENTRY POINT)
-│   ├── tailor.ts           # Single-pass tailoring (LLM call)
-│   ├── critic.ts           # Scores a draft, returns fixes
-│   ├── grounding.ts        # Checks no invented facts
-│   ├── format.ts           # Deterministic ATS checks + Markdown renderer
-│   ├── master-resume.ts    # SOURCE OF TRUTH — move to DB
-│   ├── types.ts            # Zod schemas for MasterResume, TailoredResume
-│   ├── llm.ts              # OpenAI wrapper
+│   ├── chain.ts             # generate → critique → revise loop (ENTRY POINT)
+│   ├── tailor.ts            # Single-pass tailoring (LLM call)
+│   ├── critic.ts            # Scores a draft against the resume-worded-style rubric
+│   ├── grounding.ts         # Checks no invented facts
+│   ├── format.ts            # Deterministic ATS checks + Markdown renderer
+│   ├── fit-page.ts          # Trims tailored output to fit one page
+│   ├── render-pdf.ts        # Markdown/MasterResume → LaTeX → PDF via tectonic
+│   ├── master-resume.ts     # Hardcoded facts, seeded once into the `master_resume` DB row
+│   ├── types.ts             # Zod schemas for MasterResume, TailoredResume
+│   ├── llm.ts               # completeJSON() — dispatches to Claude CLI or OpenAI per LLM_PROVIDER
+│   ├── claude-cli.ts        # Headless `claude -p` backend (default provider)
 │   └── knowledge/
 │       └── best-practices.ts
+├── api/
+│   ├── index.ts             # Express router mount
+│   └── routes/              # tailor.ts, resumes.ts, master-resume.ts, applied.ts, preferences.ts, places.ts
+├── integrations/
+│   └── sheets.ts            # Google Sheets API — append/update application rows
 ├── notifications/
-│   └── email.ts            # Resend — job alert emails
+│   └── email.ts             # Resend — job alert emails
 ├── cron/
-│   └── scheduler.ts        # node-cron — every 15 min
+│   └── scheduler.ts         # node-cron — every 15 min, guarded against overlapping ticks
 ├── db/
-│   ├── pool.ts             # pg Pool
-│   ├── schema.ts           # CREATE TABLE statements
-│   └── queries.ts          # All DB access functions
-└── config.ts               # FILTERS, thresholds
+│   ├── pool.ts               # pg Pool
+│   ├── schema.ts             # CREATE TABLE statements
+│   └── queries.ts            # All DB access functions
+└── config.ts                # FILTERS/Preferences type, thresholds
 ```
 
-### `packages/web/` target layout
+### `packages/web/` layout
 
 ```
 web/
@@ -97,12 +112,20 @@ web/
 │   ├── resume/
 │   │   ├── [id]/page.tsx     # /resume/[id] — Google Doc editor
 │   │   └── master/page.tsx   # /resume/master — edit master resume
-│   └── applied/
-│       └── page.tsx          # /applied — application log
+│   ├── applied/
+│   │   └── page.tsx          # /applied — application log
+│   └── preferences/
+│       └── page.tsx          # /preferences — edit scraper filters
 ├── components/
 │   ├── ResumeEditor.tsx      # Inline text editor with Download/Email buttons
 │   ├── ResumeCard.tsx        # Card used in history dashboard
-│   └── AppliedTable.tsx      # Application log table
+│   ├── DashboardClient.tsx   # Client-side dashboard wrapper
+│   ├── AppliedTable.tsx      # Application log table
+│   ├── MasterResumeForm.tsx  # Form for editing master resume fields
+│   ├── SortableSection.tsx   # Drag-to-reorder for master resume sections/bullets
+│   ├── TailorForm.tsx        # JD input + generate button
+│   ├── PreferencesForm.tsx   # Scraper filter settings form
+│   └── Nav.tsx                # Top navigation bar
 └── lib/
     └── api.ts                # Typed fetch wrappers for agent API
 ```
@@ -119,11 +142,12 @@ web/
 - Playwright (JS-rendered pages), Cheerio (static HTML), custom snapshot diffing via hash sets
 
 ### AI
-- OpenAI API (GPT-4o for tailoring + critique), Zod (LLM output validation)
+- Claude (default) — headless `claude -p` CLI, authenticated via `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing); set `LLM_PROVIDER=openai` to fall back to OpenAI/GPT-4o
+- Zod (LLM output validation)
 - No RAG pipeline / pgvector — master resume is the direct source of truth
 
 ### PDF
-- Puppeteer (render Markdown → HTML → PDF) or `pdf-lib` — decision deferred; plain text style for now
+- Tectonic (LaTeX compiler) rendering `Resume_Template/czresume.cls` — used for both tailored resumes and the master resume preview
 
 ### Notifications
 - Resend (job alert emails + "Email to me" from editor)
@@ -165,6 +189,7 @@ tailored_resumes (
   id            uuid primary key,
   job_title     text,
   company       text,
+  location      text,
   job_url       text,
   jd_text       text,           -- full job description used for tailoring
   markdown      text,           -- current editor content (editable)
@@ -186,10 +211,16 @@ applied_jobs (
   job_title     text,
   location      text,
   job_url       text,
-  status        text,           -- 'applied' | 'interviewing' | 'rejected' | 'offer'
+  status        text,           -- 'applied' | 'interviewing' | 'rejected' | 'offer' | 'assessment' | 'no_response'
   applied_at    timestamptz,
   resume_id     uuid references tailored_resumes(id),
   sheets_row    int             -- row number in Google Sheet for updates
+)
+
+preferences (
+  id            int primary key default 1,   -- single row
+  data          jsonb,          -- Preferences JSON: titleKeywords, requiredKeywords, targetLocations, priorityCompanies, maxPerEmail
+  updated_at    timestamptz
 )
 ```
 
@@ -197,10 +228,10 @@ applied_jobs (
 
 ### Scraping → Alert
 ```
-cron (every 15 min, in-process)
-  → Playwright/Cheerio scrape per company
+cron (every 15 min, in-process, guarded against overlapping ticks)
+  → Playwright/Cheerio scrape per company + Jobright.ai recommendation feed
     → diff.ts (new job hashes)
-      → filter by location + keyword score
+      → filter by location + keyword score (reads `preferences` table)
         → Resend email (job list + "Tailor resume" link per job)
 ```
 
@@ -208,9 +239,9 @@ cron (every 15 min, in-process)
 ```
 POST /api/tailor (jd text or job URL)
   → if URL: auto-fetch JD via Playwright/Cheerio
-    → generateBestResume(jd) — up to 3 passes
+    → generateBestResume(jd) — up to 3 passes via Claude CLI (or OpenAI if LLM_PROVIDER=openai)
       → save tailored_resumes row (markdown, critic_score)
-        → render PDF → store in tailored_resumes.pdf
+        → render PDF via Tectonic/czresume.cls → store in tailored_resumes.pdf
           → return resume ID → redirect to /resume/[id]
 ```
 
@@ -226,12 +257,25 @@ POST /api/applied (resume_id, status, applied_at)
 
 ```
 DATABASE_URL
-OPENAI_API_KEY
+
+LLM_PROVIDER                  # "claude" (default) or "openai"
+CLAUDE_CODE_OAUTH_TOKEN       # required when LLM_PROVIDER=claude — minted via `claude setup-token`
+CLAUDE_MODEL                  # optional — pins a model for the claude path
+OPENAI_API_KEY                # required when LLM_PROVIDER=openai, or as a manual fallback
+OPENAI_MODEL                  # defaults to gpt-4o
+
 RESEND_API_KEY
 YOUR_EMAIL
+WEB_URL                       # web app URL — CORS + "Tailor resume" email links
+APP_URL
+
 GOOGLE_SHEETS_SPREADSHEET_ID
 GOOGLE_SERVICE_ACCOUNT_JSON   # stringified service account credentials
+
+TECTONIC_PATH                 # path to the tectonic binary (PDF generation)
 ```
+
+See `.env.example` for the authoritative, commented list.
 
 ## Security
 
@@ -249,6 +293,8 @@ Use these proactively:
 - `/security-review` — run when touching env vars, API integrations, or scraping logic
 - `/verify` — run after any feature to confirm it works end-to-end
 - `/run` — launch the agent or dashboard to test changes live
+- `/investigate` — systematic root-cause debugging for scraper flakiness (Jobright selector drift, OOM, session expiry) or tailoring failures
+- `/ship` — land a branch: tests, review, changelog, commit, push, PR in one flow
 
 ## Dev Notes
 

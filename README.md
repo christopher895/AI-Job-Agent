@@ -9,17 +9,17 @@ An autonomous agent that monitors 20+ company career pages 24/7, detects new job
 ```
 Every 15 minutes
   ↓
-Playwright / Cheerio scrapes each career page
+Playwright / Cheerio scrapes each career page + Jobright.ai recommendation feed
   ↓
 Snapshot diffing (hash sets) detects new postings
   ↓
-Location + keyword scoring filters relevant roles
+Location + keyword scoring filters relevant roles (user-editable in /preferences)
   ↓
 Resend alert email (job list + "Tailor Resume" link per job)
   ↓
 Click link → /tailor opens with job pre-filled
   ↓
-GPT-4o: generate → critique → revise (up to 3 passes)
+Claude (headless CLI, OpenAI fallback): generate → critique → revise (up to 3 passes)
   ↓
 LaTeX PDF rendered via tectonic + czresume.cls
   ↓
@@ -34,13 +34,13 @@ Edit inline → Download PDF → Log to Google Sheets
 | ------------- | --------------------------------------------------------------------- |
 | Frontend      | Next.js 14 (App Router), TypeScript, Tailwind CSS, Shadcn/ui         |
 | Backend       | Node.js, Express, PostgreSQL, node-cron                               |
-| Scraping      | Playwright (JS-rendered pages), Cheerio (static HTML), snapshot diff |
-| AI            | OpenAI GPT-4o, Zod (LLM output validation)                           |
+| Scraping      | Playwright (JS-rendered pages + Jobright.ai feed), Cheerio (static HTML), snapshot diff |
+| AI            | Claude (default, headless `claude -p` CLI, subscription usage), OpenAI/GPT-4o fallback, Zod (LLM output validation) |
 | PDF           | Tectonic (LaTeX compiler), custom `czresume.cls` template            |
 | Notifications | Resend (job alert emails + "Email to me" from editor)                |
 | Sheets        | Google Sheets API v4 (application log)                               |
 | Auth          | None — private Railway URL, single user                              |
-| Infra         | Railway (deployment), Docker Compose (local Postgres + Redis)        |
+| Infra         | Railway (deployment), Docker Compose (local Postgres)        |
 
 ---
 
@@ -56,7 +56,7 @@ job-hunting-agent/
 │   └── resume.tex        # Master resume source
 ├── Dockerfile            # Agent service (Railway)
 ├── Dockerfile.web        # Web app service (Railway)
-├── docker-compose.yml    # Local Postgres + Redis
+├── docker-compose.yml    # Local Postgres
 └── .env.example
 ```
 
@@ -79,33 +79,35 @@ agent/src/
 │   ├── critic.ts         # Scores a draft, returns fixes
 │   ├── grounding.ts      # Checks no invented facts
 │   ├── format.ts         # ATS checks + Markdown renderer
-│   ├── render-pdf.ts     # Markdown → LaTeX → PDF via tectonic
-│   ├── master-resume.ts  # Structured JSON source of truth
+│   ├── render-pdf.ts     # Markdown/MasterResume → LaTeX → PDF via tectonic
+│   ├── master-resume.ts  # Hardcoded facts, seeded once into the `master_resume` DB row
 │   ├── types.ts          # Zod schemas for MasterResume, TailoredResume
-│   ├── llm.ts            # OpenAI wrapper
+│   ├── llm.ts            # completeJSON() — dispatches to Claude CLI or OpenAI per LLM_PROVIDER
+│   ├── claude-cli.ts     # Headless `claude -p` backend (default provider)
 │   └── knowledge/
 │       └── best-practices.ts  # Resume rubric + prompt blocks used by tailor/critic/format
 ├── api/
 │   ├── index.ts          # Express router mount
 │   └── routes/
-│       ├── tailor.ts     # POST /api/tailor
-│       ├── resumes.ts    # GET /api/resumes, GET /api/resumes/:id, PATCH /api/resumes/:id
-│       ├── applied.ts    # GET/POST /api/applied
-│       └── master-resume.ts  # GET/PUT /api/master-resume
+│       ├── tailor.ts        # POST /api/tailor
+│       ├── resumes.ts       # GET /api/resumes, GET /api/resumes/:id, PATCH /api/resumes/:id
+│       ├── applied.ts       # GET/POST /api/applied
+│       ├── master-resume.ts # GET/PUT /api/master-resume, POST /api/master-resume/preview-pdf
+│       ├── preferences.ts   # GET/PUT /api/preferences — scraper filter settings
+│       └── places.ts        # GET /api/places — static US city list for location autocomplete
 ├── integrations/
 │   └── sheets.ts         # Google Sheets API — append/update application rows
 ├── notifications/
-│   ├── email.ts          # Resend — job alert emails
-│   └── sms.ts            # Twilio (wired up, not in main flow)
+│   └── email.ts          # Resend — job alert emails
 ├── cron/
-│   └── scheduler.ts      # node-cron — every 15 min
+│   └── scheduler.ts      # node-cron — every 15 min, guarded against overlapping ticks
 └── db/
     ├── pool.ts           # pg Pool
     ├── schema.ts         # CREATE TABLE statements
     └── queries.ts        # All DB access functions
 ```
 
-### Web App (in progress)
+### Web App
 
 ```
 web/
@@ -115,14 +117,17 @@ web/
 │   ├── resume/
 │   │   ├── [id]/page.tsx     # /resume/[id] — inline editor, Download PDF
 │   │   └── master/page.tsx   # /resume/master — edit master resume
-│   └── applied/page.tsx      # /applied — application log table
+│   ├── applied/page.tsx      # /applied — application log table
+│   └── preferences/page.tsx  # /preferences — edit scraper filter settings
 ├── components/
 │   ├── ResumeEditor.tsx      # Inline text editor with Download/Email buttons
 │   ├── ResumeCard.tsx        # Card used in history dashboard
 │   ├── DashboardClient.tsx   # Client-side dashboard wrapper
 │   ├── AppliedTable.tsx      # Application log table
 │   ├── MasterResumeForm.tsx  # Form for editing master resume fields
+│   ├── SortableSection.tsx   # Drag-to-reorder for master resume sections/bullets
 │   ├── TailorForm.tsx        # JD input + generate button
+│   ├── PreferencesForm.tsx   # Scraper filter settings form
 │   └── Nav.tsx               # Top navigation bar
 └── lib/
     └── api.ts                # Typed fetch wrappers for agent API
@@ -147,13 +152,17 @@ master_resume    (id int default 1, data jsonb, updated_at)
 
 applied_jobs     (id uuid, company, job_title, location, job_url,
                   status, applied_at, resume_id uuid, sheets_row int)
+
+preferences      (id int default 1, data jsonb, updated_at)
+                 -- titleKeywords, requiredKeywords, targetLocations,
+                 -- priorityCompanies, maxPerEmail
 ```
 
 ---
 
 ## AI Tailoring Pipeline
 
-The master resume is the single source of truth — GPT-4o may only select or rephrase facts that exist in it, never invent new ones.
+The master resume is the single source of truth — the LLM may only select or rephrase facts that exist in it, never invent new ones.
 
 ```
 POST /api/tailor  (JD text or job URL)
@@ -178,7 +187,7 @@ POST /api/tailor  (JD text or job URL)
 - Docker (for local Postgres)
 - [Tectonic](https://tectonic-typesetting.github.io/) — `brew install tectonic`
 - Poppler (`pdfinfo`) — `brew install poppler` — used to detect résumé page overflow
-- OpenAI API key
+- A `claude` CLI subscription token (`claude setup-token`) — default LLM provider; or an OpenAI API key to run with `LLM_PROVIDER=openai`
 - Resend API key
 - Google service account with Sheets API access
 
@@ -209,7 +218,11 @@ npm run dev --workspace=packages/web
 ```bash
 DATABASE_URL=postgresql://jobagent:jobagent@localhost:5432/job_agent
 
-OPENAI_API_KEY=sk-...
+LLM_PROVIDER=claude   # "claude" (default) or "openai"
+CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...   # required when LLM_PROVIDER=claude — minted via `claude setup-token`
+CLAUDE_MODEL=                              # optional — pins a model for the claude path
+OPENAI_API_KEY=sk-...                      # required when LLM_PROVIDER=openai, or as a manual fallback
+OPENAI_MODEL=gpt-4o
 
 RESEND_API_KEY=re_...
 YOUR_EMAIL=you@example.com
@@ -242,7 +255,9 @@ Both services share the same Railway Postgres instance. Set `WEB_URL` on the age
 
 ## Key Design Decisions
 
-**No RAG / pgvector** — The master resume is small enough to fit entirely in a single GPT-4o prompt. Embedding chunks and doing cosine retrieval adds complexity with no benefit at this scale.
+**No RAG / pgvector** — The master resume is small enough to fit entirely in a single LLM prompt. Embedding chunks and doing cosine retrieval adds complexity with no benefit at this scale.
+
+**Claude by default, OpenAI as a manual fallback** — Tailoring runs through the headless `claude -p` CLI, billed against Christopher's Claude subscription rather than metered API usage. Setting `LLM_PROVIDER=openai` swaps to GPT-4o with no code changes, since both paths go through the same `completeJSON()` interface in `llm.ts`.
 
 **generate → critique → revise loop** — A single tailoring pass produces inconsistent quality. Running a separate critic model that scores the draft and returns a fix list, then revising, reliably pushes output quality above a useful threshold.
 
