@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
+import { closeBrowserSafely } from "./browser-utils";
 
 export type FetchJdResult = {
   text: string;
@@ -263,7 +264,7 @@ async function tryPlaywright(
     const html = await page.content();
     return extractFromHtml(html, url);
   } finally {
-    await browser.close();
+    await closeBrowserSafely(browser);
   }
 }
 
