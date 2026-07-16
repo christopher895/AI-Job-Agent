@@ -39,36 +39,44 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function BulletList({
+function BulletList<B extends { id: string; text: string }>({
   bullets,
   onUpdate,
   onAdd,
   onRemove,
+  onReorder,
 }: {
-  bullets: Array<{ id: string; text: string }>;
+  bullets: B[];
   onUpdate: (i: number, text: string) => void;
   onAdd: () => void;
   onRemove: (i: number) => void;
+  onReorder: (newBullets: B[]) => void;
 }) {
   return (
     <div className="flex flex-col gap-1.5 mt-2">
-      {bullets.map((b, i) => (
-        <div key={b.id} className="flex gap-2">
-          <textarea
-            value={b.text}
-            onChange={(e) => onUpdate(i, e.target.value)}
-            rows={2}
-            className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
-          />
-          <button
-            onClick={() => onRemove(i)}
-            className="text-gray-300 hover:text-red-400 text-lg leading-none self-start pt-1.5 transition-colors"
-            title="Remove bullet"
-          >
-            ×
-          </button>
-        </div>
-      ))}
+      <SortableSection items={bullets} onReorder={onReorder}>
+        {(b, _idx, drag) => {
+          const i = bullets.findIndex((x) => x.id === b.id);
+          return (
+            <div className="flex gap-2">
+              <DragHandle {...drag} />
+              <textarea
+                value={b.text}
+                onChange={(e) => onUpdate(i, e.target.value)}
+                rows={2}
+                className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
+              />
+              <button
+                onClick={() => onRemove(i)}
+                className="text-gray-300 hover:text-red-400 text-lg leading-none self-start pt-1.5 transition-colors"
+                title="Remove bullet"
+              >
+                ×
+              </button>
+            </div>
+          );
+        }}
+      </SortableSection>
       <button
         onClick={onAdd}
         className="text-xs text-gray-400 hover:text-violet-600 text-left mt-1 transition-colors"
@@ -180,6 +188,12 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ),
     }));
   }
+  function reorderExpBullets(ei: number, newBullets: ExperienceEntry["bullets"]) {
+    setResume((prev) => ({
+      ...prev,
+      experience: prev.experience.map((exp, i) => (i !== ei ? exp : { ...exp, bullets: newBullets })),
+    }));
+  }
   function addExperience() {
     setResume((prev) => ({
       ...prev,
@@ -248,6 +262,12 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       projects: prev.projects.map((p, i) =>
         i !== pi ? p : { ...p, bullets: p.bullets.filter((_, j) => j !== bi) }
       ),
+    }));
+  }
+  function reorderProjBullets(pi: number, newBullets: ProjectEntry["bullets"]) {
+    setResume((prev) => ({
+      ...prev,
+      projects: prev.projects.map((p, i) => (i !== pi ? p : { ...p, bullets: newBullets })),
     }));
   }
   function addProject() {
@@ -319,6 +339,12 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       extracurriculars: prev.extracurriculars.map((e, i) =>
         i !== ei ? e : { ...e, bullets: e.bullets.filter((_, j) => j !== bi) }
       ),
+    }));
+  }
+  function reorderExtraBullets(ei: number, newBullets: ExperienceEntry["bullets"]) {
+    setResume((prev) => ({
+      ...prev,
+      extracurriculars: prev.extracurriculars.map((e, i) => (i !== ei ? e : { ...e, bullets: newBullets })),
     }));
   }
   function reorderExtracurriculars(newOrder: ExperienceEntry[]) {
@@ -497,6 +523,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                       onUpdate={(bi, text) => setExpBullet(ei, bi, text)}
                       onAdd={() => addExpBullet(ei)}
                       onRemove={(bi) => removeExpBullet(ei, bi)}
+                      onReorder={(newBullets) => reorderExpBullets(ei, newBullets)}
                     />
                   </div>
                 );
@@ -553,6 +580,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                       onUpdate={(bi, text) => setProjBullet(pi, bi, text)}
                       onAdd={() => addProjBullet(pi)}
                       onRemove={(bi) => removeProjBullet(pi, bi)}
+                      onReorder={(newBullets) => reorderProjBullets(pi, newBullets)}
                     />
                   </div>
                 );
@@ -644,6 +672,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                       onUpdate={(bi, text) => setExtraBullet(ei, bi, text)}
                       onAdd={() => addExtraBullet(ei)}
                       onRemove={(bi) => removeExtraBullet(ei, bi)}
+                      onReorder={(newBullets) => reorderExtraBullets(ei, newBullets)}
                     />
                   </div>
                 );
