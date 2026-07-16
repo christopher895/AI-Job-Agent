@@ -98,7 +98,7 @@ async function main() {
 
   console.log("\n── 7. updateTailoredResume ─────────────────────────────────");
   const newMarkdown = "# Christopher Zhang\n\n## Experience\n- Built even better things";
-  const updated = await updateTailoredResume(created.id, newMarkdown);
+  const updated = await updateTailoredResume(created.id, { markdown: newMarkdown });
   ok("update returns the row", updated !== null);
   ok("markdown is updated", updated?.markdown === newMarkdown);
   ok("updated_at changed", updated!.updated_at >= created.updated_at);

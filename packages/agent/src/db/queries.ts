@@ -160,12 +160,19 @@ export async function listTailoredResumes(): Promise<ResumeListItem[]> {
   return rows;
 }
 
-export async function updateTailoredResume(id: string, markdown: string): Promise<TailoredResumeRow | null> {
+export async function updateTailoredResume(
+  id: string,
+  fields: { markdown?: string; jobTitle?: string; company?: string }
+): Promise<TailoredResumeRow | null> {
   const { rows } = await pool.query(
-    `UPDATE tailored_resumes SET markdown = $1, updated_at = NOW()
-     WHERE id = $2
+    `UPDATE tailored_resumes
+     SET markdown   = COALESCE($1, markdown),
+         job_title  = COALESCE($2, job_title),
+         company    = COALESCE($3, company),
+         updated_at = NOW()
+     WHERE id = $4
      RETURNING id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, created_at, updated_at`,
-    [markdown, id]
+    [fields.markdown ?? null, fields.jobTitle ?? null, fields.company ?? null, id]
   );
   return rows[0] ?? null;
 }
