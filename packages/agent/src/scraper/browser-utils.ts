@@ -22,6 +22,10 @@ export async function closeBrowserSafely(browser: Browser): Promise<void> {
   await Promise.race([browser.close().catch(() => {}), timeout]);
 
   if (timedOut) {
+    // `Browser` (from chromium.launch()) doesn't expose the underlying OS process
+    // in this Playwright version — only BrowserServer (launchServer()) does — so
+    // there's no supported way to force-kill it from here. This just stops
+    // waiting on it; the process may still be running.
     console.warn("[browser-utils] browser.close() did not resolve within " + CLOSE_TIMEOUT_MS + "ms — abandoning it");
   }
 }
