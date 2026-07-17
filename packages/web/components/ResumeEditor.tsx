@@ -121,8 +121,10 @@ export default function ResumeEditor({
   const [pdfRenderError, setPdfRenderError] = useState<string | null>(resume.pdf_error);
   const pdfBlobUrlRef = useRef<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const metaDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const companyDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const companyInputRef = useRef<HTMLInputElement>(null);
   const hasAttemptedLoadRef = useRef(false);
 
   const autoSave = useCallback(
@@ -162,15 +164,15 @@ export default function ResumeEditor({
   function handleTitleChange(value: string) {
     setJobTitle(value);
     setSaveStatus("unsaved");
-    if (metaDebounceRef.current) clearTimeout(metaDebounceRef.current);
-    metaDebounceRef.current = setTimeout(() => autoSaveMeta({ jobTitle: value }), 800);
+    if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
+    titleDebounceRef.current = setTimeout(() => autoSaveMeta({ jobTitle: value }), 800);
   }
 
   function handleCompanyChange(value: string) {
     setCompany(value);
     setSaveStatus("unsaved");
-    if (metaDebounceRef.current) clearTimeout(metaDebounceRef.current);
-    metaDebounceRef.current = setTimeout(() => autoSaveMeta({ company: value }), 800);
+    if (companyDebounceRef.current) clearTimeout(companyDebounceRef.current);
+    companyDebounceRef.current = setTimeout(() => autoSaveMeta({ company: value }), 800);
   }
 
   function insertMarkdown(before: string, after = "") {
@@ -328,13 +330,26 @@ export default function ResumeEditor({
           <input
             value={jobTitle}
             onChange={(e) => handleTitleChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                companyInputRef.current?.focus();
+              }
+            }}
             placeholder="Untitled"
             aria-label="Job title"
             className="block w-full text-lg font-semibold text-gray-900 bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 -mx-1 outline-none focus:ring-1 focus:ring-violet-300 transition-colors"
           />
           <input
+            ref={companyInputRef}
             value={company}
             onChange={(e) => handleCompanyChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.currentTarget.blur();
+              }
+            }}
             placeholder="Company"
             aria-label="Company"
             className="block w-full text-sm text-gray-500 bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 -mx-1 outline-none focus:ring-1 focus:ring-violet-300 transition-colors mt-0.5"
