@@ -10,6 +10,13 @@ RUN npm ci
 
 COPY packages/web ./packages/web
 
+# Next.js inlines NEXT_PUBLIC_* vars into the client bundle at build time, not
+# runtime — a Railway service Variable of the same name has no effect unless
+# it's threaded in here as a build arg. Railway auto-supplies build args that
+# match a configured service variable name, so no extra Railway config needed.
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 RUN npm run build --workspace=packages/web
 
 # ── Production image ──────────────────────────────────────────────────────────
