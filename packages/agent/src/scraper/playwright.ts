@@ -174,7 +174,17 @@ export async function scrapeJobright(): Promise<JobListing[]> {
   // exhaust on a JS-heavy infinite-scroll page like Jobright — surfaces as a bare
   // "Page crashed" error. --disable-dev-shm-usage makes it fall back to /tmp instead.
   // Doesn't reproduce locally since the host's shared memory isn't constrained the same way.
-  const browser = await chromium.launch({ headless: true, args: ["--disable-dev-shm-usage"] });
+  //
+  // --no-sandbox: Chromium's sandboxed renderer needs CAP_SYS_ADMIN, which Railway's
+  // container doesn't grant (and we have no docker-run flags to add it). Without this,
+  // the renderer crashes intermittently under sustained rendering load (confirmed via
+  // Railway's memory/CPU metrics showing no resource spike at any crash timestamp) —
+  // the 8-pass infinite-scroll here is heavy enough to trigger it; the lighter
+  // single-page loads in fetch-jd.ts/render-pdf.ts haven't shown the same crashes.
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--disable-dev-shm-usage", "--no-sandbox", "--disable-setuid-sandbox"],
+  });
   let watchdog: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
