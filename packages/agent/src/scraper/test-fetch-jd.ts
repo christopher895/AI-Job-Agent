@@ -70,9 +70,9 @@ function check(label: string, ok: boolean, detail?: string) {
 }
 
 // Case 4: Jobright.ai job detail page — real <title> format is
-// "{Job Title} @ {Employer} | Jobright.ai". Jobright is the job discovery
-// platform the scraper itself pulls listings from (see scraper/playwright.ts),
-// not the employer, so its brand must never end up in `title` or `company`.
+// "{Job Title} @ {Employer} | Jobright.ai". Jobright is a job discovery
+// platform a user might paste a link from, not the employer, so its brand
+// must never end up in `title` or `company`.
 {
   const html = `<html><head><title>Artificial Intelligence Specialist @ RTX | Jobright.ai</title></head>
     <body><main>${"Design and build AI systems for aerospace applications. ".repeat(20)}</main></body></html>`;

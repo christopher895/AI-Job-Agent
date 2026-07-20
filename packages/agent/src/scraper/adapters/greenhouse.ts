@@ -1,4 +1,4 @@
-import { JobListing } from "../playwright";
+import { JobListing } from "../types";
 import { matchesFilters } from "../filters";
 
 interface GreenhouseJob {
