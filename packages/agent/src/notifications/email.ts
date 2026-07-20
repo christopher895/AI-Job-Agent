@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { JobListing } from "../scraper/playwright";
+import { JobListing } from "../scraper/types";
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;
@@ -51,7 +51,7 @@ function buildEmailHtml(jobs: JobListing[], source: string): string {
   `;
 }
 
-export async function sendJobEmail(jobs: JobListing[], source: string = "Jobright") {
+export async function sendJobEmail(jobs: JobListing[], source: string) {
   if (jobs.length === 0) return;
 
   const toEmail = process.env.YOUR_EMAIL;

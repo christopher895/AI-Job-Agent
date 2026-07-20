@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An autonomous AI agent that monitors 20+ company career pages 24/7, detects new job postings via Playwright scraping and snapshot diffing, auto-tailors Christopher's resume per role using a generate → critique → revise AI loop, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — all without auth (private URL, single user).
+An autonomous AI agent that monitors 20+ company career pages 24/7, detects new job postings via Cheerio scraping and snapshot diffing, auto-tailors Christopher's resume per role using a generate → critique → revise AI loop, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — all without auth (private URL, single user).
 
 Owner: **Christopher Zhang** (Summer 2026 build)
 
@@ -10,7 +10,7 @@ Owner: **Christopher Zhang** (Summer 2026 build)
 
 Everything below is implemented and running in production, not aspirational — this used to be a "what's being built" roadmap; it has since shipped.
 
-- **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon adapters (20+ companies) *plus* a Playwright-scraped Jobright.ai recommendation feed as a second job source; snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
+- **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon adapters (20+ companies); snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
 - **Alert emails** — Resend email listing new jobs (title, company, link) with a "Tailor resume" link per job → `/tailor?jobUrl=...&title=...&company=...`
 - **AI tailoring pipeline** — `generateBestResume(jd)` in `packages/agent/src/ai/chain.ts`: generate → critique → revise loop (up to 3 passes), scored against a resume-worded-style rubric, outputs ATS-safe Markdown
 - **LLM provider** — Claude by default, via the headless `claude -p` CLI (`packages/agent/src/ai/claude-cli.ts`), authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing). OpenAI/GPT-4o is a manual fallback (`LLM_PROVIDER=openai`)
@@ -63,8 +63,8 @@ job-hunting-agent/
 ```
 agent/src/
 ├── scraper/
-│   ├── index.ts            # Orchestrator — scrapes all companies + Jobright, emails new jobs
-│   ├── playwright.ts       # JS-rendered pages (Jobright.ai recommendation feed)
+│   ├── index.ts            # Orchestrator — scrapes all companies, emails new jobs
+│   ├── types.ts            # Shared JobListing type
 │   ├── cheerio.ts          # Static HTML pages
 │   ├── fetch-jd.ts         # Auto-fetch JD text from a job URL (Cheerio → Playwright fallback)
 │   ├── diff.ts             # Snapshot diffing (hash sets)
@@ -229,7 +229,7 @@ preferences (
 ### Scraping → Alert
 ```
 cron (every 15 min, in-process, guarded against overlapping ticks)
-  → Playwright/Cheerio scrape per company + Jobright.ai recommendation feed
+  → Cheerio scrape per company
     → diff.ts (new job hashes)
       → filter by location + keyword score (reads `preferences` table)
         → Resend email (job list + "Tailor resume" link per job)
@@ -293,7 +293,7 @@ Use these proactively:
 - `/security-review` — run when touching env vars, API integrations, or scraping logic
 - `/verify` — run after any feature to confirm it works end-to-end
 - `/run` — launch the agent or dashboard to test changes live
-- `/investigate` — systematic root-cause debugging for scraper flakiness (Jobright selector drift, OOM, session expiry) or tailoring failures
+- `/investigate` — systematic root-cause debugging for scraper flakiness or tailoring failures
 - `/ship` — land a branch: tests, review, changelog, commit, push, PR in one flow
 
 ## Dev Notes

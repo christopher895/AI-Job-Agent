@@ -9,7 +9,7 @@ An autonomous agent that monitors 20+ company career pages 24/7, detects new job
 ```
 Every 15 minutes
   ↓
-Playwright / Cheerio scrapes each career page + Jobright.ai recommendation feed
+Cheerio scrapes each career page
   ↓
 Snapshot diffing (hash sets) detects new postings
   ↓
@@ -34,7 +34,7 @@ Edit inline → Download PDF → Log to Google Sheets
 | ------------- | --------------------------------------------------------------------- |
 | Frontend      | Next.js 14 (App Router), TypeScript, Tailwind CSS, Shadcn/ui         |
 | Backend       | Node.js, Express, PostgreSQL, node-cron                               |
-| Scraping      | Playwright (JS-rendered pages + Jobright.ai feed), Cheerio (static HTML), snapshot diff |
+| Scraping      | Cheerio (static HTML), snapshot diff; Playwright reserved for on-demand JD auto-fetch |
 | AI            | Claude (default, headless `claude -p` CLI, subscription usage), OpenAI/GPT-4o fallback, Zod (LLM output validation) |
 | PDF           | Tectonic (LaTeX compiler), custom `czresume.cls` template            |
 | Notifications | Resend (job alert emails + "Email to me" from editor)                |

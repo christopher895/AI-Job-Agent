@@ -1,5 +1,5 @@
 import { FILTERS, Preferences } from "../config";
-import { JobListing } from "./playwright";
+import { JobListing } from "./types";
 
 let activePrefs: Preferences = FILTERS;
 
