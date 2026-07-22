@@ -38,6 +38,9 @@ export const COMPANIES: Company[] = [
   { name: "Hex",             platform: "greenhouse", slug: "HexTechnologies" },
   { name: "Gusto",           platform: "greenhouse", slug: "gusto" },
   { name: "Pave",            platform: "greenhouse", slug: "paveakatroveinformationtechnologies" },
+  { name: "Peloton",         platform: "greenhouse", slug: "peloton" },
+  { name: "Zwift",           platform: "greenhouse", slug: "zwift" },
+  { name: "SeatGeek",        platform: "greenhouse", slug: "seatgeek" },
 
   // ── Ashby ────────────────────────────────────────────────────────────────────
   { name: "OpenAI",          platform: "ashby", slug: "openai" },
@@ -58,6 +61,10 @@ export const COMPANIES: Company[] = [
   { name: "Benchling",       platform: "ashby", slug: "benchling" },
   { name: "Superhuman",      platform: "ashby", slug: "superhuman" },
   { name: "Fin.ai",          platform: "ashby", slug: "fin" },                  // formerly Intercom
+  { name: "Whoop",           platform: "ashby", slug: "whoop" },
+  { name: "Eight Sleep",     platform: "ashby", slug: "eightsleep" },
+  { name: "Strava",          platform: "ashby", slug: "strava" },
+  { name: "Teamworks",       platform: "ashby", slug: "teamworks" },
 
   // ── Lever ────────────────────────────────────────────────────────────────────
   { name: "Atlassian",       platform: "lever", slug: "atlassian" },
