@@ -41,6 +41,20 @@ export const COMPANIES: Company[] = [
   { name: "Peloton",         platform: "greenhouse", slug: "peloton" },
   { name: "Zwift",           platform: "greenhouse", slug: "zwift" },
   { name: "SeatGeek",        platform: "greenhouse", slug: "seatgeek" },
+  { name: "Datadog",         platform: "greenhouse", slug: "datadog" },
+  { name: "MongoDB",         platform: "greenhouse", slug: "mongodb" },
+  { name: "CoreWeave",       platform: "greenhouse", slug: "coreweave" },
+  { name: "Braze",           platform: "greenhouse", slug: "braze" },
+  { name: "Klaviyo",         platform: "greenhouse", slug: "klaviyo" },
+  { name: "Fivetran",        platform: "greenhouse", slug: "fivetran" },
+  { name: "Glean",           platform: "greenhouse", slug: "gleanwork" },
+  { name: "Grafana Labs",    platform: "greenhouse", slug: "grafanalabs" },
+  { name: "Elastic",         platform: "greenhouse", slug: "elastic" },
+  { name: "LaunchDarkly",    platform: "greenhouse", slug: "launchdarkly" },
+  { name: "Instacart",       platform: "greenhouse", slug: "instacart" },
+  { name: "Block",           platform: "greenhouse", slug: "block" },
+  { name: "Asana",           platform: "greenhouse", slug: "asana" },
+  { name: "Mercury",         platform: "greenhouse", slug: "mercury" },
 
   // ── Ashby ────────────────────────────────────────────────────────────────────
   { name: "OpenAI",          platform: "ashby", slug: "openai" },
@@ -65,6 +79,16 @@ export const COMPANIES: Company[] = [
   { name: "Eight Sleep",     platform: "ashby", slug: "eightsleep" },
   { name: "Strava",          platform: "ashby", slug: "strava" },
   { name: "Teamworks",       platform: "ashby", slug: "teamworks" },
+  { name: "Cerebras",        platform: "ashby", slug: "cerebras" },
+  { name: "Snowflake",       platform: "ashby", slug: "snowflake" },
+  { name: "Modal",           platform: "ashby", slug: "modal" },
+  { name: "Pinecone",        platform: "ashby", slug: "pinecone" },
+  { name: "Temporal",        platform: "ashby", slug: "temporal" },
+  { name: "Sentry",          platform: "ashby", slug: "sentry" },
+  { name: "Harvey",          platform: "ashby", slug: "harvey" },
+  { name: "Sierra",          platform: "ashby", slug: "sierra" },
+  { name: "Decagon",         platform: "ashby", slug: "decagon" },
+  { name: "Cognition",       platform: "ashby", slug: "cognition" },            // makers of Devin
 
   // ── Lever ────────────────────────────────────────────────────────────────────
   { name: "Atlassian",       platform: "lever", slug: "atlassian" },
