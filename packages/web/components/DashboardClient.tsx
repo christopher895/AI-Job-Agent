@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api, ResumeListItem } from "../lib/api";
 import ResumeCard from "./ResumeCard";
@@ -32,6 +32,20 @@ export default function DashboardClient({
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("newest");
   const [items, setItems] = useState(resumes);
+
+  // Resumes tailor in the background (see /api/tailor) — refresh the list periodically
+  // while any card is still "pending" so the badge/score update without a manual reload.
+  useEffect(() => {
+    if (!items.some((r) => r.status === "pending")) return;
+    const interval = setInterval(async () => {
+      try {
+        setItems(await api.listResumes());
+      } catch {
+        // transient network error — keep polling
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [items]);
 
   async function handleDelete(id: string) {
     const prev = items;

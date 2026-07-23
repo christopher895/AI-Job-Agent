@@ -9,6 +9,10 @@ export type ResumeListItem = {
   critic_score: number | null;
   /** Error from the most recent PDF render attempt; null if the last attempt succeeded. */
   pdf_error: string | null;
+  /** 'pending' while the generate->critique->revise pipeline is still running in the background. */
+  status: "pending" | "ready" | "failed";
+  /** Error from the tailoring pipeline itself, set when status = 'failed'. */
+  error: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -171,11 +175,7 @@ export const api = {
     company?: string;
     location?: string;
   }) =>
-    request<{ id: string; markdown: string; criticScore: number; fetchMethod?: string }>(
-      "POST",
-      "/tailor",
-      body
-    ),
+    request<{ id: string; status: "pending" }>("POST", "/tailor", body),
   getMasterResume: () => request<MasterResume>("GET", "/master-resume"),
   putMasterResume: (data: MasterResume) =>
     request<{ updated: boolean }>("PUT", "/master-resume", data),

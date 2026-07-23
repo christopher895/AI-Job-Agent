@@ -121,6 +121,20 @@ export async function initSchema() {
     ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS location TEXT;
   `);
 
+  // Tailoring runs as a background job (POST /api/tailor returns immediately with a
+  // pending row) because the generate->critique->revise loop routinely runs past
+  // Railway's ~300s edge-proxy timeout, which otherwise kills the request outright
+  // and surfaces to the browser as a generic "Failed to fetch".
+  await pool.query(`
+    ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ready';
+    ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS error TEXT;
+  `);
+  await pool.query(`
+    ALTER TABLE tailored_resumes DROP CONSTRAINT IF EXISTS tailored_resumes_status_check;
+    ALTER TABLE tailored_resumes ADD CONSTRAINT tailored_resumes_status_check
+      CHECK (status IN ('pending','ready','failed'));
+  `);
+
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_tailored_resumes_created ON tailored_resumes(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_snapshots_company_scraped ON snapshots(company_id, scraped_at DESC);

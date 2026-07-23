@@ -4,7 +4,8 @@ import { initSchema } from "./schema";
 import {
   getMasterResume,
   updateMasterResume,
-  createTailoredResume,
+  createPendingResume,
+  completeTailoredResume,
   getTailoredResume,
   listTailoredResumes,
   updateTailoredResume,
@@ -66,25 +67,30 @@ async function main() {
   const restored = await getMasterResume();
   ok("phone restored to original", restored.basics.phone === master.basics.phone);
 
-  console.log("\n── 4. createTailoredResume ─────────────────────────────────");
-  const created = await createTailoredResume({
+  console.log("\n── 4. createPendingResume + completeTailoredResume ──────────");
+  const pending = await createPendingResume({
     jobTitle: "Software Engineer Intern",
     company: "TestCo",
     jobUrl: "https://testco.com/jobs/1",
     jdText: "We need a great engineer.",
+  });
+  ok("returns a row with id", typeof pending.id === "string" && pending.id.length > 0);
+  ok("starts pending", pending.status === "pending");
+  await completeTailoredResume(pending.id, {
     markdown: "# Christopher Zhang\n\n## Experience\n- Built things",
     criticScore: 82,
   });
-  ok("returns a row with id", typeof created.id === "string" && created.id.length > 0);
-  ok("job_title matches", created.job_title === "Software Engineer Intern");
-  ok("company matches", created.company === "TestCo");
-  ok("critic_score matches", created.critic_score === 82);
-  ok("markdown matches", created.markdown.includes("Christopher Zhang"));
+  const created = await getTailoredResume(pending.id);
+  ok("job_title matches", created?.job_title === "Software Engineer Intern");
+  ok("company matches", created?.company === "TestCo");
+  ok("critic_score matches", created?.critic_score === 82);
+  ok("markdown matches", created?.markdown.includes("Christopher Zhang") ?? false);
+  ok("status ready", created?.status === "ready");
 
   console.log("\n── 5. getTailoredResume ────────────────────────────────────");
-  const fetched = await getTailoredResume(created.id);
+  const fetched = await getTailoredResume(pending.id);
   ok("fetched by id", fetched !== null);
-  ok("id matches", fetched?.id === created.id);
+  ok("id matches", fetched?.id === pending.id);
   ok("jd_text present", fetched?.jd_text === "We need a great engineer.");
 
   const missing = await getTailoredResume("00000000-0000-0000-0000-000000000000");
@@ -93,20 +99,20 @@ async function main() {
   console.log("\n── 6. listTailoredResumes ──────────────────────────────────");
   const list = await listTailoredResumes();
   ok("list is an array", Array.isArray(list));
-  ok("created resume appears in list", list.some((r) => r.id === created.id));
+  ok("created resume appears in list", list.some((r) => r.id === pending.id));
   ok("pdf column NOT included in list", !("pdf" in list[0]));
 
   console.log("\n── 7. updateTailoredResume ─────────────────────────────────");
   const newMarkdown = "# Christopher Zhang\n\n## Experience\n- Built even better things";
-  const updated = await updateTailoredResume(created.id, { markdown: newMarkdown });
+  const updated = await updateTailoredResume(pending.id, { markdown: newMarkdown });
   ok("update returns the row", updated !== null);
   ok("markdown is updated", updated?.markdown === newMarkdown);
-  ok("updated_at changed", updated!.updated_at >= created.updated_at);
+  ok("updated_at changed", updated!.updated_at >= created!.updated_at);
 
   console.log("\n── 8. storePdf / getPdf ────────────────────────────────────");
   const fakePdf = Buffer.from("%PDF-1.4 fake pdf content for phase 1 test");
-  await storePdf(created.id, fakePdf);
-  const retrieved = await getPdf(created.id);
+  await storePdf(pending.id, fakePdf);
+  const retrieved = await getPdf(pending.id);
   ok("pdf retrieved is a Buffer", Buffer.isBuffer(retrieved));
   ok("pdf content matches", retrieved?.toString() === fakePdf.toString());
 
@@ -120,12 +126,12 @@ async function main() {
     location: "Remote",
     jobUrl: "https://testco.com/jobs/1",
     status: "applied",
-    resumeId: created.id,
+    resumeId: pending.id,
   });
   ok("returns a row with id", typeof applied.id === "string" && applied.id.length > 0);
   ok("company matches", applied.company === "TestCo");
   ok("status is 'applied'", applied.status === "applied");
-  ok("resume_id FK set", applied.resume_id === created.id);
+  ok("resume_id FK set", applied.resume_id === pending.id);
 
   console.log("\n── 10. listAppliedJobs ─────────────────────────────────────");
   const appliedList = await listAppliedJobs();
@@ -145,7 +151,7 @@ async function main() {
   ok("CHECK constraint rejects invalid status", invalidStatus);
 
   console.log("\n── Cleanup ──────────────────────────────────────────────────");
-  await cleanup(created.id, applied.id);
+  await cleanup(pending.id, applied.id);
   ok("test rows removed", true);
 
   console.log(`\n${"─".repeat(55)}`);

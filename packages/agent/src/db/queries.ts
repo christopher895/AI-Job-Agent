@@ -13,6 +13,10 @@ export type TailoredResumeRow = {
   critic_score: number | null;
   /** Error from the most recent PDF render attempt; null if the last attempt succeeded. */
   pdf_error: string | null;
+  /** 'pending' while the generate->critique->revise pipeline is still running in the background. */
+  status: "pending" | "ready" | "failed";
+  /** Error from the tailoring pipeline itself, set when status = 'failed'. */
+  error: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -124,29 +128,61 @@ export async function updatePreferences(data: Preferences): Promise<void> {
 
 // ── Tailored resumes ───────────────────────────────────────────────────────────
 
-export async function createTailoredResume(fields: {
+const TAILORED_RESUME_COLUMNS =
+  "id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, status, error, created_at, updated_at";
+
+/** Inserts a placeholder row immediately so POST /api/tailor can respond before the pipeline runs. */
+export async function createPendingResume(fields: {
   jobTitle?: string;
   company?: string;
   location?: string;
   jobUrl?: string;
   jdText?: string;
-  markdown: string;
-  criticScore?: number;
 }): Promise<TailoredResumeRow> {
   const { rows } = await pool.query(
-    `INSERT INTO tailored_resumes (job_title, company, location, job_url, jd_text, markdown, critic_score)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, created_at, updated_at`,
+    `INSERT INTO tailored_resumes (job_title, company, location, job_url, jd_text, markdown, status)
+     VALUES ($1, $2, $3, $4, $5, '', 'pending')
+     RETURNING ${TAILORED_RESUME_COLUMNS}`,
     [fields.jobTitle ?? null, fields.company ?? null, fields.location ?? null, fields.jobUrl ?? null,
-     fields.jdText ?? null, fields.markdown, fields.criticScore ?? null]
+     fields.jdText ?? null]
   );
   return rows[0];
 }
 
+/** Marks a pending resume as ready once the tailoring pipeline finishes successfully. */
+export async function completeTailoredResume(
+  id: string,
+  fields: { markdown: string; criticScore?: number }
+): Promise<void> {
+  const { rowCount } = await pool.query(
+    `UPDATE tailored_resumes
+     SET markdown     = $1,
+         critic_score = $2,
+         status       = 'ready',
+         error        = NULL,
+         updated_at   = NOW()
+     WHERE id = $3`,
+    [fields.markdown, fields.criticScore ?? null, id]
+  );
+  if (rowCount === 0) {
+    console.warn(`[queries] completeTailoredResume: row ${id} no longer exists (deleted mid-generation?)`);
+  }
+}
+
+/** Marks a pending resume as failed when the background pipeline throws. */
+export async function failTailoredResume(id: string, message: string): Promise<void> {
+  const { rowCount } = await pool.query(
+    `UPDATE tailored_resumes SET status = 'failed', error = $1, updated_at = NOW() WHERE id = $2`,
+    [message, id]
+  );
+  if (rowCount === 0) {
+    console.warn(`[queries] failTailoredResume: row ${id} no longer exists (deleted mid-generation?)`);
+  }
+}
+
 export async function getTailoredResume(id: string): Promise<TailoredResumeRow | null> {
   const { rows } = await pool.query(
-    `SELECT id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, created_at, updated_at
-     FROM tailored_resumes WHERE id = $1`,
+    `SELECT ${TAILORED_RESUME_COLUMNS} FROM tailored_resumes WHERE id = $1`,
     [id]
   );
   return rows[0] ?? null;
@@ -154,7 +190,7 @@ export async function getTailoredResume(id: string): Promise<TailoredResumeRow |
 
 export async function listTailoredResumes(): Promise<ResumeListItem[]> {
   const { rows } = await pool.query(
-    `SELECT id, job_title, company, location, job_url, critic_score, pdf_error, created_at, updated_at
+    `SELECT id, job_title, company, location, job_url, critic_score, pdf_error, status, error, created_at, updated_at
      FROM tailored_resumes ORDER BY created_at DESC`
   );
   return rows;
@@ -171,7 +207,7 @@ export async function updateTailoredResume(
          company    = COALESCE($3, company),
          updated_at = NOW()
      WHERE id = $4
-     RETURNING id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, created_at, updated_at`,
+     RETURNING ${TAILORED_RESUME_COLUMNS}`,
     [fields.markdown ?? null, fields.jobTitle ?? null, fields.company ?? null, id]
   );
   return rows[0] ?? null;

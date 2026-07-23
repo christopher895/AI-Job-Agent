@@ -83,18 +83,19 @@ async function testCreateResumeDirectly() {
   console.log("\n── Seed a tailored_resume row directly ─────────────────────");
   // We seed directly via DB so we can test all the resume endpoints without
   // calling the LLM. If OPENAI_API_KEY is present we also run the tailor endpoint.
-  const { createTailoredResume } = await import("../db/queries");
-  const row = await createTailoredResume({
+  const { createPendingResume, completeTailoredResume } = await import("../db/queries");
+  const row = await createPendingResume({
     jobTitle: "Software Engineer Intern",
     company: "PhaseTwo Corp",
     jobUrl: "https://example.com/jobs/1",
     jdText: "We need a great engineer who loves TypeScript.",
+  });
+  await completeTailoredResume(row.id, {
     markdown: "# Christopher Zhang\nProvidence, RI\n\n## Experience\n**PhaseTwo Corp** — SWE Intern\n- Built stuff with TypeScript\n\n## Skills\nTypeScript · Node.js",
     criticScore: 77,
   });
   createdResumeId = row.id;
   ok("row created with uuid", typeof row.id === "string" && row.id.length > 0);
-  ok("critic_score stored", row.critic_score === 77);
   console.log(`  (resume id: ${createdResumeId})`);
 }
 
@@ -111,6 +112,7 @@ async function testResumes() {
   ok("status 200", s2 === 200);
   ok("id matches", b2?.id === createdResumeId);
   ok("jd_text present", typeof b2?.jd_text === "string");
+  ok("critic_score stored", b2?.critic_score === 77);
 
   const { status: s404 } = await api("GET", "/resume/00000000-0000-0000-0000-000000000000");
   ok("unknown id → 404", s404 === 404);
