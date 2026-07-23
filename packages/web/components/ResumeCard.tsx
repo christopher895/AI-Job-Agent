@@ -80,8 +80,18 @@ export default function ResumeCard({
           <p className="text-xs text-gray-500 mt-0.5 truncate">
             {resume.company ?? "—"}
           </p>
-          <p className="text-xs text-gray-400 mt-1">
+          <p className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
             {date} &bull; Edited {editedAgo}
+            {resume.status === "pending" && (
+              <span className="text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 text-[10px] font-medium">
+                Generating…
+              </span>
+            )}
+            {resume.status === "failed" && (
+              <span className="text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 text-[10px] font-medium">
+                Failed
+              </span>
+            )}
           </p>
         </div>
         <div className="relative flex-shrink-0" ref={menuRef}>

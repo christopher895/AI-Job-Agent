@@ -17,6 +17,15 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Rejects with 409 unless the resume finished tailoring; shared by /pdf and /email. */
+function requireReady(row: { status: string }, res: import("express").Response): boolean {
+  if (row.status !== "ready") {
+    res.status(409).json({ error: `Resume is still ${row.status === "pending" ? "generating" : "in an error state"} — no PDF yet.` });
+    return false;
+  }
+  return true;
+}
+
 const router = Router();
 
 // GET /api/resumes
@@ -53,6 +62,15 @@ router.patch("/resume/:id", async (req, res) => {
   }
   if (markdown === undefined && jobTitle === undefined && company === undefined) {
     res.status(400).json({ error: "markdown, jobTitle, or company required" });
+    return;
+  }
+
+  const existing = await getTailoredResume(req.params.id);
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+  if (existing.status === "pending") {
+    // The background tailoring pipeline (see routes/tailor.ts) will overwrite markdown
+    // unconditionally once it finishes, so an edit saved here would be silently lost.
+    res.status(409).json({ error: "Resume is still generating — try again once it's ready." });
     return;
   }
 
@@ -94,6 +112,7 @@ router.delete("/resume/:id", async (req, res) => {
 router.get("/resume/:id/pdf", async (req, res) => {
   const row = await getTailoredResume(req.params.id);
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (!requireReady(row, res)) return;
 
   let pdf = await getPdf(req.params.id);
   if (!pdf) {
@@ -121,6 +140,7 @@ router.get("/resume/:id/pdf", async (req, res) => {
 router.post("/resume/:id/email", async (req, res) => {
   const row = await getTailoredResume(req.params.id);
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (!requireReady(row, res)) return;
 
   let pdf = await getPdf(req.params.id);
   if (!pdf) {

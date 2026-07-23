@@ -106,6 +106,14 @@ export default function ResumeEditor({
   const [markdown, setMarkdown] = useState(resume.markdown);
   const [jobTitle, setJobTitle] = useState(resume.job_title ?? "");
   const [company, setCompany] = useState(resume.company ?? "");
+  const [meta, setMeta] = useState({
+    status: resume.status,
+    error: resume.error,
+    critic_score: resume.critic_score,
+    location: resume.location,
+    job_url: resume.job_url,
+    created_at: resume.created_at,
+  });
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [showApplyForm, setShowApplyForm] = useState(false);
@@ -227,6 +235,44 @@ export default function ResumeEditor({
     };
   }, []);
 
+  // The tailoring pipeline runs in the background (see /api/tailor) so this page can
+  // load instantly instead of holding a request open past Railway's proxy timeout.
+  // Poll until it flips out of "pending".
+  useEffect(() => {
+    if (meta.status !== "pending") return;
+    let cancelled = false;
+    const interval = setInterval(async () => {
+      try {
+        const fresh = await api.getResume(resume.id);
+        if (cancelled || fresh.status === "pending") return;
+        // Let the PDF pane's auto-load effect retry now that a PDF might exist —
+        // it latched hasAttemptedLoadRef after an earlier attempt 409'd while pending.
+        hasAttemptedLoadRef.current = false;
+        setMeta({
+          status: fresh.status,
+          error: fresh.error,
+          critic_score: fresh.critic_score,
+          location: fresh.location,
+          job_url: fresh.job_url,
+          created_at: fresh.created_at,
+        });
+        setMarkdown(fresh.markdown);
+        setJobTitle(fresh.job_title ?? "");
+        setCompany(fresh.company ?? "");
+        setPdfRenderError(fresh.pdf_error);
+      } catch (err) {
+        if (!cancelled && err instanceof Error && err.message === "Not found") {
+          setMeta((m) => ({ ...m, status: "failed", error: "This resume was deleted." }));
+        }
+        // otherwise assume a transient network error — keep polling
+      }
+    }, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [meta.status, resume.id]);
+
   async function handleDownload() {
     try {
       const { blob, filename } = await api.getPdfBlobWithFilename(resume.id);
@@ -259,8 +305,8 @@ export default function ResumeEditor({
       await api.postApplied({
         company: company,
         jobTitle: jobTitle,
-        location: resume.location ?? undefined,
-        jobUrl: resume.job_url ?? undefined,
+        location: meta.location ?? undefined,
+        jobUrl: meta.job_url ?? undefined,
         status: applyForm.status,
         appliedAt: applyForm.appliedAt,
         resumeId: resume.id,
@@ -284,6 +330,61 @@ export default function ResumeEditor({
   const title = [jobTitle, company].filter(Boolean).join(" – ");
   const wordCount = markdown.trim() ? markdown.trim().split(/\s+/).length : 0;
   const charCount = markdown.length;
+
+  if (meta.status === "pending") {
+    return (
+      <div className="flex flex-col h-full bg-white">
+        <div className="border-b border-gray-200 px-6 py-3 flex-shrink-0">
+          <Link href="/" className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 w-fit transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+            Dashboard
+          </Link>
+        </div>
+        <div className="flex-1 flex items-center justify-center text-center px-6">
+          <div>
+            <svg className="animate-spin mx-auto text-violet-600" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            <p className="text-sm font-medium text-gray-900 mt-4">
+              Generating your tailored resume{title ? ` for ${title}` : ""}…
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              The generate → critique → revise loop usually takes a few minutes. This page updates automatically.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (meta.status === "failed") {
+    return (
+      <div className="flex flex-col h-full bg-white">
+        <div className="border-b border-gray-200 px-6 py-3 flex-shrink-0">
+          <Link href="/" className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 w-fit transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+            Dashboard
+          </Link>
+        </div>
+        <div className="flex-1 flex items-center justify-center text-center px-6">
+          <div className="max-w-md">
+            <p className="text-sm font-medium text-red-700">Tailoring failed</p>
+            <p className="text-xs text-gray-500 mt-2">{meta.error ?? "Unknown error."}</p>
+            <Link
+              href="/tailor"
+              className="inline-block mt-4 text-sm px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors"
+            >
+              Back to Tailor
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const showEdit = viewMode === "edit" || viewMode === "split";
   const showPreview = viewMode === "split" || viewMode === "preview";
@@ -355,19 +456,19 @@ export default function ResumeEditor({
             className="block w-full text-sm text-gray-500 bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 -mx-1 outline-none focus:ring-1 focus:ring-violet-300 transition-colors mt-0.5"
           />
           <p className="text-xs text-gray-400 mt-0.5">
-            {new Date(resume.created_at).toLocaleDateString("en-US", {
+            {new Date(meta.created_at).toLocaleDateString("en-US", {
               month: "long",
               day: "numeric",
               year: "numeric",
             })}
-            {resume.critic_score != null ? ` • Match Score: ${resume.critic_score}` : ""}
+            {meta.critic_score != null ? ` • Match Score: ${meta.critic_score}` : ""}
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-          {resume.critic_score != null && (
+          {meta.critic_score != null && (
             <div className="w-10 h-10 rounded-full border-2 border-green-400 flex items-center justify-center mr-1">
-              <span className="text-sm font-bold text-gray-900">{resume.critic_score}</span>
+              <span className="text-sm font-bold text-gray-900">{meta.critic_score}</span>
             </div>
           )}
 
@@ -388,9 +489,9 @@ export default function ResumeEditor({
             ))}
           </div>
 
-          {resume.job_url && (
+          {meta.job_url && (
             <a
-              href={resume.job_url}
+              href={meta.job_url}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
@@ -446,11 +547,11 @@ export default function ResumeEditor({
       {/* Apply form */}
       {showApplyForm && (
         <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex flex-col gap-2 flex-shrink-0">
-          {(!resume.location || !resume.job_url) && (
+          {(!meta.location || !meta.job_url) && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-              Missing {[!resume.location && "location", !resume.job_url && "job URL"].filter(Boolean).join(" and ")} on
+              Missing {[!meta.location && "location", !meta.job_url && "job URL"].filter(Boolean).join(" and ")} on
               this resume — the applied-jobs log and Google Sheet row will have blank cells for{" "}
-              {resume.location || resume.job_url ? "it" : "them"}.
+              {meta.location || meta.job_url ? "it" : "them"}.
             </p>
           )}
           <div className="flex items-center gap-4">
