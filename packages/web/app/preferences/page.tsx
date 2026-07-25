@@ -16,7 +16,7 @@ export default async function PreferencesPage() {
   }
 
   return (
-    <div className="px-8 py-8 max-w-2xl">
+    <div className="px-8 py-8 max-w-2xl mx-auto">
       <PreferencesForm initial={prefs} />
     </div>
   );
