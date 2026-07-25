@@ -95,7 +95,7 @@ export default function TailorForm({
   }
 
   return (
-    <div className="px-8 py-8 max-w-2xl">
+    <div className="px-8 py-8 max-w-2xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-gray-900">Tailor a New Resume</h1>
         <p className="text-sm text-gray-500 mt-1">

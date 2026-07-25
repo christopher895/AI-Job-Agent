@@ -75,10 +75,10 @@ export default function ResumeCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-semibold text-gray-900 text-sm truncate">
-            {resume.job_title ?? "Untitled"}
+            {resume.job_title?.trim() || "Untitled"}
           </p>
           <p className="text-xs text-gray-500 mt-0.5 truncate">
-            {resume.company ?? "—"}
+            {resume.company?.trim() || "—"}
           </p>
           <p className="text-xs text-gray-400 mt-1 flex items-center gap-1.5">
             {date} &bull; Edited {editedAgo}
