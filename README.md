@@ -66,7 +66,8 @@ job-hunting-agent/
 agent/src/
 ├── scraper/
 │   ├── index.ts          # Orchestrator — scrapes all companies, emails new jobs
-│   ├── playwright.ts     # JS-rendered pages
+│   ├── types.ts          # Shared JobListing type
+│   ├── browser-utils.ts  # Shared Playwright browser lifecycle helpers
 │   ├── cheerio.ts        # Static HTML pages
 │   ├── fetch-jd.ts       # Auto-fetch JD text from a job URL (Cheerio → Playwright fallback)
 │   ├── diff.ts           # Snapshot diffing (hash sets)
