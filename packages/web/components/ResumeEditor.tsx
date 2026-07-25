@@ -427,7 +427,7 @@ export default function ResumeEditor({
 
       {/* Title + score + actions */}
       <div className="border-b border-gray-200 px-6 py-4 flex items-start justify-between gap-4 flex-shrink-0">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <input
             value={jobTitle}
             onChange={(e) => handleTitleChange(e.target.value)}
