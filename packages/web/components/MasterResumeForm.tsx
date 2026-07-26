@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, MasterResume, ExperienceEntry, ProjectEntry, EducationEntry } from "../lib/api";
 import { SortableSection, DragHandle } from "./SortableSection";
+import GeneralResumeTab from "./GeneralResumeTab";
 
 const SECTIONS = ["Basics", "Experience", "Projects", "Skills", "Education", "Extracurriculars"] as const;
 type Section = (typeof SECTIONS)[number];
@@ -99,6 +100,23 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   const [previewError, setPreviewError] = useState<string | null>(null);
   const prevBlobRef = useRef<string | null>(null);
   const hasAttemptedPreviewRef = useRef(false);
+  const [mode, setMode] = useState<"master" | "general">("master");
+  const [dirty, setDirty] = useState(false);
+  const isFirstRenderRef = useRef(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Any edit to the Master form marks it dirty; "Sync to General" is
+  // disabled while dirty because syncing always reads the DB-persisted
+  // master resume (same source getMasterResume() uses everywhere else),
+  // so unsaved form edits would silently not be reflected in a sync.
+  useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    setDirty(true);
+  }, [resume]);
 
   async function save() {
     setSaving(true);
@@ -106,11 +124,25 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     try {
       await api.putMasterResume(resume);
       setSaved(true);
+      setDirty(false);
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function syncToGeneral() {
+    setSyncing(true);
+    setSyncError(null);
+    try {
+      await api.generateGeneralResume();
+      setMode("general");
+    } catch (e) {
+      setSyncError(e instanceof Error ? e.message : "Sync failed");
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -378,23 +410,49 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     <div className="flex h-full">
       {/* Section tabs */}
       <div className="w-44 flex-shrink-0 border-r border-gray-200 bg-white px-3 py-6">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">Sections</p>
-        {SECTIONS.map((s) => (
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">Resume</p>
+        {(["master", "general"] as const).map((m) => (
           <button
-            key={s}
-            onClick={() => setActiveSection(s)}
+            key={m}
+            onClick={() => setMode(m)}
             className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-0.5 transition-colors ${
-              activeSection === s
+              mode === m
                 ? "bg-violet-50 text-violet-700 font-medium"
                 : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
             }`}
           >
-            {s}
+            {m === "master" ? "Master Resume" : "General Resume"}
           </button>
         ))}
+
+        {mode === "master" && (
+          <>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-6">
+              Sections
+            </p>
+            {SECTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => setActiveSection(s)}
+                className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-0.5 transition-colors ${
+                  activeSection === s
+                    ? "bg-violet-50 text-violet-700 font-medium"
+                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </>
+        )}
       </div>
 
       {/* Content + optional preview panel */}
+      {mode === "general" ? (
+        <div className="flex-1 min-w-0">
+          <GeneralResumeTab />
+        </div>
+      ) : (
       <PanelGroup direction="horizontal" className="flex-1 min-w-0">
         <Panel id="form-content" order={1} defaultSize={50} minSize={20}>
         {/* Form content */}
@@ -443,6 +501,15 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                 ✕
               </button>
             )}
+            {syncError && <span className="text-xs text-red-600">{syncError}</span>}
+            <button
+              onClick={syncToGeneral}
+              disabled={dirty || syncing}
+              title={dirty ? "Save changes first" : "Regenerate the General Resume from this Master Resume"}
+              className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors font-medium"
+            >
+              {syncing ? "Syncing…" : "Sync to General ⟳"}
+            </button>
             <button
               onClick={save}
               disabled={saving}
@@ -728,6 +795,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
           </>
         )}
       </PanelGroup>
+      )}
     </div>
   );
 }
