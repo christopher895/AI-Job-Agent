@@ -1,6 +1,6 @@
 # AI Job Hunting Agent
 
-An autonomous agent that monitors 20+ company career pages 24/7, detects new job postings via snapshot diffing, auto-tailors Christopher's resume per role using a generate → critique → revise AI loop, and sends email alerts with a one-click link to generate a tailored resume. A web app lets you paste a job description or URL, edit the tailored output, download a PDF, and log applications to Google Sheets — no auth required.
+An autonomous agent that monitors 80+ company career pages 24/7, detects new job postings via snapshot diffing, auto-tailors Christopher's resume per role using a generate → critique → revise AI loop, and sends email alerts with a one-click link to generate a tailored resume. A web app lets you paste a job description or URL, edit the tailored output, download a PDF, and log applications to Google Sheets — no auth required.
 
 ---
 
@@ -32,7 +32,7 @@ Edit inline → Download PDF → Log to Google Sheets
 
 | Layer         | Tools                                                                 |
 | ------------- | --------------------------------------------------------------------- |
-| Frontend      | Next.js 14 (App Router), TypeScript, Tailwind CSS, Shadcn/ui         |
+| Frontend      | Next.js 16 (App Router), TypeScript, Tailwind CSS                    |
 | Backend       | Node.js, Express, PostgreSQL, node-cron                               |
 | Scraping      | Cheerio (static HTML), snapshot diff; Playwright reserved for on-demand JD auto-fetch |
 | AI            | Claude (default, headless `claude -p` CLI, subscription usage), OpenAI/GPT-4o fallback, Zod (LLM output validation) |
@@ -49,7 +49,7 @@ Edit inline → Download PDF → Log to Google Sheets
 ```
 job-hunting-agent/
 ├── packages/
-│   ├── web/              # Next.js 14 app (App Router)
+│   ├── web/              # Next.js 16 app (App Router)
 │   └── agent/            # Scraper, AI pipeline, API server
 ├── Resume_Template/
 │   ├── czresume.cls      # Custom LaTeX class (Times Roman, rSection format)
@@ -91,8 +91,8 @@ agent/src/
 │   ├── index.ts          # Express router mount
 │   └── routes/
 │       ├── tailor.ts        # POST /api/tailor
-│       ├── resumes.ts       # GET /api/resumes, GET /api/resumes/:id, PATCH /api/resumes/:id
-│       ├── applied.ts       # GET/POST /api/applied
+│       ├── resumes.ts       # GET /api/resumes, GET /api/resume/:id, PATCH /api/resume/:id
+│       ├── applied.ts       # GET/POST /api/applied, PATCH /api/applied/:id
 │       ├── master-resume.ts # GET/PUT /api/master-resume, POST /api/master-resume/preview-pdf
 │       ├── preferences.ts   # GET/PUT /api/preferences — scraper filter settings
 │       └── places.ts        # GET /api/places — static US city list for location autocomplete
@@ -167,12 +167,11 @@ The master resume is the single source of truth — the LLM may only select or r
 
 ```
 POST /api/tailor  (JD text or job URL)
-  → auto-fetch JD if URL (Playwright/Cheerio)
-    → generateBestResume(jd) — up to 3 passes:
-        pass 1: tailor.ts    — rewrite bullets to match JD
-        pass 2: critic.ts    — score draft, return fix list
-        pass 3: tailor.ts    — revise based on fixes
-      → grounding.ts         — verify no invented facts
+  → auto-fetch JD if URL (Cheerio/Playwright)
+    → generateBestResume(jd) — up to 3 iterations, each:
+        tailor.ts   — rewrite bullets to match JD (feeding in the prior iteration's critic fixes, if any)
+        critic.ts   — score the draft (grounding.ts + format.ts + JD keyword coverage baked into the score)
+      loop stops early once a non-gated draft clears the target score; always keeps the best-scoring draft seen
     → save tailored_resumes row
     → render PDF via tectonic + czresume.cls
     → redirect to /resume/[id]
@@ -236,7 +235,9 @@ GOOGLE_SERVICE_ACCOUNT_JSON='{...}'
 TECTONIC_PATH=/opt/homebrew/bin/tectonic
 
 WEB_URL=http://localhost:3000   # agent uses this for CORS + email links
-APP_URL=http://localhost:3001
+APP_URL=http://localhost:3000   # fallback web app URL (email links)
+
+NEXT_PUBLIC_API_URL=http://localhost:3001/api   # agent API URL — used by the web app, baked in at build time
 ```
 
 ---
@@ -250,7 +251,7 @@ Two separate Railway services, same GitHub repo, different Dockerfiles:
 | `agent` | `Dockerfile` | Scraper + AI pipeline + Express API |
 | `web` | `Dockerfile.web` | Next.js web app |
 
-Both services share the same Railway Postgres instance. Set `WEB_URL` on the agent service to the web service's Railway URL, and `NEXT_PUBLIC_AGENT_URL` on the web service to the agent's Railway URL.
+Both services share the same Railway Postgres instance. Set `WEB_URL` on the agent service to the web service's Railway URL, and `NEXT_PUBLIC_API_URL` on the web service to the agent's Railway URL (with a trailing `/api`).
 
 ---
 
