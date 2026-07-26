@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An autonomous AI agent that monitors 20+ company career pages 24/7, detects new job postings via Cheerio scraping and snapshot diffing, auto-tailors Christopher's resume per role using a generate → critique → revise AI loop, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — all without auth (private URL, single user).
+An autonomous AI agent that monitors 80+ company career pages 24/7, detects new job postings via each company's ATS API (Greenhouse/Ashby/Lever/Amazon) and snapshot diffing, auto-tailors Christopher's resume per role using a generate → critique → revise AI loop, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — all without auth (private URL, single user).
 
 Owner: **Christopher Zhang** (Summer 2026 build)
 
@@ -10,7 +10,7 @@ Owner: **Christopher Zhang** (Summer 2026 build)
 
 Everything below is implemented and running in production, not aspirational — this used to be a "what's being built" roadmap; it has since shipped.
 
-- **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon adapters (20+ companies); snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
+- **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon adapters (80+ companies); snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
 - **Alert emails** — Resend email listing new jobs (title, company, link) with a "Tailor resume" link per job → `/tailor?jobUrl=...&title=...&company=...`
 - **AI tailoring pipeline** — `generateBestResume(jd)` in `packages/agent/src/ai/chain.ts`: generate → critique → revise loop (up to 3 passes), scored against a resume-worded-style rubric, outputs ATS-safe Markdown
 - **LLM provider** — Claude by default, via the headless `claude -p` CLI (`packages/agent/src/ai/claude-cli.ts`), authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing). OpenAI/GPT-4o is a manual fallback (`LLM_PROVIDER=openai`)
@@ -18,6 +18,7 @@ Everything below is implemented and running in production, not aspirational — 
 - **PDF generation** — Markdown → LaTeX → PDF via Tectonic + the custom `Resume_Template/czresume.cls` template, for both tailored resumes and the master resume preview
 - **Web app** — `/`, `/tailor`, `/resume/[id]`, `/resume/master`, `/applied`, `/preferences` all built (see table below)
 - **Cron scheduler** — scraper runs every 15 min, in-process (no queue layer), guarded against overlapping ticks
+- **Async tailoring** — `POST /api/tailor` returns immediately (202) with a `pending` row; the generate → critique → revise loop and PDF render run in the background since they routinely exceed Railway's ~300s edge-proxy timeout. The editor polls `GET /api/resumes/:id` until status flips to `ready` or `failed`
 
 ## Core Flows
 
@@ -38,7 +39,7 @@ Everything below is implemented and running in production, not aspirational — 
 | `/preferences` | Edit scraper filters (title/required keywords, target locations, priority companies, max alerts per email) — backed by the `preferences` DB table and `/api/preferences` |
 
 ### JD auto-fetch
-When a job URL is submitted, the backend fetches the page with Playwright (JS-heavy) or Cheerio (static) and extracts the job description text. Falls back to a paste box if the page is blocked or returns no useful content.
+When a job URL is submitted, the backend fetches the page with Playwright (JS-heavy) or Cheerio (static), extracts the article body with Mozilla Readability (`@mozilla/readability` + `jsdom`), and validates the URL against SSRF (blocks localhost/private IPs/cloud metadata endpoints) — see `fetch-jd.ts`. Falls back to a paste box if the page is blocked or returns no useful content.
 
 ### PDF generation
 Every tailored or edited resume, and the master resume preview, is rendered to PDF via Tectonic (LaTeX) using `Resume_Template/czresume.cls`, and stored in the database alongside the resume record. Downloadable from the editor and the dashboard. Attached when "Email to me" is clicked.
@@ -52,7 +53,7 @@ When Christopher marks a job as "applied" (from `/applied` or the resume editor)
 ```
 job-hunting-agent/
 ├── packages/
-│   ├── web/          # Next.js 14 app (App Router)
+│   ├── web/          # Next.js 16 app (App Router)
 │   └── agent/        # Scraper, AI pipeline, API server
 ├── docker-compose.yml
 └── .env.example
@@ -65,11 +66,12 @@ agent/src/
 ├── scraper/
 │   ├── index.ts            # Orchestrator — scrapes all companies, emails new jobs
 │   ├── types.ts            # Shared JobListing type
-│   ├── cheerio.ts          # Static HTML pages
-│   ├── fetch-jd.ts         # Auto-fetch JD text from a job URL (Cheerio → Playwright fallback)
+│   ├── fetch-jd.ts         # Auto-fetch JD text from a job URL (Cheerio → Playwright fallback, Readability extraction)
+│   ├── browser-utils.ts    # Shared Playwright browser lifecycle helpers
 │   ├── diff.ts             # Snapshot diffing (hash sets)
 │   ├── filters.ts          # Location + keyword scoring (reads `preferences` table)
-│   ├── companies.ts        # Hardcoded company list (Greenhouse/Ashby/Lever/Amazon)
+│   ├── companies.ts        # Hardcoded company list (Greenhouse/Ashby/Lever/Amazon, 80+ companies)
+│   ├── run-companies.ts    # CLI entry — `npm run scrape:companies`
 │   └── adapters/           # greenhouse.ts, ashby.ts, lever.ts, amazon.ts
 ├── ai/
 │   ├── chain.ts             # generate → critique → revise loop (ENTRY POINT)
@@ -133,13 +135,14 @@ web/
 ## Tech Stack
 
 ### Frontend
-- Next.js 14 (App Router), TypeScript, Tailwind CSS, Shadcn/ui
+- Next.js 16 (App Router), TypeScript, Tailwind CSS
 
 ### Backend
 - Node.js + Express (API server in `packages/agent`), PostgreSQL, node-cron
 
 ### Scraping
-- Playwright (JS-rendered pages), Cheerio (static HTML), custom snapshot diffing via hash sets
+- Direct ATS API calls per company (Greenhouse/Ashby/Lever/Amazon adapters), custom snapshot diffing via hash sets
+- Playwright + Cheerio + Mozilla Readability — used only for JD auto-fetch from a pasted job URL, not for company scraping
 
 ### AI
 - Claude (default) — headless `claude -p` CLI, authenticated via `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing); set `LLM_PROVIDER=openai` to fall back to OpenAI/GPT-4o
@@ -181,8 +184,8 @@ Local `docker-compose` Postgres is for scraper/tailoring dev work, not for maste
 ```sql
 -- Existing
 companies       (id, name, careers_url, scrape_type, active, created_at)
-jobs            (id, company_id, title, url, detected_at, is_new)
-snapshots       (id, company_id, job_hashes[], scraped_at)
+jobs            (id, company_id, title, company_name, url, description, detected_at, is_new)
+snapshots       (id, company_id, raw_html, job_hashes[], scraped_at)
 
 -- New
 tailored_resumes (
@@ -194,7 +197,10 @@ tailored_resumes (
   jd_text       text,           -- full job description used for tailoring
   markdown      text,           -- current editor content (editable)
   pdf           bytea,          -- rendered PDF blob
+  pdf_error     text,           -- error from the most recent PDF render attempt, if any
   critic_score  int,            -- final score from the critique loop
+  status        text,           -- 'pending' | 'ready' | 'failed' — tailoring runs as a background job
+  error         text,           -- error message if status = 'failed'
   created_at    timestamptz,
   updated_at    timestamptz
 )
@@ -229,7 +235,7 @@ preferences (
 ### Scraping → Alert
 ```
 cron (every 15 min, in-process, guarded against overlapping ticks)
-  → Cheerio scrape per company
+  → fetch each company's ATS API/page (greenhouse/ashby/lever/amazon adapters)
     → diff.ts (new job hashes)
       → filter by location + keyword score (reads `preferences` table)
         → Resend email (job list + "Tailor resume" link per job)
@@ -238,12 +244,15 @@ cron (every 15 min, in-process, guarded against overlapping ticks)
 ### Tailoring (triggered from web app)
 ```
 POST /api/tailor (jd text or job URL)
-  → if URL: auto-fetch JD via Playwright/Cheerio
-    → generateBestResume(jd) — up to 3 passes via Claude CLI (or OpenAI if LLM_PROVIDER=openai)
-      → save tailored_resumes row (markdown, critic_score)
-        → render PDF via Tectonic/czresume.cls → store in tailored_resumes.pdf
-          → return resume ID → redirect to /resume/[id]
+  → if URL: auto-fetch JD synchronously via Playwright/Cheerio + Readability (capped at 15s)
+    → create tailored_resumes row with status='pending', respond 202 immediately
+      → [background] generateBestResume(jd) — up to 3 passes via Claude CLI (or OpenAI if LLM_PROVIDER=openai)
+        → update row: markdown, critic_score, status='ready' (or 'failed' + error message)
+          → [background] render PDF via Tectonic/czresume.cls → store in tailored_resumes.pdf (or pdf_error)
+  → frontend polls GET /api/resumes/:id until status leaves 'pending'
 ```
+
+Async because the generate → critique → revise loop routinely exceeds Railway's ~300s edge-proxy timeout, which would otherwise kill the request and surface as a generic "Failed to fetch" in the browser.
 
 ### Apply → Google Sheets
 ```
@@ -268,6 +277,7 @@ RESEND_API_KEY
 YOUR_EMAIL
 WEB_URL                       # web app URL — CORS + "Tailor resume" email links
 APP_URL
+NEXT_PUBLIC_API_URL           # agent API URL the web app calls — baked in at Next.js build time (needs a Docker build arg on Railway, not just a runtime env var)
 
 GOOGLE_SHEETS_SPREADSHEET_ID
 GOOGLE_SERVICE_ACCOUNT_JSON   # stringified service account credentials
@@ -303,4 +313,4 @@ Use these proactively:
 - All LLM outputs validated with Zod; retry on failed calls
 - Master resume is the single source of truth — the AI may only select/rephrase facts that exist in it, never invent
 - Alert score threshold: top-ranked jobs by keyword score, capped at `FILTERS.maxPerEmail`
-- PDF design: plain text / ATS-safe for now; will match a specific template in a later pass
+- PDF design: renders via the custom `Resume_Template/czresume.cls` LaTeX template, ATS-safe
