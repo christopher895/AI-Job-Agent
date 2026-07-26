@@ -5,6 +5,7 @@ import masterResumeRouter from "./routes/master-resume";
 import appliedRouter from "./routes/applied";
 import preferencesRouter from "./routes/preferences";
 import placesRouter from "./routes/places";
+import generalResumeRouter from "./routes/general-resume";
 
 const router = Router();
 
@@ -14,5 +15,6 @@ router.use("/master-resume", masterResumeRouter);
 router.use("/applied", appliedRouter);
 router.use("/preferences", preferencesRouter);
 router.use("/places", placesRouter);
+router.use("/general-resume", generalResumeRouter);
 
 export default router;
