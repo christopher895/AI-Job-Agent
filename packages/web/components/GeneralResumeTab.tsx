@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { api, Resume } from "../lib/api";
 import ResumeEditor from "./ResumeEditor";
 
@@ -10,6 +10,7 @@ export default function GeneralResumeTab() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const hasAttemptedLoadRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -30,7 +31,10 @@ export default function GeneralResumeTab() {
   }, []);
 
   useEffect(() => {
-    load();
+    if (!hasAttemptedLoadRef.current) {
+      hasAttemptedLoadRef.current = true;
+      load();
+    }
   }, [load]);
 
   async function handleGenerate(isResync: boolean) {
