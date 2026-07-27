@@ -9,6 +9,7 @@ import {
 } from "../../db/queries";
 import { fetchJd } from "../../scraper/fetch-jd";
 import { renderPdf } from "../../ai/render-pdf";
+import { fitToOnePage } from "../../ai/fit-page";
 import { LLM_PROVIDER } from "../../ai/llm";
 
 const router = Router();
@@ -92,9 +93,23 @@ async function runTailorPipeline(
     return;
   }
 
+  // Fit to one page (page-count check + LLM trim/widow-fix loop). A failure
+  // here degrades gracefully — the resume still completes with the
+  // un-fitted markdown, and the PDF render further down reports the error
+  // via pdf_error, same as any other PDF render failure.
+  let finalMarkdown = result.markdown;
+  let fittedPdf: Buffer | null = null;
+  try {
+    const fitted = await fitToOnePage(result.markdown);
+    finalMarkdown = fitted.markdown;
+    fittedPdf = fitted.pdf;
+  } catch (err) {
+    console.error("[tailor] fitToOnePage failed, continuing with un-fitted markdown:", err);
+  }
+
   try {
     await completeTailoredResume(id, {
-      markdown: result.markdown,
+      markdown: finalMarkdown,
       criticScore: result.critic.finalScore,
     });
   } catch (err) {
@@ -103,14 +118,24 @@ async function runTailorPipeline(
     return;
   }
 
-  // Render PDF in the background — /pdf endpoint generates on-demand if not ready yet
-  renderPdf(result.markdown)
-    .then((pdf) => storePdf(id, pdf))
-    .catch((err) => {
-      console.error("[tailor] pdf render failed:", err);
-      const message = err instanceof Error ? err.message : String(err);
-      setPdfError(id, message).catch(() => {});
+  // Store the PDF fitToOnePage already rendered, if it succeeded; otherwise
+  // fall back to rendering the un-fitted markdown directly, same as before
+  // this change. Either way this runs in the background — /pdf generates
+  // on-demand if not ready yet.
+  if (fittedPdf) {
+    storePdf(id, fittedPdf).catch((err) => {
+      console.error("[tailor] pdf store failed:", err);
+      setPdfError(id, err instanceof Error ? err.message : String(err)).catch(() => {});
     });
+  } else {
+    renderPdf(finalMarkdown)
+      .then((pdf) => storePdf(id, pdf))
+      .catch((err) => {
+        console.error("[tailor] pdf render failed:", err);
+        const message = err instanceof Error ? err.message : String(err);
+        setPdfError(id, message).catch(() => {});
+      });
+  }
 }
 
 // POST /api/tailor/fetch-jd — just fetch the JD text without running the tailor pipeline

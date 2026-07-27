@@ -135,6 +135,24 @@ export async function initSchema() {
       CHECK (status IN ('pending','ready','failed'));
   `);
 
+  // The general resume: a JD-less, one-page resume synced from Master, reusing
+  // this same table/pipeline/editor as job-tailored resumes rather than a
+  // parallel stack. 'kind' distinguishes the (at most one) general row from
+  // ordinary tailored ones; the partial unique index makes "at most one"
+  // a DB-level guarantee, not just application discipline.
+  await pool.query(`
+    ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'tailored';
+  `);
+  await pool.query(`
+    ALTER TABLE tailored_resumes DROP CONSTRAINT IF EXISTS tailored_resumes_kind_check;
+    ALTER TABLE tailored_resumes ADD CONSTRAINT tailored_resumes_kind_check
+      CHECK (kind IN ('tailored', 'general'));
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tailored_resumes_one_general
+      ON tailored_resumes ((true)) WHERE kind = 'general';
+  `);
+
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_tailored_resumes_created ON tailored_resumes(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_snapshots_company_scraped ON snapshots(company_id, scraped_at DESC);

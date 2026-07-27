@@ -179,6 +179,8 @@ export const api = {
   getMasterResume: () => request<MasterResume>("GET", "/master-resume"),
   putMasterResume: (data: MasterResume) =>
     request<{ updated: boolean }>("PUT", "/master-resume", data),
+  getGeneralResume: () => request<Resume>("GET", "/general-resume"),
+  generateGeneralResume: () => request<{ id: string; status: "pending" }>("POST", "/general-resume/generate"),
   listApplied: () => request<AppliedJob[]>("GET", "/applied"),
   postApplied: (body: {
     company: string;
