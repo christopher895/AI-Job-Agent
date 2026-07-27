@@ -28,9 +28,28 @@ async function countPdfPages(pdf: Buffer): Promise<number> {
   }
 }
 
+// Education, Extracurriculars, and Skills are copied verbatim from the master
+// resume and must never be reworded by the trim/widow-fix passes below — only
+// Experience and Projects bullets are ever eligible for AI-driven tailoring.
+const TAILORABLE_HEADINGS = new Set(["## experience", "## projects"]);
+
+/** Lines within ## Experience/## Projects sections only — see note above. */
+function tailorableSectionLines(markdown: string): string[] {
+  const out: string[] = [];
+  let inTailorable = false;
+  for (const line of markdown.split("\n")) {
+    if (line.startsWith("## ")) {
+      inTailorable = TAILORABLE_HEADINGS.has(line.trim().toLowerCase());
+      continue;
+    }
+    if (inTailorable) out.push(line);
+  }
+  return out;
+}
+
 function findWidowBullets(markdown: string): string[] {
   const widows: string[] = [];
-  for (const line of markdown.split("\n")) {
+  for (const line of tailorableSectionLines(markdown)) {
     if (!line.startsWith("- ")) continue;
     const bullet = line.slice(2).trim();
     if (bullet.length <= CHARS_PER_BULLET_LINE) continue; // single line, no wrap
@@ -64,10 +83,11 @@ async function trimToOnePage(markdown: string, overflowLines: number): Promise<s
     system: `You are editing a résumé that overflows onto a second page by approximately ${overflowLines} printed lines.
 
 Shorten it to fit one page by:
-- Removing the least relevant bullet from one or more roles/projects (prefer older or less relevant roles)
-- Shortening verbose bullets by cutting filler words (never remove facts, metrics, or technologies)
+- Removing the least relevant bullet from one or more roles/projects under ## Experience or ## Projects (prefer older or less relevant roles)
+- Shortening verbose bullets under ## Experience or ## Projects by cutting filler words (never remove facts, metrics, or technologies)
 
 Do NOT change font, margins, section headers, names, titles, companies, dates, or URLs.
+Do NOT modify ## Education, ## Extracurriculars, or ## Skills in any way — those sections must stay byte-for-byte identical to the input, even if that means the résumé stays slightly over one page.
 Do NOT add any content.
 Return the complete résumé markdown as JSON: { "markdown": "..." }`,
     user: markdown,
