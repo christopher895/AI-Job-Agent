@@ -6,6 +6,7 @@ import {
   failTailoredResume,
   storePdf,
   setPdfError,
+  updateResumeStage,
 } from "../../db/queries";
 import { fetchJd } from "../../scraper/fetch-jd";
 import { renderPdf } from "../../ai/render-pdf";
@@ -84,7 +85,14 @@ async function runTailorPipeline(
 ) {
   let result;
   try {
-    result = await generateBestResume(jd, opts);
+    result = await generateBestResume(jd, {
+      ...opts,
+      onProgress: (stage) => {
+        updateResumeStage(id, stage).catch((err) => {
+          console.error("[tailor] stage update failed:", err);
+        });
+      },
+    });
   } catch (err) {
     console.error("[tailor] pipeline error:", err);
     const credentialHint =
@@ -97,6 +105,9 @@ async function runTailorPipeline(
   // here degrades gracefully — the resume still completes with the
   // un-fitted markdown, and the PDF render further down reports the error
   // via pdf_error, same as any other PDF render failure.
+  await updateResumeStage(id, "Finalizing formatting").catch((err) => {
+    console.error("[tailor] stage update failed:", err);
+  });
   let finalMarkdown = result.markdown;
   let fittedPdf: Buffer | null = null;
   try {
