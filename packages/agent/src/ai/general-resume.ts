@@ -33,10 +33,14 @@ export type GeneralResumeResult = {
  * job-tailored resumes there's no JD to naturally narrow content down to a
  * page, so fitToOnePage() is load-bearing here, not just a safety net.
  */
-export async function generateGeneralResume(): Promise<GeneralResumeResult> {
+export async function generateGeneralResume(
+  onProgress?: (stage: string) => void
+): Promise<GeneralResumeResult> {
   const result = await generateBestResume(GENERIC_SWE_PROMPT, {
     jobTitle: "General Software Engineer",
+    onProgress,
   });
+  onProgress?.("Finalizing formatting");
   const fitted = await fitToOnePage(result.markdown);
   return {
     markdown: fitted.markdown,
