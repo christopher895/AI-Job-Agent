@@ -12,6 +12,7 @@
     "test:format": "tsx src/ai/test-format.ts",
     "test:critic": "tsx src/ai/test-critic.ts",
     "test:general-resume": "tsx src/db/test-general-resume.ts",
+    "test:stage-tracking": "tsx src/db/test-stage-tracking.ts",
     "test:fetch-jd": "tsx src/scraper/test-fetch-jd.ts",
     "test:claude-cli": "tsx src/ai/test-claude-cli.ts",
     "test:render-pdf": "tsx src/ai/test-render-pdf.ts",

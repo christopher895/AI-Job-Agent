@@ -153,6 +153,14 @@ export async function initSchema() {
       ON tailored_resumes ((true)) WHERE kind = 'general';
   `);
 
+  // Tracks which real step of the generate->critique->revise pipeline a
+  // pending row is on (e.g. "Drafting resume (pass 1)", "Critiquing draft"),
+  // so the pending-state UI can show real progress instead of a generic
+  // spinner. Only meaningful transiently while status = 'pending'.
+  await pool.query(`
+    ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS stage TEXT;
+  `);
+
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_tailored_resumes_created ON tailored_resumes(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_snapshots_company_scraped ON snapshots(company_id, scraped_at DESC);
