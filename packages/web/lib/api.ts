@@ -13,6 +13,8 @@ export type ResumeListItem = {
   status: "pending" | "ready" | "failed";
   /** Error from the tailoring pipeline itself, set when status = 'failed'. */
   error: string | null;
+  /** Current pipeline step while status = 'pending' (e.g. "Drafting resume (pass 1)"); null otherwise. */
+  stage: string | null;
   created_at: string;
   updated_at: string;
 };
