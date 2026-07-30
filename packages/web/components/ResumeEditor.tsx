@@ -3,6 +3,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, Resume } from "../lib/api";
+import { STAGE_SEGMENTS, segmentIndex } from "../lib/resumeStage";
 
 type ApplyForm = { status: string; appliedAt: string };
 type ViewMode = "edit" | "split" | "preview";
@@ -113,6 +114,7 @@ export default function ResumeEditor({
     location: resume.location,
     job_url: resume.job_url,
     created_at: resume.created_at,
+    stage: resume.stage,
   });
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -244,7 +246,13 @@ export default function ResumeEditor({
     const interval = setInterval(async () => {
       try {
         const fresh = await api.getResume(resume.id);
-        if (cancelled || fresh.status === "pending") return;
+        if (cancelled) return;
+        if (fresh.status === "pending") {
+          // Still running — just surface the current stage, nothing else has
+          // changed yet (markdown/PDF are only written once status flips).
+          setMeta((m) => (m.stage === fresh.stage ? m : { ...m, stage: fresh.stage }));
+          return;
+        }
         // Let the PDF pane's auto-load effect retry now that a PDF might exist —
         // it latched hasAttemptedLoadRef after an earlier attempt 409'd while pending.
         hasAttemptedLoadRef.current = false;
@@ -255,6 +263,7 @@ export default function ResumeEditor({
           location: fresh.location,
           job_url: fresh.job_url,
           created_at: fresh.created_at,
+          stage: fresh.stage,
         });
         setMarkdown(fresh.markdown);
         setJobTitle(fresh.job_title ?? "");
@@ -332,6 +341,7 @@ export default function ResumeEditor({
   const charCount = markdown.length;
 
   if (meta.status === "pending") {
+    const activeIndex = segmentIndex(meta.stage);
     return (
       <div className="flex flex-col h-full bg-white">
         <div className="border-b border-gray-200 px-6 py-3 flex-shrink-0">
@@ -343,16 +353,50 @@ export default function ResumeEditor({
           </Link>
         </div>
         <div className="flex-1 flex items-center justify-center text-center px-6">
-          <div>
-            <svg className="animate-spin mx-auto text-violet-600" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-            </svg>
-            <p className="text-sm font-medium text-gray-900 mt-4">
+          <div className="w-full max-w-sm">
+            <p className="text-sm font-medium text-gray-900">
               Generating your tailored resume{title ? ` for ${title}` : ""}…
             </p>
-            <p className="text-xs text-gray-500 mt-1">
-              The generate → critique → revise loop usually takes a few minutes. This page updates automatically.
-            </p>
+            {activeIndex === -1 ? (
+              <>
+                <svg className="animate-spin mx-auto text-violet-600 mt-4" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+                <p className="text-xs text-gray-500 mt-4">
+                  The generate → critique → revise loop usually takes a few minutes. This page updates automatically.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mt-6">
+                  {STAGE_SEGMENTS.map((label, i) => (
+                    <div key={label} className="flex-1 flex flex-col items-center">
+                      <div className="flex items-center w-full">
+                        {i > 0 && (
+                          <div className={`h-0.5 flex-1 ${i <= activeIndex ? "bg-violet-600" : "bg-gray-200"}`} />
+                        )}
+                        <div
+                          className={`w-3 h-3 rounded-full flex-shrink-0 ${
+                            i < activeIndex
+                              ? "bg-violet-600"
+                              : i === activeIndex
+                              ? "bg-violet-600 animate-pulse"
+                              : "bg-gray-200"
+                          } ${i === 0 ? "" : "ml-0"}`}
+                        />
+                        {i < STAGE_SEGMENTS.length - 1 && (
+                          <div className={`h-0.5 flex-1 ${i < activeIndex ? "bg-violet-600" : "bg-gray-200"}`} />
+                        )}
+                      </div>
+                      <span className={`text-[11px] mt-1.5 ${i === activeIndex ? "text-violet-700 font-medium" : "text-gray-400"}`}>
+                        {label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-6">{meta.stage}</p>
+              </>
+            )}
           </div>
         </div>
       </div>
