@@ -28,7 +28,7 @@ export type AppliedJob = {
   job_title: string;
   location: string | null;
   job_url: string | null;
-  status: string;
+  status: string | null;
   applied_at: string;
   resume_id: string | null;
   sheets_row: number | null;

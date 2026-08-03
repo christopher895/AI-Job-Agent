@@ -41,7 +41,7 @@ router.post("/", async (req, res) => {
     jobTitle: row.job_title,
     location: row.location,
     jobUrl: row.job_url,
-    status: row.status,
+    status: row.status ?? "",
     resumeLink: row.resume_id ? `${appUrl}/resume/${row.resume_id}` : "",
   })
     .then((sheetsRow) => {
