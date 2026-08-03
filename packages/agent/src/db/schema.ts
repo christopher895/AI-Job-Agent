@@ -109,6 +109,13 @@ export async function initSchema() {
       CHECK (status IN ('applied','interviewing','rejected','offer','assessment','no_response'));
   `);
 
+  // Newly logged applications should start with no status rather than defaulting to
+  // 'applied' — the user picks a status explicitly.
+  await pool.query(`
+    ALTER TABLE applied_jobs ALTER COLUMN status DROP NOT NULL;
+    ALTER TABLE applied_jobs ALTER COLUMN status DROP DEFAULT;
+  `);
+
   // Tracks the error from the most recent PDF render attempt, if any, so a failed
   // re-render after an edit doesn't silently leave a stale PDF with no indication.
   await pool.query(`

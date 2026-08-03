@@ -29,7 +29,7 @@ export type AppliedJobRow = {
   job_title: string;
   location: string | null;
   job_url: string | null;
-  status: string;
+  status: string | null;
   applied_at: Date;
   resume_id: string | null;
   sheets_row: number | null;
@@ -278,7 +278,7 @@ export async function createAppliedJob(fields: {
      RETURNING *`,
     [
       fields.company, fields.jobTitle, fields.location ?? null, fields.jobUrl ?? null,
-      fields.status ?? "applied", fields.appliedAt ?? new Date(), fields.resumeId ?? null,
+      fields.status || null, fields.appliedAt ?? new Date(), fields.resumeId ?? null,
     ]
   );
   return rows[0];
@@ -293,13 +293,15 @@ export async function updateAppliedJob(
   id: string,
   fields: { status?: string; sheetsRow?: number }
 ): Promise<AppliedJobRow | null> {
+  // status is nullable, so an explicit "" (clear status) must be distinguished from
+  // "field omitted" (leave status untouched) — a plain COALESCE can't tell those apart.
   const { rows } = await pool.query(
     `UPDATE applied_jobs
-     SET status     = COALESCE($1, status),
-         sheets_row = COALESCE($2, sheets_row)
-     WHERE id = $3
+     SET status     = CASE WHEN $1::boolean THEN $2 ELSE status END,
+         sheets_row = COALESCE($3, sheets_row)
+     WHERE id = $4
      RETURNING *`,
-    [fields.status ?? null, fields.sheetsRow ?? null, id]
+    [fields.status !== undefined, fields.status || null, fields.sheetsRow ?? null, id]
   );
   return rows[0] ?? null;
 }

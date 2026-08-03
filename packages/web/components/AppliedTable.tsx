@@ -7,6 +7,7 @@ const STATUSES = ["applied", "interviewing", "assessment", "no_response", "offer
 type Status = (typeof STATUSES)[number];
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  "": { label: "Select status", className: "bg-gray-100 text-gray-400" },
   applied: { label: "Applied", className: "bg-green-100 text-green-700" },
   interviewing: { label: "Interview", className: "bg-cyan-100 text-cyan-700" },
   assessment: { label: "Assessment", className: "bg-orange-100 text-orange-700" },
@@ -43,20 +44,22 @@ function StatusBadge({
   updating,
   onChange,
 }: {
-  status: string;
+  status: string | null;
   id: string;
   updating: boolean;
   onChange: (status: string) => void;
 }) {
-  const config = STATUS_CONFIG[status] ?? { label: status, className: "bg-gray-100 text-gray-500" };
+  const value = status ?? "";
+  const config = STATUS_CONFIG[value] ?? { label: value, className: "bg-gray-100 text-gray-500" };
   return (
     <div className="relative inline-block">
       <select
-        value={status}
+        value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={updating}
         className={`appearance-none cursor-pointer text-xs font-medium px-2.5 py-1 rounded-full pr-6 border-0 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:opacity-50 ${config.className}`}
       >
+        <option value="">Select status</option>
         {STATUSES.map((s) => (
           <option key={s} value={s}>
             {STATUS_CONFIG[s]?.label ?? s}
