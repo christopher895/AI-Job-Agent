@@ -24,11 +24,16 @@ async function handle(
   const contentType = req.headers.get("content-type");
   if (contentType) headers["Content-Type"] = contentType;
 
-  const agentRes = await fetch(targetUrl, {
-    method: req.method,
-    headers,
-    body: hasBody && body && body.byteLength > 0 ? body : undefined,
-  });
+  let agentRes: Response;
+  try {
+    agentRes = await fetch(targetUrl, {
+      method: req.method,
+      headers,
+      body: hasBody && body && body.byteLength > 0 ? body : undefined,
+    });
+  } catch {
+    return Response.json({ error: "agent API unreachable" }, { status: 502 });
+  }
 
   const resHeaders = new Headers();
   const outContentType = agentRes.headers.get("content-type");

@@ -1,4 +1,15 @@
-const API = "/api/proxy";
+// Browser code always goes through the same-origin proxy, which forwards the
+// session cookie and attaches the shared secret server-side. Server Components
+// render before any browser exists, so they call the agent directly with the
+// shared secret themselves — a relative URL isn't resolvable from Node's fetch,
+// and the proxy wouldn't see a session cookie for a server-originated request anyway.
+const PROXY_BASE = "/api/proxy";
+const isServer = typeof window === "undefined";
+const API = isServer ? (process.env.AGENT_API_URL ?? "http://localhost:3001/api") : PROXY_BASE;
+
+function extraHeaders(): Record<string, string> {
+  return isServer ? { "X-Internal-Secret": process.env.INTERNAL_API_SECRET ?? "" } : {};
+}
 
 export type ResumeListItem = {
   id: string;
@@ -108,7 +119,7 @@ export type MasterResume = {
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     method,
-    headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+    headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...extraHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: "no-store",
   });
@@ -127,7 +138,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 async function requestBlob(method: string, path: string, body?: unknown): Promise<Blob> {
   const res = await fetch(`${API}${path}`, {
     method,
-    headers: body !== undefined ? { "Content-Type": "application/json" } : {},
+    headers: { ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...extraHeaders() },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401 && typeof window !== "undefined") {
@@ -151,7 +162,7 @@ async function requestBlobWithFilename(
   method: string,
   path: string,
 ): Promise<{ blob: Blob; filename: string | null }> {
-  const res = await fetch(`${API}${path}`, { method });
+  const res = await fetch(`${API}${path}`, { method, headers: extraHeaders() });
   if (res.status === 401 && typeof window !== "undefined") {
     window.location.href = "/login";
     throw new Error("unauthorized");
@@ -209,7 +220,7 @@ export const api = {
     request<{ name: string }[]>("GET", `/places?q=${encodeURIComponent(q)}`),
   getPreferences: () => request<Preferences>("GET", "/preferences"),
   putPreferences: (data: Preferences) => request<{ updated: boolean }>("PUT", "/preferences", data),
-  pdfUrl: (id: string) => `${API}/resume/${id}/pdf`,
+  pdfUrl: (id: string) => `${PROXY_BASE}/resume/${id}/pdf`,
   getPdfBlob: (id: string) => requestBlob("GET", `/resume/${id}/pdf`),
   getPdfBlobWithFilename: (id: string) => requestBlobWithFilename("GET", `/resume/${id}/pdf`),
   previewMasterResumePdf: (data: MasterResume) =>

@@ -15,7 +15,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   callbacks: {
     async signIn({ profile }) {
-      return isAllowedEmail(profile?.email);
+      return profile?.email_verified === true && isAllowedEmail(profile?.email);
     },
   },
   pages: {
