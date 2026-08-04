@@ -97,16 +97,16 @@ export default function TailorForm({
   return (
     <div className="px-8 py-8 max-w-2xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-gray-900">Tailor a New Resume</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="font-serif text-3xl text-foreground">Tailor a New Resume</h1>
+        <p className="text-sm text-gray-500 mt-1.5">
           Paste a job link or description and we&apos;ll tailor your resume.
         </p>
       </div>
 
-      <div className="flex flex-col gap-5">
+      <div className="bg-paper border border-paper-border rounded-xl p-6 flex flex-col gap-5">
         {/* Job URL */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Job URL</label>
+          <label className="block text-sm font-medium text-paper-ink mb-1.5">Job URL</label>
           <div className="flex gap-2">
             <input
               type="url"
@@ -117,18 +117,18 @@ export default function TailorForm({
               }}
               onKeyDown={(e) => e.key === "Enter" && handleFetchJd()}
               placeholder="https://boards.greenhouse.io/vercel/jobs/1234567"
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+              className="flex-1 border border-paper-border rounded-lg px-3 py-2 text-sm text-paper-ink placeholder:text-paper-muted focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
             />
             <button
               onClick={handleFetchJd}
               disabled={fetchStatus === "fetching" || !jobUrl.trim()}
-              className="flex-shrink-0 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white"
+              className="flex-shrink-0 px-4 py-2 border border-paper-border rounded-lg text-sm font-medium text-paper-ink hover:bg-black/5 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white"
             >
               {fetchStatus === "fetching" ? "Fetching…" : "Fetch JD"}
             </button>
           </div>
           {fetchStatus === "done" && (
-            <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
+            <p className="text-xs text-green-700 mt-1.5 flex items-center gap-1">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -136,7 +136,7 @@ export default function TailorForm({
             </p>
           )}
           {fetchStatus === "failed" && (
-            <p className="text-xs text-red-600 mt-1.5">
+            <p className="text-xs text-red-700 mt-1.5">
               Could not fetch — paste the description below.
             </p>
           )}
@@ -144,54 +144,54 @@ export default function TailorForm({
 
         {/* Job Title */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Job Title</label>
+          <label className="block text-sm font-medium text-paper-ink mb-1.5">Job Title</label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Frontend Engineer"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+            className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm text-paper-ink placeholder:text-paper-muted focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
           />
         </div>
 
         {/* Company */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Company</label>
+          <label className="block text-sm font-medium text-paper-ink mb-1.5">Company</label>
           <input
             type="text"
             value={company}
             onChange={(e) => setCompany(e.target.value)}
             placeholder="Vercel"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+            className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm text-paper-ink placeholder:text-paper-muted focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
           />
         </div>
 
         {/* Location */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Location</label>
+          <label className="block text-sm font-medium text-paper-ink mb-1.5">Location</label>
           <input
             type="text"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             placeholder="San Francisco, CA"
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+            className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm text-paper-ink placeholder:text-paper-muted focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
           />
         </div>
 
         {/* Job Description */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Job Description</label>
+          <label className="block text-sm font-medium text-paper-ink mb-1.5">Job Description</label>
           <textarea
             value={jdText}
             onChange={(e) => setJdText(e.target.value)}
             placeholder="Paste the full job description here…"
             rows={10}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white resize-y"
+            className="w-full border border-paper-border rounded-lg px-3 py-2.5 text-sm text-paper-ink placeholder:text-paper-muted focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white resize-y"
           />
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2.5 text-sm">
+          <div className="bg-red-100 border border-red-300 text-red-800 rounded-lg px-3 py-2.5 text-sm">
             {error}
           </div>
         )}
@@ -202,7 +202,7 @@ export default function TailorForm({
             onClick={handleAddToLog}
             disabled={logging || logStatus === "done"}
             title="Log this application to Google Sheets without generating a resume"
-            className="flex-1 border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white"
+            className="flex-1 border border-paper-border hover:bg-black/5 text-paper-ink font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white"
           >
             {logging ? "Adding…" : logStatus === "done" ? "Added to log ✓" : "Add to Log"}
           </button>

@@ -5,23 +5,23 @@ import { api, Preferences } from "../lib/api";
 type Place = { name: string };
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <label className="block text-xs font-medium text-gray-600 mb-1">{children}</label>;
+  return <label className="block text-xs font-medium text-paper-muted mb-1">{children}</label>;
 }
 
 function SectionHeader({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mb-4">
-      <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-widest">{title}</h2>
-      {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
+      <h2 className="font-mono text-xs font-semibold text-paper-ink uppercase tracking-widest">{title}</h2>
+      {description && <p className="text-xs text-paper-muted mt-1">{description}</p>}
     </div>
   );
 }
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 bg-violet-50 text-violet-700 text-xs px-2 py-0.5 rounded-md font-medium">
+    <span className="inline-flex items-center gap-1 bg-violet-100 text-violet-800 text-xs px-2 py-0.5 rounded-md font-medium">
       {label}
-      <button type="button" onClick={onRemove} className="text-violet-400 hover:text-violet-700 leading-none">×</button>
+      <button type="button" onClick={onRemove} className="text-violet-500 hover:text-violet-800 leading-none">×</button>
     </span>
   );
 }
@@ -51,7 +51,7 @@ function TagInput({
   }
 
   return (
-    <div className="border border-gray-200 rounded-lg px-3 py-2 bg-white flex flex-wrap gap-1.5 min-h-[40px] focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-transparent">
+    <div className="border border-paper-border rounded-lg px-3 py-2 bg-white flex flex-wrap gap-1.5 min-h-[40px] focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-transparent">
       {tags.map((tag) => (
         <Chip key={tag} label={tag} onRemove={() => onChange(tags.filter((t) => t !== tag))} />
       ))}
@@ -62,7 +62,7 @@ function TagInput({
         onKeyDown={onKey}
         onBlur={add}
         placeholder={tags.length === 0 ? placeholder : ""}
-        className="flex-1 min-w-[100px] text-sm outline-none bg-transparent placeholder-gray-400"
+        className="flex-1 min-w-[100px] text-sm text-paper-ink outline-none bg-transparent placeholder-paper-muted"
       />
     </div>
   );
@@ -161,7 +161,7 @@ function LocationTagInput({
 
   return (
     <div ref={containerRef} className="relative">
-      <div className="border border-gray-200 rounded-lg px-3 py-2 bg-white flex flex-wrap gap-1.5 min-h-[40px] focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-transparent">
+      <div className="border border-paper-border rounded-lg px-3 py-2 bg-white flex flex-wrap gap-1.5 min-h-[40px] focus-within:ring-2 focus-within:ring-violet-500 focus-within:border-transparent">
         {tags.map((tag) => (
           <Chip key={tag} label={tag} onRemove={() => onChange(tags.filter((t) => t !== tag))} />
         ))}
@@ -172,11 +172,11 @@ function LocationTagInput({
             onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={onKey}
             placeholder={tags.length === 0 ? 'Type a city name, or Remote' : ""}
-            className="flex-1 text-sm outline-none bg-transparent placeholder-gray-400"
+            className="flex-1 text-sm text-paper-ink outline-none bg-transparent placeholder-paper-muted"
             autoComplete="off"
           />
           {loading && (
-            <svg className="animate-spin flex-shrink-0 text-gray-300" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg className="animate-spin flex-shrink-0 text-paper-muted" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
             </svg>
           )}
@@ -184,7 +184,7 @@ function LocationTagInput({
       </div>
 
       {open && (
-        <ul className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+        <ul className="absolute z-20 left-0 right-0 mt-1 bg-white border border-paper-border rounded-lg shadow-lg overflow-hidden">
           {suggestions.map((place, i) => (
             <li key={place.name}>
               <button
@@ -192,7 +192,7 @@ function LocationTagInput({
                 onMouseDown={(e) => { e.preventDefault(); addTag(place.name); }}
                 onMouseEnter={() => setActiveIdx(i)}
                 className={`w-full text-left px-3 py-2 text-sm transition-colors ${
-                  i === activeIdx ? "bg-violet-50 text-violet-700" : "text-gray-700 hover:bg-gray-50"
+                  i === activeIdx ? "bg-violet-100 text-violet-800" : "text-paper-ink hover:bg-black/5"
                 }`}
               >
                 {place.name}
@@ -234,13 +234,13 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Preferences</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="font-serif text-3xl text-foreground">Preferences</h1>
+          <p className="text-sm text-gray-500 mt-1.5">
             Controls which jobs the scraper surfaces and emails to you.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {error && <span className="text-xs text-red-600">{error}</span>}
+          {error && <span className="text-xs text-red-400">{error}</span>}
           <button
             onClick={save}
             disabled={saving}
@@ -258,7 +258,7 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
 
       <div className="flex flex-col gap-6">
         {/* Locations */}
-        <div className="border border-gray-100 rounded-xl p-5 bg-white">
+        <div className="border border-paper-border rounded-xl p-5 bg-paper">
           <SectionHeader
             title="Target Locations"
             description="Jobs must be in one of these cities, or remote/unspecified. Select from suggestions to validate."
@@ -271,7 +271,7 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
         </div>
 
         {/* Job matching */}
-        <div className="border border-gray-100 rounded-xl p-5 bg-white">
+        <div className="border border-paper-border rounded-xl p-5 bg-paper">
           <SectionHeader
             title="Job Matching"
             description="Title must contain at least one keyword and all required keywords."
@@ -300,14 +300,14 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
                 value={prefs.termFilter ?? ""}
                 onChange={(e) => set("termFilter", e.target.value || null)}
                 placeholder="Leave blank to match any term"
-                className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+                className="w-full border border-paper-border rounded-lg px-3 py-1.5 text-sm text-paper-ink focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
               />
             </div>
           </div>
         </div>
 
         {/* Email settings */}
-        <div className="border border-gray-100 rounded-xl p-5 bg-white">
+        <div className="border border-paper-border rounded-xl p-5 bg-paper">
           <SectionHeader
             title="Email Settings"
             description="Controls the alert email sent when new jobs are found."
@@ -321,7 +321,7 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
                 max={20}
                 value={prefs.maxPerEmail}
                 onChange={(e) => set("maxPerEmail", Math.max(1, Math.min(20, Number(e.target.value))))}
-                className="w-24 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+                className="w-24 border border-paper-border rounded-lg px-3 py-1.5 text-sm text-paper-ink focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
               />
             </div>
             <div>

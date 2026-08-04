@@ -98,7 +98,7 @@ export default function AppliedTable({ initial }: { initial: AppliedJob[] }) {
         <p className="text-base mb-1">No applications logged yet</p>
         <p className="text-sm">
           Use{" "}
-          <span className="text-gray-600">&ldquo;Mark as applied&rdquo;</span> in the resume editor
+          <span className="text-gray-500">&ldquo;Mark as applied&rdquo;</span> in the resume editor
           to add one.
         </p>
       </div>
@@ -106,10 +106,10 @@ export default function AppliedTable({ initial }: { initial: AppliedJob[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+    <div className="overflow-x-auto rounded-xl border border-paper-border bg-paper">
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="text-left text-xs text-gray-500 border-b border-gray-200 bg-gray-50">
+          <tr className="text-left text-xs text-paper-muted border-b border-paper-border bg-black/[0.03]">
             <th className="py-3 px-4 font-medium">Company</th>
             <th className="py-3 px-4 font-medium">Role</th>
             <th className="py-3 px-4 font-medium">Date Applied</th>
@@ -127,15 +127,15 @@ export default function AppliedTable({ initial }: { initial: AppliedJob[] }) {
             });
 
             return (
-              <tr key={job.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+              <tr key={job.id} className="border-b border-paper-border last:border-0 hover:bg-black/[0.02] transition-colors">
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-3">
                     <CompanyAvatar name={job.company} />
-                    <span className="font-medium text-gray-900">{job.company}</span>
+                    <span className="font-medium text-paper-ink">{job.company}</span>
                   </div>
                 </td>
-                <td className="py-3 px-4 text-gray-600">{job.job_title}</td>
-                <td className="py-3 px-4 text-gray-500 whitespace-nowrap">{date}</td>
+                <td className="py-3 px-4 text-paper-muted">{job.job_title}</td>
+                <td className="py-3 px-4 text-paper-muted whitespace-nowrap">{date}</td>
                 <td className="py-3 px-4">
                   <StatusBadge
                     status={job.status}
@@ -144,13 +144,13 @@ export default function AppliedTable({ initial }: { initial: AppliedJob[] }) {
                     onChange={(s) => handleStatusChange(job.id, s)}
                   />
                 </td>
-                <td className="py-3 px-4 text-gray-400 text-xs">
+                <td className="py-3 px-4 text-paper-muted text-xs">
                   {job.job_url ? (
                     <a
                       href={job.job_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-violet-600 hover:text-violet-800 underline underline-offset-2"
+                      className="text-violet-700 hover:text-violet-900 underline underline-offset-2"
                     >
                       View posting
                     </a>
@@ -163,24 +163,24 @@ export default function AppliedTable({ initial }: { initial: AppliedJob[] }) {
                     {job.resume_id ? (
                       <Link
                         href={`/resume/${job.resume_id}`}
-                        className="text-xs text-violet-600 hover:text-violet-800 transition-colors"
+                        className="text-xs text-violet-700 hover:text-violet-900 transition-colors"
                       >
                         Resume
                       </Link>
                     ) : (
-                      <span className="text-xs text-gray-300">—</span>
+                      <span className="text-xs text-paper-muted/60">—</span>
                     )}
                     {job.resume_id && (
                       <a
                         href={api.pdfUrl(job.resume_id)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                        className="text-xs text-paper-muted hover:text-paper-ink transition-colors"
                       >
                         PDF
                       </a>
                     )}
-                    <button className="text-gray-300 hover:text-gray-500 transition-colors">
+                    <button className="text-paper-muted/60 hover:text-paper-muted transition-colors">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <circle cx="12" cy="5" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="12" cy="19" r="1" />
                       </svg>
@@ -192,7 +192,7 @@ export default function AppliedTable({ initial }: { initial: AppliedJob[] }) {
           })}
         </tbody>
       </table>
-      <div className="px-4 py-3 border-t border-gray-100 text-xs text-gray-400">
+      <div className="px-4 py-3 border-t border-paper-border text-xs text-paper-muted">
         Showing 1 to {jobs.length} of {jobs.length} result{jobs.length !== 1 ? "s" : ""}
       </div>
     </div>

@@ -16,8 +16,8 @@ export default async function AppliedPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Applied Jobs</h1>
-          <p className="text-sm text-gray-500 mt-1">Track all your job applications in one place.</p>
+          <h1 className="font-serif text-3xl text-foreground">Applied Jobs</h1>
+          <p className="text-sm text-gray-500 mt-1.5">Track all your job applications in one place.</p>
         </div>
         {process.env.GOOGLE_SHEETS_SPREADSHEET_ID && (
           <a

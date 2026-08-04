@@ -9,7 +9,7 @@ type Section = (typeof SECTIONS)[number];
 type ViewMode = "edit" | "split" | "preview";
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <label className="block text-xs font-medium text-gray-600 mb-1">{children}</label>;
+  return <label className="block text-xs font-medium text-paper-muted mb-1">{children}</label>;
 }
 
 function TextInput({
@@ -27,14 +27,14 @@ function TextInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+      className="w-full border border-paper-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-paper"
     />
   );
 }
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-widest mb-4 mt-8 first:mt-0">
+    <h2 className="text-sm font-semibold text-paper-ink uppercase tracking-widest mb-4 mt-8 first:mt-0">
       {title}
     </h2>
   );
@@ -94,11 +94,11 @@ function BulletList<B extends { id: string; text: string }>({
               <AutoGrowTextarea
                 value={b.text}
                 onChange={(text) => onUpdate(i, text)}
-                className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none overflow-hidden"
+                className="flex-1 border border-paper-border rounded-lg px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none overflow-hidden"
               />
               <button
                 onClick={() => onRemove(i)}
-                className="text-gray-300 hover:text-red-400 text-lg leading-none self-start pt-1.5 transition-colors"
+                className="text-paper-muted/60 hover:text-red-400 text-lg leading-none self-start pt-1.5 transition-colors"
                 title="Remove bullet"
               >
                 ×
@@ -109,7 +109,7 @@ function BulletList<B extends { id: string; text: string }>({
       </SortableSection>
       <button
         onClick={onAdd}
-        className="text-xs text-gray-400 hover:text-violet-600 text-left mt-1 transition-colors"
+        className="text-xs text-paper-muted hover:text-violet-600 text-left mt-1 transition-colors"
       >
         + Add bullet
       </button>
@@ -190,13 +190,13 @@ function PdfPreviewPane({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-col border-l border-gray-200 bg-gray-50 min-w-0 ${className}`}>
-      <div className="px-4 py-2 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
-        <span className="text-xs font-medium text-gray-600">PDF Preview</span>
+    <div className={`flex flex-col border-l border-paper-border bg-black/[0.03] min-w-0 ${className}`}>
+      <div className="px-4 py-2 border-b border-paper-border bg-paper flex items-center justify-between flex-shrink-0">
+        <span className="text-xs font-medium text-paper-muted">PDF Preview</span>
         <button
           onClick={onRefresh}
           disabled={loading}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-paper-muted hover:text-paper-ink disabled:opacity-50 transition-colors"
         >
           <svg
             width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -227,12 +227,12 @@ function PdfPreviewPane({
         {blobUrl ? (
           <iframe src={blobUrl} className="w-full h-full border-0" title="Master resume PDF preview" />
         ) : !loading && !error ? (
-          <div className="h-full flex items-center justify-center text-sm text-gray-400">
+          <div className="h-full flex items-center justify-center text-sm text-paper-muted">
             Click Refresh to load the PDF preview.
           </div>
         ) : null}
         {loading && !blobUrl && (
-          <div className="h-full flex flex-col items-center justify-center gap-3 text-gray-400">
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-paper-muted">
             <svg className="animate-spin" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
               <path d="M21 3v5h-5" />
@@ -596,7 +596,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       {editMode === "text" ? (
         <div>
           <SectionHeader title="Edit as text" />
-          <p className="text-sm text-gray-500 mb-3">
+          <p className="text-sm text-paper-muted mb-3">
             Edit your resume as plain text, then click Apply to re-parse it into the structured
             fields. Nothing is saved until you click Save Changes.
           </p>
@@ -604,7 +604,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             value={textDraft}
             onChange={(e) => setTextDraft(e.target.value)}
             rows={28}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white resize-none"
+            className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-violet-500 bg-paper resize-none"
           />
           <div className="flex items-center gap-3 mt-3">
             <button
@@ -639,11 +639,11 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                   value={basics.summary}
                   onChange={(e) => setBasics("summary", e.target.value)}
                   rows={4}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white resize-none"
+                  className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-paper resize-none"
                 />
               </div>
               {saved && <p className="text-xs text-green-600 mt-4">&#x2022; Saved</p>}
-              {saving && <p className="text-xs text-gray-400 mt-4">&#x2022; Saving…</p>}
+              {saving && <p className="text-xs text-paper-muted mt-4">&#x2022; Saving…</p>}
             </div>
           )}
 
@@ -652,18 +652,18 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             <div>
               <SectionHeader title="Experience" />
               {resume.experience.length === 0 && (
-                <p className="text-sm text-gray-400">No experience entries yet.</p>
+                <p className="text-sm text-paper-muted">No experience entries yet.</p>
               )}
               <SortableSection items={resume.experience} onReorder={reorderExperience}>
                 {(exp, _idx, drag) => {
                   const ei = resume.experience.findIndex((e) => e.id === exp.id);
                   return (
-                    <div className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                    <div className="mb-6 border border-paper-border rounded-xl p-4 bg-paper">
                       <div className="flex justify-between items-start -mt-1 -mr-1 mb-1">
                         <DragHandle {...drag} />
                         <button
                           onClick={() => removeExperience(ei)}
-                          className="text-xs text-gray-300 hover:text-red-500 transition-colors"
+                          className="text-xs text-paper-muted/60 hover:text-red-500 transition-colors"
                           title="Remove experience"
                         >
                           Remove experience ×
@@ -692,7 +692,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               </SortableSection>
               <button
                 onClick={addExperience}
-                className="w-full border border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
+                className="w-full border border-dashed border-paper-border rounded-xl py-3 text-sm text-paper-muted hover:border-violet-400 hover:text-violet-600 transition-colors"
               >
                 + Add experience
               </button>
@@ -704,18 +704,18 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             <div>
               <SectionHeader title="Projects" />
               {resume.projects.length === 0 && (
-                <p className="text-sm text-gray-400">No projects yet.</p>
+                <p className="text-sm text-paper-muted">No projects yet.</p>
               )}
               <SortableSection items={resume.projects} onReorder={reorderProjects}>
                 {(proj, _idx, drag) => {
                   const pi = resume.projects.findIndex((p) => p.id === proj.id);
                   return (
-                    <div className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                    <div className="mb-6 border border-paper-border rounded-xl p-4 bg-paper">
                       <div className="flex justify-between items-start -mt-1 -mr-1 mb-1">
                         <DragHandle {...drag} />
                         <button
                           onClick={() => removeProject(pi)}
-                          className="text-xs text-gray-300 hover:text-red-500 transition-colors"
+                          className="text-xs text-paper-muted/60 hover:text-red-500 transition-colors"
                           title="Remove project"
                         >
                           Remove project ×
@@ -749,7 +749,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               </SortableSection>
               <button
                 onClick={addProject}
-                className="w-full border border-dashed border-gray-300 rounded-xl py-3 text-sm text-gray-500 hover:border-violet-400 hover:text-violet-600 transition-colors"
+                className="w-full border border-dashed border-paper-border rounded-xl py-3 text-sm text-paper-muted hover:border-violet-400 hover:text-violet-600 transition-colors"
               >
                 + Add project
               </button>
@@ -760,7 +760,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
           {activeSection === "Skills" && (
             <div>
               <SectionHeader title="Skills" />
-              <div className="border border-gray-100 rounded-xl p-4 bg-white grid grid-cols-2 gap-4">
+              <div className="border border-paper-border rounded-xl p-4 bg-paper grid grid-cols-2 gap-4">
                 {(["languages", "frameworks", "tools", "interests"] as const).map((field) => (
                   <div key={field}>
                     <Label>{field.charAt(0).toUpperCase() + field.slice(1)}</Label>
@@ -780,7 +780,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             <div>
               <SectionHeader title="Education" />
               {resume.education.map((edu, idx) => (
-                <div key={idx} className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                <div key={idx} className="mb-6 border border-paper-border rounded-xl p-4 bg-paper">
                   <div className="grid grid-cols-2 gap-3">
                     <div><Label>School</Label><TextInput value={edu.school} onChange={(v) => setEduField(idx, "school", v)} /></div>
                     <div><Label>Location</Label><TextInput value={edu.location} onChange={(v) => setEduField(idx, "location", v)} /></div>
@@ -811,13 +811,13 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             <div>
               <SectionHeader title="Extracurriculars" />
               {resume.extracurriculars.length === 0 && (
-                <p className="text-sm text-gray-400">No extracurricular entries.</p>
+                <p className="text-sm text-paper-muted">No extracurricular entries.</p>
               )}
               <SortableSection items={resume.extracurriculars} onReorder={reorderExtracurriculars}>
                 {(e, _idx, drag) => {
                   const ei = resume.extracurriculars.findIndex((x) => x.id === e.id);
                   return (
-                    <div className="mb-6 border border-gray-100 rounded-xl p-4 bg-white">
+                    <div className="mb-6 border border-paper-border rounded-xl p-4 bg-paper">
                       <div className="flex justify-between items-start -mt-1 -mr-1 mb-1">
                         <DragHandle {...drag} />
                       </div>
@@ -849,13 +849,13 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   return (
     <div className="flex h-full">
       {/* Sidebar */}
-      <div className="w-44 flex-shrink-0 border-r border-gray-200 bg-white px-3 py-6">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">Edit as</p>
+      <div className="w-44 flex-shrink-0 border-r border-paper-border bg-paper px-3 py-6">
+        <p className="text-xs font-semibold text-paper-muted uppercase tracking-wider px-3 mb-2">Edit as</p>
         <div className="flex gap-1 px-3 mb-6">
           <button
             onClick={() => setEditMode("structured")}
             className={`flex-1 text-xs px-2 py-1.5 rounded-lg font-medium transition-colors ${
-              editMode === "structured" ? "bg-violet-50 text-violet-700" : "text-gray-500 hover:bg-gray-100"
+              editMode === "structured" ? "bg-violet-50 text-violet-700" : "text-paper-muted hover:bg-black/5"
             }`}
           >
             Structured
@@ -863,7 +863,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
           <button
             onClick={switchToTextMode}
             className={`flex-1 text-xs px-2 py-1.5 rounded-lg font-medium transition-colors ${
-              editMode === "text" ? "bg-violet-50 text-violet-700" : "text-gray-500 hover:bg-gray-100"
+              editMode === "text" ? "bg-violet-50 text-violet-700" : "text-paper-muted hover:bg-black/5"
             }`}
           >
             Text
@@ -872,7 +872,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
 
         {editMode === "structured" && (
           <>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">Sections</p>
+            <p className="text-xs font-semibold text-paper-muted uppercase tracking-wider px-3 mb-2">Sections</p>
             {SECTIONS.map((s) => (
               <button
                 key={s}
@@ -880,7 +880,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                 className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-0.5 transition-colors ${
                   activeSection === s
                     ? "bg-violet-50 text-violet-700 font-medium"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                    : "text-paper-muted hover:bg-black/5 hover:text-paper-ink"
                 }`}
               >
                 {s}
@@ -894,8 +894,8 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       <div className="flex-1 min-w-0 flex flex-col h-full">
         <div className="flex items-start justify-between px-8 pt-8 pb-4 flex-shrink-0">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Master Resume</h1>
-            <p className="text-sm text-gray-500 mt-1">
+            <h1 className="font-serif text-2xl text-paper-ink">Master Resume</h1>
+            <p className="text-sm text-paper-muted mt-1">
               This is the source of truth used to generate all tailored resumes.
             </p>
           </div>
@@ -903,7 +903,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             {error && <span className="text-xs text-red-600">{error}</span>}
             <button
               onClick={() => setShowImport((v) => !v)}
-              className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+              className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-paper-border bg-paper text-paper-ink hover:bg-black/5 transition-colors font-medium"
             >
               Import…
             </button>
@@ -919,15 +919,15 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               </svg>
               {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
             </button>
-            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+            <div className="flex items-center border border-paper-border rounded-lg overflow-hidden">
               {(["edit", "split", "preview"] as ViewMode[]).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode)}
                   className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                     viewMode === mode
-                      ? "bg-gray-900 text-white"
-                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                      ? "bg-paper-ink text-paper"
+                      : "text-paper-muted hover:bg-black/5 hover:text-paper-ink"
                   }`}
                 >
                   {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -938,8 +938,8 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
         </div>
 
         {showImport && (
-          <div className="mx-8 mb-6 border border-gray-200 rounded-xl p-4 bg-gray-50 flex-shrink-0">
-            <p className="text-sm text-gray-600 mb-3">
+          <div className="mx-8 mb-6 border border-paper-border rounded-xl p-4 bg-black/[0.03] flex-shrink-0">
+            <p className="text-sm text-paper-muted mb-3">
               Paste your resume text below, or upload a PDF. This pre-fills the form for you to
               review — nothing is saved until you click Save Changes.
             </p>
@@ -948,7 +948,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               onChange={(e) => setImportText(e.target.value)}
               rows={6}
               placeholder="Paste resume text here…"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white resize-none"
+              className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500 bg-paper resize-none"
             />
             <div className="flex items-center gap-3 mt-3">
               <button
@@ -958,8 +958,8 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               >
                 {importing ? "Parsing…" : "Parse pasted text"}
               </button>
-              <span className="text-xs text-gray-400">or</span>
-              <label className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 cursor-pointer transition-colors">
+              <span className="text-xs text-paper-muted">or</span>
+              <label className="text-sm px-3 py-1.5 border border-paper-border rounded-lg text-paper-ink hover:bg-black/5 cursor-pointer transition-colors">
                 Upload PDF
                 <input
                   type="file"
@@ -983,7 +983,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             <Panel id="form-content" order={1} defaultSize={50} minSize={20}>
               <div className="h-full overflow-y-auto">{sectionContent}</div>
             </Panel>
-            <PanelResizeHandle className="w-1 bg-gray-200 hover:bg-violet-400 active:bg-violet-500 transition-colors cursor-col-resize" />
+            <PanelResizeHandle className="w-1 bg-paper-border hover:bg-violet-400 active:bg-violet-500 transition-colors cursor-col-resize" />
             <Panel id="pdf-preview" order={2} defaultSize={50} minSize={20}>
               <PdfPreviewPane
                 blobUrl={previewBlobUrl}

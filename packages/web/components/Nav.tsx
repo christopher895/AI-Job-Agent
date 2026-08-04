@@ -96,7 +96,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
   }
 
   return (
-    <aside className="w-52 flex-shrink-0 bg-gray-900 flex flex-col h-full">
+    <aside className="w-52 flex-shrink-0 bg-ink-850 flex flex-col h-full">
       {/* Logo */}
       <div className="px-4 py-5 flex items-center gap-2.5">
         <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -105,7 +105,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
             <path d="M14 2v4a2 2 0 0 0 2 2h4" />
           </svg>
         </div>
-        <span className="text-white font-semibold text-sm tracking-tight">Resume Tailor</span>
+        <span className="font-serif text-white text-base tracking-tight">Resume Tailor</span>
       </div>
 
       {/* Nav links */}
@@ -117,7 +117,7 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
             className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
               isActive(href)
                 ? "bg-violet-600 text-white"
-                : "text-gray-400 hover:bg-gray-800 hover:text-white"
+                : "text-white/50 hover:bg-white/5 hover:text-white"
             }`}
           >
             <Icon />
@@ -127,19 +127,19 @@ export default function Sidebar({ user }: { user: SidebarUser }) {
       </nav>
 
       {/* User profile */}
-      <div className="border-t border-gray-800">
+      <div className="border-t border-white/10">
         <div className="px-4 py-3 flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
             {initialsFrom(user.name, user.email)}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm text-white font-medium leading-tight truncate">{user.name ?? user.email}</p>
-            {user.name && <p className="text-xs text-gray-400 leading-tight truncate">{user.email}</p>}
+            {user.name && <p className="text-xs text-white/40 leading-tight truncate">{user.email}</p>}
           </div>
         </div>
         <button
           onClick={() => signOutAction()}
-          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-gray-400 hover:bg-gray-800 hover:text-white transition-colors"
+          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-white/50 hover:bg-white/5 hover:text-white transition-colors"
         >
           <LogOutIcon />
           Sign out
