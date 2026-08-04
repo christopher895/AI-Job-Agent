@@ -338,3 +338,4 @@ Use these proactively:
 - Master resume is the single source of truth — the AI may only select/rephrase facts that exist in it, never invent
 - Alert score threshold: top-ranked jobs by keyword score, capped at `FILTERS.maxPerEmail`
 - PDF design: renders via the custom `Resume_Template/czresume.cls` LaTeX template, ATS-safe
+- Tests: `npm test` (from the repo root) runs the fast, self-contained unit tests across both workspaces — no DB/LLM/network needed. Each `test-*.ts` script exits non-zero on failure so the chain fails fast. `npm run test:integration` runs the tests that need live infra (Postgres, LLM, Tectonic); run those manually, not in the default gate.
