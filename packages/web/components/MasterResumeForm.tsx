@@ -40,6 +40,36 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
+/** A textarea that grows to fit its content instead of scrolling internally — bullet text should always be fully visible. */
+function AutoGrowTextarea({
+  value,
+  onChange,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      rows={1}
+      className={className}
+    />
+  );
+}
+
 function BulletList<B extends { id: string; text: string }>({
   bullets,
   onUpdate,
@@ -61,11 +91,10 @@ function BulletList<B extends { id: string; text: string }>({
           return (
             <div className="flex gap-2">
               <DragHandle {...drag} />
-              <textarea
+              <AutoGrowTextarea
                 value={b.text}
-                onChange={(e) => onUpdate(i, e.target.value)}
-                rows={2}
-                className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
+                onChange={(text) => onUpdate(i, text)}
+                className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none overflow-hidden"
               />
               <button
                 onClick={() => onRemove(i)}
