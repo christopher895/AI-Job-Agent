@@ -144,20 +144,34 @@ suggestions over many marginal ones." Output: `Suggestion[]` (without
 
 **Apply step (`apply-suggestions.ts`):**
 ```ts
-export function applySuggestions(master: MasterResume, accepted: Suggestion[]): MasterResume
+export function applySuggestions(
+  master: MasterResume,
+  accepted: Suggestion[]
+): { master: MasterResume; tailored: TailoredResume }
 ```
-Pure function: deep-clones the master resume, and for each accepted
-`bullet-rewrite` suggestion, replaces the matching bullet's `text` in place
-(matched by `targetId` against the bullet's `id`); for each accepted
-`skill-addition`, appends `suggestedText` to `skills[targetId]` (one of
-`languages`/`frameworks`/`tools`) if not already present (case-insensitive
-check). Everything else — order, cuts, sections — is untouched. The result is a full `MasterResume`, not a
-`TailoredResume`; rendering reuses the same `masterResumeToDoc` /
-`renderMasterResumePdf` path already used for the master preview, not
-`renderMarkdown`'s `TailoredResume`-shaped renderer. (`TailoredResumeSchema`,
-`renderMarkdown`, `lintFormat`, `keywordCoverage` — all built around
-per-job *subset selection* — are not used by this new flow; they remain in
-place for the dormant general-resume path.)
+Pure function, and the one place this flow reuses existing rendering code
+instead of duplicating it. It builds two things:
+- an adjusted `master` — a deep clone with each accepted `skill-addition`'s
+  `suggestedText` appended to `skills[targetId]` (one of
+  `languages`/`frameworks`/`tools`), case-insensitive de-duped; otherwise
+  identical to the input.
+- a full-coverage `tailored` (the existing `TailoredResumeSchema` shape) —
+  every master experience/project section included, every bullet present
+  with `sourceId` = its own master id and `text` = the accepted
+  `bullet-rewrite`'s `suggestedText` where one targets it, else the
+  original master text unchanged. `skillsOrder: []` (so `renderMarkdown`'s
+  `orderWithinCategory` falls through to master's own order — nothing is
+  re-ranked). `cut: []`, `keywordsCovered`: the accepted suggestions'
+  `keyword`s, `reasoning: ""`.
+
+The route then calls the **existing** `renderMarkdown(result.master,
+result.tailored)` from `format.ts` unchanged — it already handles
+Education/Extracurriculars/Skills verbatim from `master` and
+Experience/Projects from `tailored`, which is exactly what "every bullet
+present, some rewritten" needs. No new markdown renderer, no new PDF path.
+(`lintFormat`/`keywordCoverage` from the same file, and `chain.ts`/
+`critic.ts`, remain unused by this flow — those stay in place only for the
+dormant general-resume path.)
 
 **Pipeline (`routes/tailor.ts`, rewritten):**
 1. `POST /api/tailor` — unchanged (fetch JD if URL, create row). Row starts
@@ -170,11 +184,13 @@ place for the dormant general-resume path.)
    (pre-filled with `suggestedText`) so wording can be hand-tweaked before
    acceptance.
 4. `POST /api/resumes/:id/apply-suggestions` with the (possibly edited)
-   accepted suggestions — backend calls `applySuggestions`, writes the
-   final `suggestions` array back (now with `accepted`/edited text set, for
-   audit — "why does this resume say Kubernetes" stays answerable later),
-   runs `fitToOnePage` on the rendered result as a safety net, stores
-   markdown + PDF, flips `status = 'ready'`.
+   accepted suggestions — backend calls `applySuggestions(master, accepted)`,
+   renders markdown via the existing `renderMarkdown(result.master,
+   result.tailored)`, writes the final `suggestions` array back (now with
+   `accepted`/edited text set, for audit — "why does this resume say
+   Kubernetes" stays answerable later), runs `fitToOnePage` on the rendered
+   markdown as a safety net, stores markdown + PDF, flips `status =
+   'ready'`.
 5. From `ready` onward, existing `ResumeEditor` behavior (inline edit,
    download, email, mark applied) is unchanged.
 
