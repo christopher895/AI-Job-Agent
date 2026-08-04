@@ -8,7 +8,19 @@ export default auth((req) => {
   const isAuthApi = pathname.startsWith("/api/auth");
   const isApiRoute = pathname.startsWith("/api/");
 
-  if (isLoggedIn || isPublicPage || isAuthApi) {
+  if (isAuthApi) {
+    return;
+  }
+
+  if (isLoggedIn) {
+    // Already signed in — don't show the login page (e.g. after hitting back post-sign-in).
+    if (isPublicPage) {
+      return NextResponse.redirect(new URL("/", req.nextUrl));
+    }
+    return;
+  }
+
+  if (isPublicPage) {
     return;
   }
 
