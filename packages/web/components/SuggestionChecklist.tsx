@@ -66,7 +66,7 @@ function WordDiff({ before, after }: { before: string; after: string }) {
             {t.text}
           </span>
         ) : (
-          <span key={i} className="text-gray-500">
+          <span key={i} className="text-paper-muted">
             {t.text}
           </span>
         )
@@ -114,7 +114,7 @@ export default function SuggestionChecklist({
   if (items.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
-        <p className="text-sm text-gray-500 max-w-sm">
+        <p className="text-sm text-paper-muted max-w-sm">
           No keyword suggestions found for this job description — your resume already covers it well.
         </p>
         <button
@@ -132,7 +132,7 @@ export default function SuggestionChecklist({
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="px-6 pt-6 pb-2 flex-shrink-0">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-paper-muted">
           Review each suggested change before it&apos;s applied. Nothing here is final — uncheck
           anything you don&apos;t want, or edit the wording directly.
         </p>
@@ -142,12 +142,12 @@ export default function SuggestionChecklist({
           {items.map((it) => (
             <label
               key={it.id}
-              className="flex gap-3 border border-gray-200 rounded-xl p-3 bg-white hover:border-violet-300 transition-colors cursor-pointer"
+              className="flex gap-3 border border-paper-border rounded-xl p-3 bg-paper hover:border-violet-300 transition-colors cursor-pointer"
             >
               <input type="checkbox" checked={it.accepted} onChange={() => toggle(it.id)} className="mt-1" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-medium text-gray-700">{it.keyword}</span>
+                  <span className="text-xs font-medium text-paper-ink">{it.keyword}</span>
                   <span
                     className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
                       it.groundedness === "grounded"
@@ -166,21 +166,21 @@ export default function SuggestionChecklist({
                       onChange={(e) => editText(it.id, e.target.value)}
                       rows={2}
                       onClick={(e) => e.preventDefault()}
-                      className="w-full text-sm font-mono border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
+                      className="w-full text-sm font-mono border border-paper-border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
                     />
                   </>
                 ) : (
-                  <p className="text-sm font-medium text-gray-900">
+                  <p className="text-sm font-medium text-paper-ink">
                     Add &quot;{it.suggestedText}&quot; to {it.targetId}
                   </p>
                 )}
-                <p className="text-xs text-gray-400 mt-1">{it.rationale}</p>
+                <p className="text-xs text-paper-muted mt-1">{it.rationale}</p>
               </div>
             </label>
           ))}
         </div>
       </div>
-      <div className="flex items-center gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0">
+      <div className="flex items-center gap-3 px-6 py-4 border-t border-paper-border flex-shrink-0">
         <button
           onClick={apply}
           disabled={submitting}

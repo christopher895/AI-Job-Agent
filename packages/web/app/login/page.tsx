@@ -1,12 +1,4 @@
-import { Fraunces } from "next/font/google";
 import { signIn } from "@/auth";
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  weight: ["500", "600"],
-  style: ["normal"],
-  display: "swap",
-});
 
 function GoogleMark() {
   return (
@@ -32,7 +24,7 @@ export default async function LoginPage({
   const errorMessage = error ? (ERROR_COPY[error] ?? "Couldn't sign you in — try again.") : null;
 
   return (
-    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#0B0B12] px-6">
+    <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-ink-950 px-6">
       {/* Ambient backdrop: violet glow over a fine scan grid */}
       <div
         className="pointer-events-none absolute inset-0"
@@ -47,16 +39,16 @@ export default async function LoginPage({
       />
 
       {/* Sign-in card, styled as a single sheet of paper */}
-      <div className="relative w-full max-w-sm -rotate-1 rounded-sm bg-[#F6F1E4] px-8 py-9 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.6)]">
+      <div className="relative w-full max-w-sm rounded-sm bg-paper px-8 py-9 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.6)]">
         <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-600">
           Private access
         </p>
-        <h1 className={`${fraunces.className} mt-2 text-4xl text-[#1F1B16]`}>Resume Tailor</h1>
+        <h1 className="mt-2 font-serif text-4xl text-paper-ink">Resume Tailor</h1>
 
         {errorMessage ? (
           <p className="mt-3 text-sm text-[#9A5A32]">{errorMessage}</p>
         ) : (
-          <p className="mt-3 text-sm text-[#544E42]">
+          <p className="mt-3 text-sm text-paper-muted">
             Your agent&rsquo;s been watching job boards while you were away.
           </p>
         )}
@@ -70,19 +62,19 @@ export default async function LoginPage({
         >
           <button
             type="submit"
-            className="flex w-full items-center justify-center gap-2.5 rounded-sm bg-[#1F1B16] px-4 py-3 text-sm font-medium text-[#F6F1E4] transition-colors hover:bg-[#332C22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#F6F1E4]"
+            className="flex w-full items-center justify-center gap-2.5 rounded-sm bg-paper-ink px-4 py-3 text-sm font-medium text-paper transition-colors hover:bg-[#332C22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-paper"
           >
             <GoogleMark />
             Sign in with Google
           </button>
         </form>
 
-        <div className="mt-7 flex items-center gap-2 border-t border-[#1F1B16]/10 pt-4">
+        <div className="mt-7 flex items-center gap-2 border-t border-paper-ink/10 pt-4">
           <span className="relative flex h-1.5 w-1.5">
             <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-60 motion-safe:animate-ping" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
           </span>
-          <p className="font-mono text-[11px] tracking-wide text-[#7A7568]">
+          <p className="font-mono text-[11px] tracking-wide text-paper-muted">
             80+ companies · scanned every 15 min
           </p>
         </div>

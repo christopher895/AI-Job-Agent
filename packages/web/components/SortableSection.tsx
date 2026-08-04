@@ -29,7 +29,7 @@ export function DragHandle({
       type="button"
       {...attributes}
       {...listeners}
-      className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none px-1 -ml-1"
+      className="text-paper-muted/60 hover:text-paper-muted cursor-grab active:cursor-grabbing touch-none px-1 -ml-1"
       title="Drag to reorder"
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">

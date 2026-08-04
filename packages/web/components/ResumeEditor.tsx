@@ -10,7 +10,7 @@ type ApplyForm = { status: string; appliedAt: string };
 type ViewMode = "edit" | "split" | "preview";
 
 function ToolbarDivider() {
-  return <div className="w-px h-4 bg-gray-200 mx-1 flex-shrink-0" />;
+  return <div className="w-px h-4 bg-paper-border mx-1 flex-shrink-0" />;
 }
 
 function ToolbarBtn({
@@ -26,7 +26,7 @@ function ToolbarBtn({
     <button
       onClick={onClick}
       title={title}
-      className="px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors leading-none"
+      className="px-2 py-1 text-xs font-medium text-paper-muted hover:bg-black/5 rounded transition-colors leading-none"
     >
       {label}
     </button>
@@ -47,14 +47,14 @@ function PdfPane({
   className?: string;
 }) {
   return (
-    <div className={`flex flex-col border-l border-gray-200 bg-gray-50 min-w-0 ${className}`}>
+    <div className={`flex flex-col border-l border-paper-border bg-black/[0.03] min-w-0 ${className}`}>
       {/* Pane header */}
-      <div className="px-4 py-2 border-b border-gray-200 bg-white flex items-center justify-between flex-shrink-0">
-        <span className="text-xs font-medium text-gray-600">PDF Preview</span>
+      <div className="px-4 py-2 border-b border-paper-border bg-paper flex items-center justify-between flex-shrink-0">
+        <span className="text-xs font-medium text-paper-muted">PDF Preview</span>
         <button
           onClick={onRefresh}
           disabled={loading}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 disabled:opacity-50 transition-colors"
+          className="flex items-center gap-1.5 text-xs text-paper-muted hover:text-paper-ink disabled:opacity-50 transition-colors"
         >
           <svg
             width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -84,12 +84,12 @@ function PdfPane({
             title="Resume PDF preview"
           />
         ) : !loading && !error ? (
-          <div className="h-full flex items-center justify-center text-sm text-gray-400">
+          <div className="h-full flex items-center justify-center text-sm text-paper-muted">
             Click Refresh to load the PDF preview.
           </div>
         ) : null}
         {loading && !blobUrl && (
-          <div className="h-full flex items-center justify-center text-sm text-gray-400">
+          <div className="h-full flex items-center justify-center text-sm text-paper-muted">
             Rendering PDF…
           </div>
         )}
@@ -346,9 +346,9 @@ export default function ResumeEditor({
   if (meta.status === "pending") {
     const activeIndex = segmentIndex(meta.stage);
     return (
-      <div className="flex flex-col h-full bg-white">
-        <div className="border-b border-gray-200 px-6 py-3 flex-shrink-0">
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 w-fit transition-colors">
+      <div className="flex flex-col h-full bg-paper">
+        <div className="border-b border-paper-border px-6 py-3 flex-shrink-0">
+          <Link href="/" className="text-sm text-paper-muted hover:text-paper-ink flex items-center gap-1 w-fit transition-colors">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m15 18-6-6 6-6" />
             </svg>
@@ -357,7 +357,7 @@ export default function ResumeEditor({
         </div>
         <div className="flex-1 flex items-center justify-center text-center px-6">
           <div className="w-full max-w-sm">
-            <p className="text-sm font-medium text-gray-900">
+            <p className="text-sm font-medium text-paper-ink">
               Generating your tailored resume{title ? ` for ${title}` : ""}…
             </p>
             {activeIndex === -1 ? (
@@ -365,7 +365,7 @@ export default function ResumeEditor({
                 <svg className="animate-spin mx-auto text-violet-600 mt-4" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                 </svg>
-                <p className="text-xs text-gray-500 mt-4">
+                <p className="text-xs text-paper-muted mt-4">
                   This usually takes well under a minute. This page updates automatically.
                 </p>
               </>
@@ -376,7 +376,7 @@ export default function ResumeEditor({
                     <div key={label} className="flex-1 flex flex-col items-center">
                       <div className="flex items-center w-full">
                         {i > 0 && (
-                          <div className={`h-0.5 flex-1 ${i <= activeIndex ? "bg-violet-600" : "bg-gray-200"}`} />
+                          <div className={`h-0.5 flex-1 ${i <= activeIndex ? "bg-violet-600" : "bg-paper-border"}`} />
                         )}
                         <div
                           className={`w-3 h-3 rounded-full flex-shrink-0 ${
@@ -384,20 +384,20 @@ export default function ResumeEditor({
                               ? "bg-violet-600"
                               : i === activeIndex
                               ? "bg-violet-600 animate-pulse"
-                              : "bg-gray-200"
+                              : "bg-paper-border"
                           } ${i === 0 ? "" : "ml-0"}`}
                         />
                         {i < STAGE_SEGMENTS.length - 1 && (
-                          <div className={`h-0.5 flex-1 ${i < activeIndex ? "bg-violet-600" : "bg-gray-200"}`} />
+                          <div className={`h-0.5 flex-1 ${i < activeIndex ? "bg-violet-600" : "bg-paper-border"}`} />
                         )}
                       </div>
-                      <span className={`text-[11px] mt-1.5 ${i === activeIndex ? "text-violet-700 font-medium" : "text-gray-400"}`}>
+                      <span className={`text-[11px] mt-1.5 ${i === activeIndex ? "text-violet-700 font-medium" : "text-paper-muted"}`}>
                         {label}
                       </span>
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-gray-500 mt-6">{meta.stage}</p>
+                <p className="text-xs text-paper-muted mt-6">{meta.stage}</p>
               </>
             )}
           </div>
@@ -408,9 +408,9 @@ export default function ResumeEditor({
 
   if (meta.status === "awaiting_review") {
     return (
-      <div className="flex flex-col h-full bg-white">
-        <div className="border-b border-gray-200 px-6 py-3 flex-shrink-0">
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 w-fit transition-colors">
+      <div className="flex flex-col h-full bg-paper">
+        <div className="border-b border-paper-border px-6 py-3 flex-shrink-0">
+          <Link href="/" className="text-sm text-paper-muted hover:text-paper-ink flex items-center gap-1 w-fit transition-colors">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m15 18-6-6 6-6" />
             </svg>
@@ -418,7 +418,7 @@ export default function ResumeEditor({
           </Link>
         </div>
         <div className="px-6 pt-4 flex-shrink-0">
-          <p className="text-sm font-medium text-gray-900">
+          <p className="text-sm font-medium text-paper-ink">
             Review suggestions{title ? ` for ${title}` : ""}
           </p>
         </div>
@@ -433,9 +433,9 @@ export default function ResumeEditor({
 
   if (meta.status === "failed") {
     return (
-      <div className="flex flex-col h-full bg-white">
-        <div className="border-b border-gray-200 px-6 py-3 flex-shrink-0">
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 w-fit transition-colors">
+      <div className="flex flex-col h-full bg-paper">
+        <div className="border-b border-paper-border px-6 py-3 flex-shrink-0">
+          <Link href="/" className="text-sm text-paper-muted hover:text-paper-ink flex items-center gap-1 w-fit transition-colors">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m15 18-6-6 6-6" />
             </svg>
@@ -445,7 +445,7 @@ export default function ResumeEditor({
         <div className="flex-1 flex items-center justify-center text-center px-6">
           <div className="max-w-md">
             <p className="text-sm font-medium text-red-700">Tailoring failed</p>
-            <p className="text-xs text-gray-500 mt-2">{meta.error ?? "Unknown error."}</p>
+            <p className="text-xs text-paper-muted mt-2">{meta.error ?? "Unknown error."}</p>
             <Link
               href="/tailor"
               className="inline-block mt-4 text-sm px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors"
@@ -462,20 +462,20 @@ export default function ResumeEditor({
   const showPreview = viewMode === "split" || viewMode === "preview";
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-paper">
       {/* Breadcrumb */}
-      <div className="border-b border-gray-200 px-6 py-3 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-1.5 text-sm text-gray-500">
-          <Link href="/" className="hover:text-gray-800 flex items-center gap-1 transition-colors">
+      <div className="border-b border-paper-border px-6 py-3 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-1.5 text-sm text-paper-muted">
+          <Link href="/" className="hover:text-paper-ink flex items-center gap-1 transition-colors">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="m15 18-6-6 6-6" />
             </svg>
             Dashboard
           </Link>
-          <span className="text-gray-300">&rsaquo;</span>
+          <span className="text-paper-muted/60">&rsaquo;</span>
           <span>Resumes</span>
-          <span className="text-gray-300">/</span>
-          <span className="text-gray-900 font-medium truncate max-w-xs">{title || "Untitled"}</span>
+          <span className="text-paper-muted/60">/</span>
+          <span className="text-paper-ink font-medium truncate max-w-xs">{title || "Untitled"}</span>
         </div>
         <span
           className={`text-xs font-medium ${
@@ -483,7 +483,7 @@ export default function ResumeEditor({
               ? "text-green-600"
               : saveStatus === "error"
               ? "text-red-500"
-              : "text-gray-400"
+              : "text-paper-muted"
           }`}
         >
           {saveLabel}
@@ -498,7 +498,7 @@ export default function ResumeEditor({
       )}
 
       {/* Title + score + actions */}
-      <div className="border-b border-gray-200 px-6 py-4 flex items-start justify-between gap-4 flex-shrink-0">
+      <div className="border-b border-paper-border px-6 py-4 flex items-start justify-between gap-4 flex-shrink-0">
         <div className="min-w-0 flex-1">
           <input
             value={jobTitle}
@@ -511,7 +511,7 @@ export default function ResumeEditor({
             }}
             placeholder="Untitled"
             aria-label="Job title"
-            className="block w-full text-lg font-semibold text-gray-900 bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 -mx-1 outline-none focus:ring-1 focus:ring-violet-300 transition-colors"
+            className="block w-full text-lg font-semibold text-paper-ink bg-transparent border border-transparent hover:border-paper-border focus:border-paper-border rounded px-1 -mx-1 outline-none focus:ring-1 focus:ring-violet-300 transition-colors"
           />
           <input
             ref={companyInputRef}
@@ -525,9 +525,9 @@ export default function ResumeEditor({
             }}
             placeholder="Company"
             aria-label="Company"
-            className="block w-full text-sm text-gray-500 bg-transparent border border-transparent hover:border-gray-200 focus:border-gray-300 rounded px-1 -mx-1 outline-none focus:ring-1 focus:ring-violet-300 transition-colors mt-0.5"
+            className="block w-full text-sm text-paper-muted bg-transparent border border-transparent hover:border-paper-border focus:border-paper-border rounded px-1 -mx-1 outline-none focus:ring-1 focus:ring-violet-300 transition-colors mt-0.5"
           />
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-xs text-paper-muted mt-0.5">
             {new Date(meta.created_at).toLocaleDateString("en-US", {
               month: "long",
               day: "numeric",
@@ -540,20 +540,20 @@ export default function ResumeEditor({
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
           {meta.critic_score != null && (
             <div className="w-10 h-10 rounded-full border-2 border-green-400 flex items-center justify-center mr-1">
-              <span className="text-sm font-bold text-gray-900">{meta.critic_score}</span>
+              <span className="text-sm font-bold text-paper-ink">{meta.critic_score}</span>
             </div>
           )}
 
           {/* View mode toggle */}
-          <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+          <div className="flex items-center border border-paper-border rounded-lg overflow-hidden">
             {(["edit", "split", "preview"] as ViewMode[]).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
                 className={`px-3 py-1.5 text-xs font-medium transition-colors ${
                   viewMode === mode
-                    ? "bg-gray-900 text-white"
-                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                    ? "bg-paper-ink text-paper"
+                    : "text-paper-muted hover:bg-black/[0.03] hover:text-paper-ink"
                 }`}
               >
                 {mode.charAt(0).toUpperCase() + mode.slice(1)}
@@ -566,7 +566,7 @@ export default function ResumeEditor({
               href={meta.job_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-paper-border rounded-lg hover:bg-black/[0.03] transition-colors text-paper-ink"
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -578,7 +578,7 @@ export default function ResumeEditor({
           )}
           <button
             onClick={handleDownload}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700"
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-paper-border rounded-lg hover:bg-black/[0.03] transition-colors text-paper-ink"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -590,7 +590,7 @@ export default function ResumeEditor({
           <button
             onClick={handleEmail}
             disabled={emailStatus === "sending"}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-gray-700"
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-paper-border rounded-lg hover:bg-black/[0.03] disabled:opacity-50 transition-colors text-paper-ink"
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect width="20" height="16" x="2" y="4" rx="2" />
@@ -618,7 +618,7 @@ export default function ResumeEditor({
 
       {/* Apply form */}
       {showApplyForm && (
-        <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex flex-col gap-2 flex-shrink-0">
+        <div className="bg-black/[0.03] border-b border-paper-border px-6 py-3 flex flex-col gap-2 flex-shrink-0">
           {(!meta.location || !meta.job_url) && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
               Missing {[!meta.location && "location", !meta.job_url && "job URL"].filter(Boolean).join(" and ")} on
@@ -628,11 +628,11 @@ export default function ResumeEditor({
           )}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-600 font-medium">Status</label>
+              <label className="text-xs text-paper-muted font-medium">Status</label>
               <select
                 value={applyForm.status}
                 onChange={(e) => setApplyForm((f) => ({ ...f, status: e.target.value }))}
-                className="border border-gray-300 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="border border-paper-border rounded-lg px-2 py-1 text-xs bg-paper focus:outline-none focus:ring-1 focus:ring-violet-500"
               >
                 <option value="">Select status</option>
                 <option value="applied">Applied</option>
@@ -644,12 +644,12 @@ export default function ResumeEditor({
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-600 font-medium">Date</label>
+              <label className="text-xs text-paper-muted font-medium">Date</label>
               <input
                 type="date"
                 value={applyForm.appliedAt}
                 onChange={(e) => setApplyForm((f) => ({ ...f, appliedAt: e.target.value }))}
-                className="border border-gray-300 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="border border-paper-border rounded-lg px-2 py-1 text-xs bg-paper focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
             </div>
             <button
@@ -661,7 +661,7 @@ export default function ResumeEditor({
             </button>
             <button
               onClick={() => setShowApplyForm(false)}
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-xs text-paper-muted hover:text-paper-muted transition-colors"
             >
               Cancel
             </button>
@@ -671,7 +671,7 @@ export default function ResumeEditor({
 
       {/* Formatting toolbar (hidden in pure preview mode) */}
       {showEdit && (
-        <div className="border-b border-gray-200 px-4 py-1.5 flex items-center gap-0.5 flex-wrap bg-white flex-shrink-0">
+        <div className="border-b border-paper-border px-4 py-1.5 flex items-center gap-0.5 flex-wrap bg-paper flex-shrink-0">
           <ToolbarBtn label="H1" title="Heading 1" onClick={() => insertMarkdown("# ")} />
           <ToolbarBtn label="H2" title="Heading 2" onClick={() => insertMarkdown("## ")} />
           <ToolbarBtn label="H3" title="Heading 3" onClick={() => insertMarkdown("### ")} />
@@ -700,11 +700,11 @@ export default function ResumeEditor({
               value={markdown}
               onChange={(e) => handleChange(e.target.value)}
               spellCheck={false}
-              className="w-full h-full resize-none font-mono text-sm leading-relaxed text-gray-800 bg-white px-10 py-8 focus:outline-none"
+              className="w-full h-full resize-none font-mono text-sm leading-relaxed text-paper-ink bg-paper px-10 py-8 focus:outline-none"
               style={{ fontFamily: "var(--font-geist-mono), 'Courier New', monospace" }}
             />
           </Panel>
-          <PanelResizeHandle className="w-1 bg-gray-200 hover:bg-violet-400 active:bg-violet-500 transition-colors cursor-col-resize" />
+          <PanelResizeHandle className="w-1 bg-paper-border hover:bg-violet-400 active:bg-violet-500 transition-colors cursor-col-resize" />
           <Panel defaultSize={50} minSize={20}>
             <PdfPane
               blobUrl={pdfBlobUrl}
@@ -723,7 +723,7 @@ export default function ResumeEditor({
               value={markdown}
               onChange={(e) => handleChange(e.target.value)}
               spellCheck={false}
-              className="flex-1 resize-none font-mono text-sm leading-relaxed text-gray-800 bg-white px-10 py-8 focus:outline-none"
+              className="flex-1 resize-none font-mono text-sm leading-relaxed text-paper-ink bg-paper px-10 py-8 focus:outline-none"
               style={{ fontFamily: "var(--font-geist-mono), 'Courier New', monospace" }}
             />
           )}
@@ -742,11 +742,11 @@ export default function ResumeEditor({
 
       {/* Footer: word/char count (only shown when editor is visible) */}
       {showEdit && (
-        <div className="border-t border-gray-200 px-6 py-2 flex items-center justify-between flex-shrink-0">
-          <span className="text-xs text-gray-400">
+        <div className="border-t border-paper-border px-6 py-2 flex items-center justify-between flex-shrink-0">
+          <span className="text-xs text-paper-muted">
             Words: {wordCount.toLocaleString()}&nbsp;&nbsp;Characters: {charCount.toLocaleString()}
           </span>
-          <span className="text-xs bg-gray-100 text-gray-500 font-medium px-2 py-0.5 rounded">
+          <span className="text-xs bg-black/5 text-paper-muted font-medium px-2 py-0.5 rounded">
             Markdown
           </span>
         </div>
