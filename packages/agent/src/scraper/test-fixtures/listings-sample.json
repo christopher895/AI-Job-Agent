@@ -33,5 +33,13 @@
     "url": "https://hiddenco.example.com/jobs/2",
     "active": true,
     "is_visible": false
+  },
+  {
+    "id": "eee",
+    "company_name": "NoLoc Inc",
+    "title": "Mystery Intern",
+    "url": "https://noloc.example.com/jobs/1",
+    "active": true,
+    "is_visible": true
   }
 ]

@@ -52,7 +52,12 @@ feed sidesteps all of that.
   `maxPerEmail` slots.
 - **Cap:** no cap. Every job newly detected since the last poll is emailed. The
   15-minute diff window naturally keeps most emails small; a large batch push to
-  the repo just means a larger (but still accurate) email that cycle.
+  the repo just means a larger (but still accurate) email that cycle. This
+  assumes a valid prior snapshot exists — a scrape failure or a repo's
+  first-ever poll must not be treated as "zero prior listings," or an
+  uncapped email would blast the repo's entire current listing count as if it
+  were all new. (See `packages/agent/src/scraper/github-repos.ts`'s handling
+  of `scrapeGithubRepo` returning `null` vs. a missing prior snapshot.)
 
 ## Architecture
 

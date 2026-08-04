@@ -35,7 +35,7 @@ assertEqual(parseRepoUrl("not a url"), null, "parseRepoUrl: malformed input retu
 const fixture = readFileSync(join(__dirname, "test-fixtures", "listings-sample.json"), "utf-8");
 const jobs = parseListingsJson(fixture);
 
-assertEqual(jobs.length, 2, "parseListingsJson: keeps only active + visible entries");
+assertEqual(jobs.length, 3, "parseListingsJson: keeps only active + visible entries");
 assertEqual(
   jobs[0],
   {
@@ -55,6 +55,16 @@ assertEqual(
     url: "https://acme.example.com/jobs/xyz",
   },
   "parseListingsJson: is_visible defaults to visible when the field is missing"
+);
+assertEqual(
+  jobs[2],
+  {
+    title: "Mystery Intern",
+    company: "NoLoc Inc",
+    location: "",
+    url: "https://noloc.example.com/jobs/1",
+  },
+  "parseListingsJson: missing locations field maps to empty string"
 );
 assertEqual(parseListingsJson("not json"), [], "parseListingsJson: malformed JSON returns empty array");
 assertEqual(parseListingsJson("{}"), [], "parseListingsJson: non-array JSON returns empty array");

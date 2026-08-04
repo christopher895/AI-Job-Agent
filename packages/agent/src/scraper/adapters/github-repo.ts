@@ -55,18 +55,21 @@ export function parseListingsJson(raw: string): JobListing[] {
  * GitHub Contents API (which resolves the repo's default branch
  * automatically — no branch needs to be known or hardcoded) and returns
  * the active, visible listings. Never throws: any failure (bad URL, 404,
- * network error, GitHub rate limit) is logged and treated as "no jobs
- * this cycle" so one broken watched repo can't take down a scrape tick.
+ * network error, GitHub rate limit) is logged and the function returns
+ * `null` — meaning "couldn't determine current listings this cycle," so
+ * the caller should leave any prior snapshot untouched rather than wipe
+ * it. `[]` means the fetch succeeded and parsed cleanly but there are no
+ * active listings right now — a real, trustworthy zero.
  */
-export async function scrapeGithubRepo(repoUrl: string): Promise<JobListing[]> {
+export async function scrapeGithubRepo(repoUrl: string): Promise<JobListing[] | null> {
   const parsed = parseRepoUrl(repoUrl);
   if (!parsed) {
     console.warn(`[github-repo] Could not parse repo URL: ${repoUrl}`);
-    return [];
+    return null;
   }
   const { owner, repo } = parsed;
 
-  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/.github/scripts/listings.json`;
+  const apiUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/.github/scripts/listings.json`;
 
   let res: Response;
   try {
@@ -81,12 +84,12 @@ export async function scrapeGithubRepo(repoUrl: string): Promise<JobListing[]> {
     });
   } catch (err) {
     console.warn(`[github-repo] ${owner}/${repo}: fetch failed — ${err instanceof Error ? err.message : err}`);
-    return [];
+    return null;
   }
 
   if (!res.ok) {
     console.warn(`[github-repo] ${owner}/${repo}: HTTP ${res.status} fetching listings.json`);
-    return [];
+    return null;
   }
 
   let raw: string;
@@ -94,7 +97,7 @@ export async function scrapeGithubRepo(repoUrl: string): Promise<JobListing[]> {
     raw = await res.text();
   } catch (err) {
     console.warn(`[github-repo] ${owner}/${repo}: failed reading response body — ${err instanceof Error ? err.message : err}`);
-    return [];
+    return null;
   }
 
   return parseListingsJson(raw);

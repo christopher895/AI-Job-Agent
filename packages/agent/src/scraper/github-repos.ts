@@ -10,14 +10,32 @@ function repoLabel(repoUrl: string): string {
 }
 
 async function processWatchedRepo(repoUrl: string): Promise<JobListing[]> {
-  const name = repoLabel(repoUrl);
+  const parsed = parseRepoUrl(repoUrl);
+  if (!parsed) {
+    console.warn(`[github-repo] Skipping unparseable repo URL: ${repoUrl}`);
+    return [];
+  }
+  const name = `${parsed.owner}/${parsed.repo}`;
+
   const record = await getOrCreateCompany(name, repoUrl, "github-repo");
 
   const currentJobs = await scrapeGithubRepo(repoUrl);
+  if (currentJobs === null) {
+    console.warn(`[github-repo] ${name}: scrape failed this cycle, leaving prior snapshot intact`);
+    return [];
+  }
+
   const currentHashes = currentJobs.map((j) => hashJob(j.url));
 
   const prevSnapshot = await getLatestSnapshot(record.id);
-  const prevHashes: string[] = prevSnapshot?.job_hashes ?? [];
+
+  if (!prevSnapshot) {
+    await saveSnapshot(record.id, currentHashes);
+    console.log(`[github-repo] ${name}: seeded ${currentHashes.length} listing(s), no email on first run`);
+    return [];
+  }
+
+  const prevHashes: string[] = prevSnapshot.job_hashes ?? [];
 
   const newHashSet = new Set(diffSnapshots(prevHashes, currentHashes));
   const hashToJob = new Map(currentJobs.map((j, i) => [currentHashes[i], j]));
@@ -34,7 +52,15 @@ async function processWatchedRepo(repoUrl: string): Promise<JobListing[]> {
 
 export async function runWatchedRepoScrapes(): Promise<void> {
   const prefs = await getPreferences();
-  const watchedRepos = prefs.watchedRepos ?? [];
+  const rawWatchedRepos = prefs.watchedRepos ?? [];
+
+  const seenRepoLabels = new Set<string>();
+  const watchedRepos = rawWatchedRepos.filter((url) => {
+    const label = repoLabel(url);
+    if (seenRepoLabels.has(label)) return false;
+    seenRepoLabels.add(label);
+    return true;
+  });
 
   if (watchedRepos.length === 0) return;
 
