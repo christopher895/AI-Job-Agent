@@ -206,7 +206,7 @@ function LocationTagInput({
 }
 
 export default function PreferencesForm({ initial }: { initial: Preferences }) {
-  const [prefs, setPrefs] = useState<Preferences>(initial);
+  const [prefs, setPrefs] = useState<Preferences>({ ...initial, watchedRepos: initial.watchedRepos ?? [] });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
