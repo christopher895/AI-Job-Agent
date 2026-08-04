@@ -317,5 +317,41 @@ function check(label: string, ok: boolean, detail?: string) {
   check("flat-spa", !result.text.includes("Link0"), "nav link text leaked into extracted JD");
 }
 
+// Case 13: a short, bare (non-bold) mid-section lead-in label — e.g. "For Los
+// Angeles County (unincorporated) Candidates:" ahead of a Fair Chance Act
+// disclosure — must NOT be mistaken for a new section heading. It matches
+// neither the boilerplate blacklist nor a known JD heading, so treating it
+// as heading-like would reset the active "Job Information" boilerplate drop
+// and let the disclosure text right after it leak through.
+{
+  const html = `
+<html><head><title>Engineer - Acme</title></head>
+<body><article>
+<h1>Engineer</h1>
+<h2>Responsibilities</h2>
+<p>${"Own the reliability of our payment processing pipeline end to end. ".repeat(5)}</p>
+<p>Job Information</p>
+<p>${"Compensation for this role varies by location and experience level and is reviewed annually. ".repeat(
+    3
+  )}</p>
+<p>For Los Angeles County (unincorporated) Candidates:</p>
+<p>Qualified applicants with arrest or conviction records will be considered for employment in accordance with the Los Angeles County Fair Chance Ordinance for Employers and the California Fair Chance Act.</p>
+</article></body></html>`;
+  const url = "https://acmecorp.com/careers/engineer-3";
+  const result = extractFromHtml(html, url);
+
+  check("mid-section-label", result.text.includes("payment processing pipeline"), "Responsibilities content was stripped");
+  check(
+    "mid-section-label",
+    !result.text.includes("Compensation for this role"),
+    "Job Information/compensation section was not stripped"
+  );
+  check(
+    "mid-section-label",
+    !result.text.includes("Fair Chance"),
+    "Fair Chance Act disclosure leaked through after the mid-section label reset the drop"
+  );
+}
+
 console.log(allPass ? "\n✓ fetch-jd extraction test PASSED" : "\n✗ fetch-jd extraction test FAILED");
 process.exit(allPass ? 0 : 1);

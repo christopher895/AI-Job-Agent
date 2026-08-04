@@ -294,9 +294,17 @@ const BOILERPLATE_SECTION_HEADINGS: RegExp[] = [
   /^how\s+to\s+apply/i,
   /^application\s+process/i,
   /^equal\s+(employment\s+)?opportunity/i,
-  /^diversity(,?\s*equity(,?\s*(&|and)?\s*inclusion)?)?$/i,
+  // "Diversity", "Diversity & Inclusion", "Diversity, Equity & Inclusion",
+  // "Diversity, Equity, and Inclusion" — the original pattern required
+  // "Equity" between "Diversity" and "Inclusion", missing the very common
+  // "Diversity & Inclusion" (no Equity) phrasing.
+  /^diversity(,?\s*equity)?(,?\s*(&|and)?\s*inclusion)?$/i,
   /^accessibility$/i,
-  /^accommodations?$/i,
+  // Matches "Accommodation(s)" alone or brand-prefixed ("TikTok Accommodation").
+  /(^|\s)accommodations?$/i,
+  // Compensation/legal disclosure wrapper section on some ATS templates
+  // (pay transparency, background-check jurisdiction notices, etc.).
+  /^job\s+information$/i,
 ];
 
 // Headerless boilerplate paragraphs — matched by content signature, dropped
@@ -310,11 +318,33 @@ const BOILERPLATE_PARAGRAPH_PATTERNS: RegExp[] = [
   /background check/i,
   /e-?verify/i,
   /without regard to (race|religion|color|sex|national origin)/i,
+  // Fair Chance Act / "ban the box" criminal-history disclosures, common on
+  // California/LA/NYC job postings.
+  /fair chance act/i,
+  /arrest or conviction records?/i,
+  /criminal history/i,
 ];
 
 const BOILERPLATE_PARAGRAPH_MIN_LENGTH = 120;
 const PSEUDO_HEADING_MAX_LENGTH = 60;
 const BLOCK_SELECTOR = "h1, h2, h3, h4, h5, h6, p, li";
+
+// Real JD section headings that legitimately appear as bare, unstyled short
+// <p> tags on some templates (no <strong>/<b> child) — used to widen
+// pseudo-heading detection just enough to catch these specific known-good
+// headings, without treating every short line of prose as a heading (which
+// misclassifies short lead-in labels like "For Los Angeles County
+// (unincorporated) Candidates:" as a new section boundary and prematurely
+// ends an active boilerplate drop right before the real disclosure text).
+const JD_POSITIVE_HEADINGS: RegExp[] = [
+  /^responsibilit(?:y|ies)$/i,
+  /^(minimum |preferred |basic |required )?qualifications$/i,
+  /^requirements$/i,
+  /^duties$/i,
+  /^about the (role|team|job|position)$/i,
+  /^what you.?ll do$/i,
+  /^who you are$/i,
+];
 const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
 
 function isBoilerplateHeading(text: string, company?: string): boolean {
@@ -355,10 +385,20 @@ function stripBoilerplate(contentHtml: string, company?: string): string {
     // Many ATS templates render section titles as <p><strong>Benefits</strong></p>,
     // or — on custom-built career microsites with no semantic heading tags at
     // all — as a bare short <p>Benefits</p> styled bold purely via CSS class.
-    // Treating any short standalone <p> as heading-like is safe: it only
-    // resets `dropping` state, which is a no-op unless the text also matches
-    // the boilerplate blacklist below.
-    const isPseudoHeading = tag === "p" && text.length > 0 && text.length <= PSEUDO_HEADING_MAX_LENGTH;
+    // Treating *any* short standalone <p> as heading-like is unsafe: a short
+    // lead-in label mid-section (e.g. "For Los Angeles County (unincorporated)
+    // Candidates:") would also qualify, and since it matches neither the
+    // boilerplate blacklist nor a real JD heading, it would reset `dropping`
+    // to false and let the disclosure text right after it leak through. So a
+    // bare (non-bold) short <p> only counts as a heading when its text is
+    // already known — either blacklisted or a real JD section name.
+    const shortText = tag === "p" && text.length > 0 && text.length <= PSEUDO_HEADING_MAX_LENGTH;
+    const boldChild = shortText && normalize($el.children("strong, b").text()) === text;
+    const knownHeadingText =
+      shortText &&
+      (isBoilerplateHeading(text, company) ||
+        JD_POSITIVE_HEADINGS.some((re) => re.test(text.replace(/:+\s*$/, "").trim())));
+    const isPseudoHeading = boldChild || knownHeadingText;
 
     const isHeading = HEADING_TAGS.has(tag) || isPseudoHeading;
 
@@ -381,8 +421,12 @@ function stripBoilerplate(contentHtml: string, company?: string): string {
 // unrelated marketing copy) that merely happened to clear MIN_LENGTH — e.g.
 // on client-rendered career microsites, the raw (pre-JS) HTML body is often
 // all nav/footer text with no JD content anywhere in the DOM yet.
+// Deliberately excludes a bare `duties` — it false-positives inside legal
+// boilerplate ("...criminal history may affect the following job duties...")
+// which would otherwise make a wrong, boilerplate-only Readability pick look
+// like it already has real JD content and block the full-body fallback below.
 const JD_SIGNAL_RE =
-  /\bresponsibilit(?:y|ies)\b|\brequirements?\b|\bqualifications?\b|\bwhat you.?ll do\b|\bwho you are\b|\bwhat we.?re looking for\b|\bduties\b|\bminimum qualifications\b/i;
+  /\bresponsibilit(?:y|ies)\b|\brequirements?\b|\bqualifications?\b|\bwhat you.?ll do\b|\bwho you are\b|\bwhat we.?re looking for\b|\bminimum qualifications\b/i;
 
 function hasJdSignal(text: string): boolean {
   return JD_SIGNAL_RE.test(text);
