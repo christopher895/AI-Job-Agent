@@ -52,6 +52,23 @@ export function renderMarkdown(master: MasterResume, tailored: TailoredResume): 
   const contact = [b.location, b.email, b.phone, b.github, b.portfolio, b.linkedin].filter(Boolean);
   if (contact.length) lines.push(contact.join(" · "));
 
+  // Section order below mirrors render-pdf.ts's buildLatex() exactly (Education,
+  // Experience, Projects, Extracurriculars, Skills) so the editable markdown a
+  // user sees matches the order the actual PDF prints — previously this function
+  // emitted Experience/Projects/Skills/Education/Extracurriculars, which put
+  // Skills above Education in the editor while the PDF rendered the opposite.
+
+  // Education (untailored — facts are fixed, never seen by the tailorer).
+  if (master.education.length) {
+    lines.push("", "## Education");
+    for (const ed of master.education) {
+      lines.push("", `**${ed.school}** — ${ed.degrees.join(", ")} · ${ed.location} · ${ed.graduation}`);
+      if (ed.gpa) lines.push(`GPA: ${ed.gpa}`);
+      if (ed.notes.length) lines.push(`Notes: ${ed.notes.join(", ")}`);
+      if (ed.coursework.length) lines.push(`Coursework: ${ed.coursework.join(", ")}`);
+    }
+  }
+
   const renderSections = (heading: string, sections: TailoredResume["experience"]) => {
     if (!sections.length) return;
     lines.push("", `## ${heading}`);
@@ -65,6 +82,15 @@ export function renderMarkdown(master: MasterResume, tailored: TailoredResume): 
 
   renderSections("Experience", tailored.experience);
   renderSections("Projects", tailored.projects);
+
+  // Extracurriculars (untailored — copied verbatim, never seen by the tailorer).
+  if (master.extracurriculars.length) {
+    lines.push("", "## Extracurriculars");
+    for (const ex of master.extracurriculars) {
+      lines.push("", `**${ex.company}** — ${ex.title} · ${ex.location} · ${ex.start}–${ex.end}`);
+      for (const bullet of ex.bullets) lines.push(`- ${bullet.text}`);
+    }
+  }
 
   // Skills: 4 fixed categories, never flattened together. Within each category,
   // front-load whichever items the tailoring pass ranked as JD-relevant — but
@@ -83,26 +109,6 @@ export function renderMarkdown(master: MasterResume, tailored: TailoredResume): 
     lines.push(`**Tools & Technologies:** ${orderWithinCategory(master.skills.tools).join(", ")}`);
   if (master.skills.interests.length)
     lines.push(`**Interests:** ${master.skills.interests.join(", ")}`);
-
-  // Education (untailored — facts are fixed, never seen by the tailorer).
-  if (master.education.length) {
-    lines.push("", "## Education");
-    for (const ed of master.education) {
-      lines.push("", `**${ed.school}** — ${ed.degrees.join(", ")} · ${ed.location} · ${ed.graduation}`);
-      if (ed.gpa) lines.push(`GPA: ${ed.gpa}`);
-      if (ed.notes.length) lines.push(`Notes: ${ed.notes.join(", ")}`);
-      if (ed.coursework.length) lines.push(`Coursework: ${ed.coursework.join(", ")}`);
-    }
-  }
-
-  // Extracurriculars (untailored — copied verbatim, never seen by the tailorer).
-  if (master.extracurriculars.length) {
-    lines.push("", "## Extracurriculars");
-    for (const ex of master.extracurriculars) {
-      lines.push("", `**${ex.company}** — ${ex.title} · ${ex.location} · ${ex.start}–${ex.end}`);
-      for (const bullet of ex.bullets) lines.push(`- ${bullet.text}`);
-    }
-  }
 
   return lines.join("\n");
 }

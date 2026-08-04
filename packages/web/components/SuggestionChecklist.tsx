@@ -1,8 +1,79 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { api, Suggestion } from "../lib/api";
 
 type Item = Suggestion & { accepted: boolean };
+
+type DiffToken = { text: string; type: "same" | "removed" | "added" };
+
+/**
+ * Word-level LCS diff between the master's original bullet and the current
+ * (possibly hand-edited) proposed text — lets the checklist show exactly
+ * what changed instead of two separate blobs of text to compare by eye.
+ * Whitespace runs are kept as their own tokens (via the capturing split) so
+ * spacing survives round-tripping through the diff unchanged.
+ */
+function wordDiff(before: string, after: string): DiffToken[] {
+  const a = before.split(/(\s+)/);
+  const b = after.split(/(\s+)/);
+  const n = a.length;
+  const m = b.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    }
+  }
+  const tokens: DiffToken[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      tokens.push({ text: a[i], type: "same" });
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      tokens.push({ text: a[i], type: "removed" });
+      i++;
+    } else {
+      tokens.push({ text: b[j], type: "added" });
+      j++;
+    }
+  }
+  while (i < n) {
+    tokens.push({ text: a[i], type: "removed" });
+    i++;
+  }
+  while (j < m) {
+    tokens.push({ text: b[j], type: "added" });
+    j++;
+  }
+  return tokens;
+}
+
+function WordDiff({ before, after }: { before: string; after: string }) {
+  const tokens = useMemo(() => wordDiff(before, after), [before, after]);
+  if (before === after) return null;
+  return (
+    <p className="text-xs leading-relaxed mb-1.5 whitespace-pre-wrap">
+      {tokens.map((t, i) =>
+        t.type === "removed" ? (
+          <span key={i} className="text-red-500 line-through">
+            {t.text}
+          </span>
+        ) : t.type === "added" ? (
+          <span key={i} className="text-green-700 underline decoration-green-400">
+            {t.text}
+          </span>
+        ) : (
+          <span key={i} className="text-gray-500">
+            {t.text}
+          </span>
+        )
+      )}
+    </p>
+  );
+}
 
 export default function SuggestionChecklist({
   resumeId,
@@ -88,13 +159,16 @@ export default function SuggestionChecklist({
                   </span>
                 </div>
                 {it.kind === "bullet-rewrite" ? (
-                  <textarea
-                    value={it.suggestedText}
-                    onChange={(e) => editText(it.id, e.target.value)}
-                    rows={2}
-                    onClick={(e) => e.preventDefault()}
-                    className="w-full text-sm font-mono border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
-                  />
+                  <>
+                    {it.originalText && <WordDiff before={it.originalText} after={it.suggestedText} />}
+                    <textarea
+                      value={it.suggestedText}
+                      onChange={(e) => editText(it.id, e.target.value)}
+                      rows={2}
+                      onClick={(e) => e.preventDefault()}
+                      className="w-full text-sm font-mono border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
+                    />
+                  </>
                 ) : (
                   <p className="text-sm font-medium text-gray-900">
                     Add &quot;{it.suggestedText}&quot; to {it.targetId}
