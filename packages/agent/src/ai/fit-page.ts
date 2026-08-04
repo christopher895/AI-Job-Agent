@@ -135,8 +135,8 @@ Return JSON: { "fixes": [{ "original": "...", "revised": "..." }] }`,
  * `opts.skipWidowFix` exists for flows where bullets must stay verbatim
  * except for explicitly-approved edits (the suggestion-based tailoring
  * flow) — the widow-fix pass sends untouched bullets to an LLM to reword
- * them, which would silently violate that guarantee. The old general-resume
- * flow, which already does full AI rewriting, keeps the widow-fix on.
+ * them, which would silently violate that guarantee. Callers that do full
+ * AI rewriting can leave the widow-fix on (the default).
  *
  * Returns the final (possibly shortened) markdown alongside the PDF so both
  * can be stored consistently in the database. Logs a warning if the content

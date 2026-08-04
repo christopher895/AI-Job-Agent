@@ -241,8 +241,6 @@ export const api = {
     fd.append("file", file);
     return requestFormData<MasterResume>("POST", "/master-resume/import", fd);
   },
-  getGeneralResume: () => request<Resume>("GET", "/general-resume"),
-  generateGeneralResume: () => request<{ id: string; status: "pending" }>("POST", "/general-resume/generate"),
   listApplied: () => request<AppliedJob[]>("GET", "/applied"),
   postApplied: (body: {
     company: string;
