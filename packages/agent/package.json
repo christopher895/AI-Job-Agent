@@ -19,6 +19,7 @@
     "test:claude-cli": "tsx src/ai/test-claude-cli.ts",
     "test:render-pdf": "tsx src/ai/test-render-pdf.ts",
     "test:internal-secret": "tsx src/api/test-internal-secret.ts",
+    "test:playground-usage": "tsx src/db/test-playground-usage.ts",
     "tailor": "tsx src/ai/run-tailor.ts"
   },
   "dependencies": {
