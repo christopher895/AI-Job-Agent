@@ -16,7 +16,7 @@
 - Session cookie: JWT strategy, 30-day `maxAge`, httpOnly (Auth.js default).
 - npm workspaces monorepo (`packages/web`, `packages/agent`) — install deps with `--workspace=packages/<name>` from the repo root.
 - No unrelated refactors: `packages/web/lib/api.ts`'s existing per-call error-handling duplication (`request`/`requestBlob`/`requestBlobWithFilename` each parse errors inline) is preserved as-is; the 401 check is added to each of the three, not factored into a new shared helper.
-- Work happens in an isolated git worktree (branch `feat/private-auth` already created off `main`; the design spec is already committed there at `docs/superpowers/specs/2026-08-03-private-auth-design.md`).
+- Work happens in an isolated git worktree (branch `feat/auth-lockdown` created off `main`; the design spec and this plan are already committed there).
 
 ---
 
