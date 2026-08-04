@@ -4,7 +4,6 @@ import Link from "next/link";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, Resume } from "../lib/api";
 import { STAGE_SEGMENTS, segmentIndex } from "../lib/resumeStage";
-import SuggestionChecklist from "./SuggestionChecklist";
 
 type ApplyForm = { status: string; appliedAt: string };
 type ViewMode = "edit" | "split" | "preview";
@@ -116,7 +115,6 @@ export default function ResumeEditor({
     job_url: resume.job_url,
     created_at: resume.created_at,
     stage: resume.stage,
-    suggestions: resume.suggestions,
   });
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -266,7 +264,6 @@ export default function ResumeEditor({
           job_url: fresh.job_url,
           created_at: fresh.created_at,
           stage: fresh.stage,
-          suggestions: fresh.suggestions,
         });
         setMarkdown(fresh.markdown);
         setJobTitle(fresh.job_title ?? "");
@@ -366,7 +363,7 @@ export default function ResumeEditor({
                   <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                 </svg>
                 <p className="text-xs text-gray-500 mt-4">
-                  This usually takes well under a minute. This page updates automatically.
+                  The generate → critique → revise loop usually takes a few minutes. This page updates automatically.
                 </p>
               </>
             ) : (
@@ -402,31 +399,6 @@ export default function ResumeEditor({
             )}
           </div>
         </div>
-      </div>
-    );
-  }
-
-  if (meta.status === "awaiting_review") {
-    return (
-      <div className="flex flex-col h-full bg-white">
-        <div className="border-b border-gray-200 px-6 py-3 flex-shrink-0">
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 w-fit transition-colors">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-            Dashboard
-          </Link>
-        </div>
-        <div className="px-6 pt-4 flex-shrink-0">
-          <p className="text-sm font-medium text-gray-900">
-            Review suggestions{title ? ` for ${title}` : ""}
-          </p>
-        </div>
-        <SuggestionChecklist
-          resumeId={resume.id}
-          suggestions={meta.suggestions ?? []}
-          onApplied={() => setMeta((m) => ({ ...m, status: "pending", stage: null }))}
-        />
       </div>
     );
   }

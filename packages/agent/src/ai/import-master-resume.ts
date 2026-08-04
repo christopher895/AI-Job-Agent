@@ -38,54 +38,10 @@ OUTPUT: a single JSON object matching this exact shape:
 }
 Return ONLY the JSON object.`;
 
-/**
- * The LLM invents entry/bullet ids during import with no uniqueness guarantee
- * — two similarly-named roles or projects can collide. Renumbers everything
- * deterministically after the fact so ids are always globally unique,
- * regardless of what the model produced. Shared across experience, projects,
- * AND extracurriculars — format.ts's buildMeta() keys a Map by entry id
- * across experience+extracurriculars together, so cross-category uniqueness
- * matters too, not just within one category.
- */
-export function dedupeIds(mr: MasterResume): MasterResume {
-  const seenEntryIds = new Set<string>();
-
-  function uniqueEntryId(base: string): string {
-    let id = base || "entry";
-    let n = 2;
-    while (seenEntryIds.has(id)) {
-      id = `${base}-${n}`;
-      n++;
-    }
-    seenEntryIds.add(id);
-    return id;
-  }
-
-  function renumberBullets<B extends { id: string }>(entryId: string, bullets: B[]): B[] {
-    return bullets.map((b, i) => ({ ...b, id: `${entryId}-${i + 1}` }));
-  }
-
-  const experience = mr.experience.map((e) => {
-    const id = uniqueEntryId(e.id);
-    return { ...e, id, bullets: renumberBullets(id, e.bullets) };
-  });
-  const projects = mr.projects.map((p) => {
-    const id = uniqueEntryId(p.id);
-    return { ...p, id, bullets: renumberBullets(id, p.bullets) };
-  });
-  const extracurriculars = mr.extracurriculars.map((e) => {
-    const id = uniqueEntryId(e.id);
-    return { ...e, id, bullets: renumberBullets(id, e.bullets) };
-  });
-
-  return { ...mr, experience, projects, extracurriculars };
-}
-
 export async function importMasterResume(rawText: string): Promise<MasterResume> {
-  const parsed = await completeJSON(MasterResumeSchema, {
+  return completeJSON(MasterResumeSchema, {
     system: SYSTEM_PROMPT,
     user: rawText,
     temperature: 0.1,
   });
-  return dedupeIds(parsed);
 }
