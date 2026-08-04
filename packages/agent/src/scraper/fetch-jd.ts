@@ -201,6 +201,102 @@ function extractJsonLdLocation($: CheerioAPI): string | undefined {
   return undefined;
 }
 
+// Section headings that mark the START of a boilerplate section to drop
+// entirely (heading + everything until the next heading). Deliberately
+// blacklist-only — anything not matched here is kept by default, so
+// Requirements/Responsibilities/Qualifications/Skills sections are never
+// touched.
+const BOILERPLATE_SECTION_HEADINGS: RegExp[] = [
+  /^(the\s+)?benefits?(\s+(&|and)\s+perks?)?$/i,
+  /^perks?(\s+(&|and)\s+benefits?)?$/i,
+  /^(our\s+)?compensation(\s+(&|and)\s+benefits?)?$/i,
+  /^why\s+(join|work\s+(at|for))\s+us/i,
+  /^about\s+(us|the\s+company|our\s+company|this\s+company)\b/i,
+  /^how\s+to\s+apply/i,
+  /^application\s+process/i,
+  /^equal\s+(employment\s+)?opportunity/i,
+  /^diversity(,?\s*equity(,?\s*(&|and)?\s*inclusion)?)?$/i,
+  /^accessibility$/i,
+  /^accommodations?$/i,
+];
+
+// Headerless boilerplate paragraphs — matched by content signature, dropped
+// wherever they appear regardless of heading structure. Gated by
+// BOILERPLATE_PARAGRAPH_MIN_LENGTH below so a short legitimate requirement
+// bullet (e.g. "Must be able to pass a background check for site access")
+// is never caught by the same pattern as a long-form legal statement.
+const BOILERPLATE_PARAGRAPH_PATTERNS: RegExp[] = [
+  /equal opportunity employer/i,
+  /reasonable accommodation/i,
+  /background check/i,
+  /e-?verify/i,
+  /without regard to (race|religion|color|sex|national origin)/i,
+];
+
+const BOILERPLATE_PARAGRAPH_MIN_LENGTH = 120;
+const PSEUDO_HEADING_MAX_LENGTH = 60;
+const BLOCK_SELECTOR = "h1, h2, h3, h4, h5, h6, p, li";
+const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
+
+function isBoilerplateHeading(text: string, company?: string): boolean {
+  const cleaned = text.replace(/:+\s*$/, "").trim();
+  if (BOILERPLATE_SECTION_HEADINGS.some((re) => re.test(cleaned))) return true;
+  if (company) {
+    const companyRe = new RegExp(`^about\\s+${escapeRegExp(company)}\\b`, "i");
+    if (companyRe.test(cleaned)) return true;
+  }
+  return false;
+}
+
+function isBoilerplateParagraph(text: string): boolean {
+  if (text.length < BOILERPLATE_PARAGRAPH_MIN_LENGTH) return false;
+  return BOILERPLATE_PARAGRAPH_PATTERNS.some((re) => re.test(text));
+}
+
+// Drops known-boilerplate sections (benefits, EEO/legal, "how to apply",
+// company blurbs) from Readability's parsed HTML before it's flattened to
+// text. This content is repeated on every tailor + critic call in the
+// generate-critique-revise loop (up to 6x per /tailor request) and never
+// helps résumé tailoring — the tailoring prompt only cares about
+// responsibilities/requirements/qualifications.
+//
+// Walks li individually rather than whole ul/ol: treating a whole list as
+// one block let one long sibling <li> drag a short, legitimate sibling <li>
+// (e.g. a one-line background-check requirement) over the paragraph-length
+// floor and get it removed too.
+function stripBoilerplate(contentHtml: string, company?: string): string {
+  const $ = cheerio.load(contentHtml);
+  let dropping = false;
+
+  $(BLOCK_SELECTOR).each((_, el) => {
+    const $el = $(el);
+    const text = normalize($el.text());
+    const tag = $el.prop("tagName")?.toLowerCase() ?? "";
+
+    // Many ATS templates render section titles as <p><strong>Benefits</strong></p>
+    // instead of a real heading tag.
+    const isPseudoHeading =
+      tag === "p" &&
+      text.length > 0 &&
+      text.length <= PSEUDO_HEADING_MAX_LENGTH &&
+      normalize($el.children("strong, b").text()) === text;
+
+    const isHeading = HEADING_TAGS.has(tag) || isPseudoHeading;
+
+    if (isHeading) {
+      dropping = isBoilerplateHeading(text, company);
+      if (dropping) $el.remove();
+      return;
+    }
+
+    if (dropping || isBoilerplateParagraph(text)) {
+      $el.remove();
+    }
+  });
+
+  return normalize($.root().text());
+}
+
 export function extractFromHtml(
   html: string,
   url: string
@@ -219,7 +315,10 @@ export function extractFromHtml(
   try {
     const dom = new JSDOM(cleanedHtml, { url });
     const article = new Readability(dom.window.document).parse();
-    text = normalize(article?.textContent ?? "");
+    if (article) {
+      const stripped = stripBoilerplate(article.content ?? "", titleCompany.company);
+      text = stripped.length >= MIN_LENGTH ? stripped : normalize(article.textContent ?? "");
+    }
   } catch {
     text = "";
   }
