@@ -1,10 +1,13 @@
 import { Router } from "express";
+import multer from "multer";
 import { getMasterResume, updateMasterResume } from "../../db/queries";
 import { MasterResumeSchema } from "../../ai/types";
 import { renderMasterResumePdf } from "../../ai/render-pdf";
 import { countPdfPages } from "../../ai/fit-page";
+import { importMasterResume } from "../../ai/import-master-resume";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 // GET /api/master-resume
 router.get("/", async (_req, res) => {
@@ -40,6 +43,45 @@ router.post("/preview-pdf", async (req, res) => {
   } catch (err) {
     console.error("[master-resume] preview pdf failed:", err);
     res.status(500).json({ error: "PDF generation failed" });
+  }
+});
+
+// POST /api/master-resume/import — parses pasted text or an uploaded PDF into a
+// MasterResume. Never writes to the DB; the frontend holds the result as unsaved
+// form state, same as any other in-form edit, until PUT /api/master-resume is called.
+router.post("/import", upload.single("file"), async (req, res) => {
+  let rawText: string;
+
+  if (req.file) {
+    try {
+      const { PDFParse } = await import("pdf-parse");
+      const parser = new PDFParse({ data: req.file.buffer });
+      const parsed = await parser.getText({ pageJoiner: "" });
+      await parser.destroy();
+      rawText = parsed.text;
+    } catch (err) {
+      console.error("[master-resume] pdf text extraction failed:", err);
+      res.status(400).json({ error: "Could not read text from the uploaded PDF." });
+      return;
+    }
+  } else if (typeof req.body?.text === "string" && req.body.text.trim()) {
+    rawText = req.body.text;
+  } else {
+    res.status(400).json({ error: "Provide resume text or upload a PDF file." });
+    return;
+  }
+
+  if (!rawText.trim()) {
+    res.status(400).json({ error: "No text could be extracted — try pasting plain text instead." });
+    return;
+  }
+
+  try {
+    const master = await importMasterResume(rawText);
+    res.json(master);
+  } catch (err) {
+    console.error("[master-resume] import failed:", err);
+    res.status(500).json({ error: "Could not parse the resume — try pasting plain text instead." });
   }
 });
 
