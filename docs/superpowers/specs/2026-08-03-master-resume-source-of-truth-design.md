@@ -183,7 +183,8 @@ dormant general-resume path.)
    a checkbox, the `groundedness` badge, and an editable text field
    (pre-filled with `suggestedText`) so wording can be hand-tweaked before
    acceptance.
-4. `POST /api/resumes/:id/apply-suggestions` with the (possibly edited)
+4. `POST /api/resume/:id/apply-suggestions` (singular, matching the existing
+   `/resume/:id/pdf` and `/resume/:id/email` routes) with the (possibly edited)
    accepted suggestions — backend calls `applySuggestions(master, accepted)`,
    renders markdown via the existing `renderMarkdown(result.master,
    result.tailored)`, writes the final `suggestions` array back (now with
