@@ -159,7 +159,7 @@ web/
 - Google Sheets API v4 (googleapis npm package) — append/update rows on apply
 
 ### Auth
-- None — private URL, single user (Christopher only)
+- Google OAuth (Auth.js), restricted to Christopher's email via a single-email allowlist. The Next.js server is the only caller of the agent API — a BFF proxy (`/api/proxy/*`) attaches a private shared secret (`INTERNAL_API_SECRET`) that the agent API requires on every `/api` request. See `docs/superpowers/specs/2026-08-03-private-auth-design.md`.
 
 ### Infra
 - Railway (deployment), Docker Compose (local Postgres)
@@ -275,9 +275,15 @@ OPENAI_MODEL                  # defaults to gpt-4o
 
 RESEND_API_KEY
 YOUR_EMAIL
-WEB_URL                       # web app URL — CORS + "Tailor resume" email links
+WEB_URL                       # web app URL — "Tailor resume" email links
 APP_URL
-NEXT_PUBLIC_API_URL           # agent API URL the web app calls — baked in at Next.js build time (needs a Docker build arg on Railway, not just a runtime env var)
+AGENT_API_URL                  # agent API URL the web app's server proxies to — private, server-only, not exposed to the browser
+AUTH_SECRET                    # session cookie signing secret for Auth.js
+AUTH_TRUST_HOST                # set to "true" on Railway (behind a reverse proxy)
+GOOGLE_CLIENT_ID               # Google OAuth client, from console.cloud.google.com
+GOOGLE_CLIENT_SECRET
+AUTH_ALLOWED_EMAIL             # the only Google account allowed to sign in
+INTERNAL_API_SECRET            # shared secret between the web app's proxy and the agent API
 
 GOOGLE_SHEETS_SPREADSHEET_ID
 GOOGLE_SERVICE_ACCOUNT_JSON   # stringified service account credentials
@@ -293,7 +299,7 @@ See `.env.example` for the authoritative, commented list.
 - Husky pre-commit hook blocks `.env` files and common API key patterns from being staged.
 - If keys are ever exposed: rotate immediately in the provider dashboard, then run `git filter-repo --invert-paths --path .env --force` + force push.
 - `auth.json` (Playwright session cookies) is gitignored.
-- No auth on the web app — keep the Railway URL private.
+- The web app is gated behind Google sign-in restricted to Christopher's email (`AUTH_ALLOWED_EMAIL`); the agent API rejects any request without the correct `INTERNAL_API_SECRET` header, so it isn't reachable directly even if its URL leaks.
 
 ## Available Claude Code Skills
 
