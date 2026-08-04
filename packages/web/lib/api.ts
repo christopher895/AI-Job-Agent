@@ -1,5 +1,17 @@
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api";
 
+export type Suggestion = {
+  id: string;
+  kind: "bullet-rewrite" | "skill-addition";
+  targetId: string;
+  keyword: string;
+  originalText?: string;
+  suggestedText: string;
+  groundedness: "grounded" | "extrapolated";
+  rationale: string;
+  accepted: boolean | null;
+};
+
 export type ResumeListItem = {
   id: string;
   job_title: string | null;
@@ -10,11 +22,11 @@ export type ResumeListItem = {
   /** Error from the most recent PDF render attempt; null if the last attempt succeeded. */
   pdf_error: string | null;
   /** 'pending' while the generate->critique->revise pipeline is still running in the background. */
-  status: "pending" | "ready" | "failed";
+  status: "pending" | "awaiting_review" | "ready" | "failed";
   /** Error from the tailoring pipeline itself, set when status = 'failed'. */
   error: string | null;
-  /** Current pipeline step while status = 'pending' (e.g. "Drafting resume (pass 1)"); null otherwise. */
   stage: string | null;
+  suggestions: Suggestion[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -193,6 +205,8 @@ export const api = {
     location?: string;
   }) =>
     request<{ id: string; status: "pending" }>("POST", "/tailor", body),
+  applySuggestions: (id: string, accepted: Suggestion[]) =>
+    request<{ id: string; status: "pending" }>("POST", `/resume/${id}/apply-suggestions`, { accepted }),
   getMasterResume: () => request<MasterResume>("GET", "/master-resume"),
   putMasterResume: (data: MasterResume) =>
     request<{ updated: boolean }>("PUT", "/master-resume", data),

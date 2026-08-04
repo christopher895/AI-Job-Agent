@@ -87,6 +87,11 @@ export default function ResumeCard({
                 Generating…
               </span>
             )}
+            {resume.status === "awaiting_review" && (
+              <span className="text-violet-600 bg-violet-50 border border-violet-200 rounded px-1.5 py-0.5 text-[10px] font-medium">
+                Needs review
+              </span>
+            )}
             {resume.status === "failed" && (
               <span className="text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5 text-[10px] font-medium">
                 Failed

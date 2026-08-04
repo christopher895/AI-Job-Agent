@@ -1,6 +1,6 @@
 # AI Job Hunting Agent
 
-An autonomous agent that monitors 80+ company career pages 24/7, detects new job postings via snapshot diffing, auto-tailors Christopher's resume per role using a generate → critique → revise AI loop, and sends email alerts with a one-click link to generate a tailored resume. A web app lets you paste a job description or URL, edit the tailored output, download a PDF, and log applications to Google Sheets — no auth required.
+An autonomous agent that monitors 80+ company career pages 24/7, detects new job postings via snapshot diffing, auto-tailors Christopher's resume per role by suggesting JD keyword insertions against his fixed master resume for review and approval, and sends email alerts with a one-click link to generate a tailored resume. A web app lets you paste a job description or URL, review/approve suggested edits, edit the tailored output, download a PDF, and log applications to Google Sheets — no auth required.
 
 ---
 
@@ -19,7 +19,9 @@ Resend alert email (job list + "Tailor Resume" link per job)
   ↓
 Click link → /tailor opens with job pre-filled
   ↓
-Claude (headless CLI, OpenAI fallback): generate → critique → revise (up to 3 passes)
+Claude (headless CLI, OpenAI fallback): suggestKeywords(jd, master) — one pass, proposes keyword-insertion suggestions
+  ↓
+Review/edit/approve suggestions in a checklist → apply-suggestions applies only the accepted ones
   ↓
 LaTeX PDF rendered via tectonic + czresume.cls
   ↓
@@ -75,7 +77,7 @@ agent/src/
 │   ├── companies.ts      # Tracked company list
 │   └── adapters/         # greenhouse.ts, ashby.ts, lever.ts, amazon.ts
 ├── ai/
-│   ├── chain.ts          # generate → critique → revise loop (entry point)
+│   ├── chain.ts          # generate → critique → revise loop; now only backs the dormant general-resume path
 │   ├── tailor.ts         # Single-pass tailoring (LLM call)
 │   ├── critic.ts         # Scores a draft, returns fixes
 │   ├── grounding.ts      # Checks no invented facts
@@ -91,9 +93,9 @@ agent/src/
 │   ├── index.ts          # Express router mount
 │   └── routes/
 │       ├── tailor.ts        # POST /api/tailor
-│       ├── resumes.ts       # GET /api/resumes, GET /api/resume/:id, PATCH /api/resume/:id
+│       ├── resumes.ts       # GET /api/resumes, GET /api/resume/:id, PATCH /api/resume/:id, POST /api/resume/:id/apply-suggestions
 │       ├── applied.ts       # GET/POST /api/applied, PATCH /api/applied/:id
-│       ├── master-resume.ts # GET/PUT /api/master-resume, POST /api/master-resume/preview-pdf
+│       ├── master-resume.ts # GET/PUT /api/master-resume, POST /api/master-resume/preview-pdf, POST /api/master-resume/import
 │       ├── preferences.ts   # GET/PUT /api/preferences — scraper filter settings
 │       └── places.ts        # GET /api/places — static US city list for location autocomplete
 ├── integrations/
@@ -163,19 +165,22 @@ preferences      (id int default 1, data jsonb, updated_at)
 
 ## AI Tailoring Pipeline
 
-The master resume is the single source of truth — the LLM may only select or rephrase facts that exist in it, never invent new ones.
+The master resume is the single source of truth, and it stays fixed — the LLM may only propose small, individually-approved keyword-insertion suggestions (bullet rewrites or skill additions), never reorder, cut, or invent facts beyond it.
 
 ```
 POST /api/tailor  (JD text or job URL)
   → auto-fetch JD if URL (Cheerio/Playwright)
-    → generateBestResume(jd) — up to 3 iterations, each:
-        tailor.ts   — rewrite bullets to match JD (feeding in the prior iteration's critic fixes, if any)
-        critic.ts   — score the draft (grounding.ts + format.ts + JD keyword coverage baked into the score)
-      loop stops early once a non-gated draft clears the target score; always keeps the best-scoring draft seen
-    → save tailored_resumes row
-    → render PDF via tectonic + czresume.cls
-    → redirect to /resume/[id]
+    → suggestKeywords(jd, master) — single pass, proposes bullet-rewrite/skill-addition suggestions
+    → save tailored_resumes row, status='awaiting_review'
+    → frontend shows a review checklist (each suggestion labeled grounded/extrapolated)
+
+POST /api/resume/:id/apply-suggestions  (accepted suggestions)
+  → applySuggestions(master, accepted) + renderMarkdown + fitToOnePage (skips the widow-fix pass, since
+    bullets must stay verbatim except for explicitly-approved edits)
+  → render PDF via tectonic + czresume.cls, status='ready'
 ```
+
+The old generate → critique → revise loop (`chain.ts`) still exists but now only backs the dormant, UI-removed general-resume feature.
 
 ---
 
@@ -261,7 +266,7 @@ Both services share the same Railway Postgres instance. Set `WEB_URL` on the age
 
 **Claude by default, OpenAI as a manual fallback** — Tailoring runs through the headless `claude -p` CLI, billed against Christopher's Claude subscription rather than metered API usage. Setting `LLM_PROVIDER=openai` swaps to GPT-4o with no code changes, since both paths go through the same `completeJSON()` interface in `llm.ts`.
 
-**generate → critique → revise loop** — A single tailoring pass produces inconsistent quality. Running a separate critic model that scores the draft and returns a fix list, then revising, reliably pushes output quality above a useful threshold.
+**Suggest-and-approve, not generate → critique → revise** — Per-job tailoring used to run a full generate → critique → revise loop, silently rewriting bullets end to end. That produced inconsistent quality and made it impossible to guarantee any bullet stayed verbatim. The current flow instead makes a single `suggestKeywords()` call that proposes discrete, individually-labeled (grounded/extrapolated) keyword-insertion suggestions against the fixed master resume, and only applies the ones Christopher explicitly checks off — trading iterative AI polish for a guarantee that nothing changes without approval. The old loop (`chain.ts`) still exists and still runs for the dormant general-resume feature, where there's no JD to ground suggestions against and full AI rewriting is the only option.
 
 **Resume-Worded-style critic rubric** — `critic_score` is a blend of an LLM holistic score (60%, graded against a Weak-roles/Brevity-&-Style rubric), a deterministic format score (25%, quantified-impact ratio, weak/repeated verbs, verb tenses, buzzwords/filler/pronouns, passive voice, spelling, readability/ATS-glyph safety), and JD keyword coverage (15%), with a hard grounding gate that caps the score at 25 on any fabricated claim. It intentionally does not score candidate credentials (open-source contributions, prior employers, portfolio links) — those can't be changed by rewriting a bullet, so scoring them just adds noise the tailoring loop can't act on. Only signals a rewrite can actually move are scored.
 

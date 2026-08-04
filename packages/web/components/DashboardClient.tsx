@@ -36,7 +36,7 @@ export default function DashboardClient({
   // Resumes tailor in the background (see /api/tailor) — refresh the list periodically
   // while any card is still "pending" so the badge/score update without a manual reload.
   useEffect(() => {
-    if (!items.some((r) => r.status === "pending")) return;
+    if (!items.some((r) => r.status === "pending" || r.status === "awaiting_review")) return;
     const interval = setInterval(async () => {
       try {
         setItems(await api.listResumes());

@@ -1,17 +1,16 @@
 import { Router } from "express";
-import { generateBestResume } from "../../ai/chain";
+import { suggestKeywords } from "../../ai/suggest-keywords";
+import { labelGroundedness } from "../../ai/apply-suggestions";
+import { getMasterResume } from "../../db/queries";
 import {
   createPendingResume,
-  completeTailoredResume,
   failTailoredResume,
-  storePdf,
-  setPdfError,
   updateResumeStage,
+  setSuggestions,
 } from "../../db/queries";
 import { fetchJd } from "../../scraper/fetch-jd";
-import { renderPdf } from "../../ai/render-pdf";
-import { fitToOnePage } from "../../ai/fit-page";
 import { LLM_PROVIDER } from "../../ai/llm";
+import { Suggestion } from "../../ai/types";
 
 const router = Router();
 
@@ -67,85 +66,34 @@ router.post("/", async (req, res) => {
     return;
   }
 
-  // Only the generate->critique->revise loop moves to the background: it routinely
-  // runs past Railway's ~300s edge-proxy timeout, which kills a synchronous request
-  // outright and shows up in the browser as a generic "Failed to fetch". The frontend
-  // polls GET /api/resume/:id and switches out of the pending state once it flips.
+  // The suggestion pipeline (single LLM call to suggestKeywords) moves to the
+  // background: even one call can run past Railway's ~300s edge-proxy timeout,
+  // which kills a synchronous request outright and shows up in the browser as a
+  // generic "Failed to fetch". The frontend polls GET /api/resume/:id and
+  // switches out of the pending state once it flips.
   res.status(202).json({ id: row.id, status: "pending" });
 
-  runTailorPipeline(row.id, jd, { jobTitle: resolvedTitle, company: resolvedCompany }).catch((err) => {
+  runSuggestPipeline(row.id, jd).catch((err) => {
     console.error("[tailor] background pipeline crashed:", err);
   });
 });
 
-async function runTailorPipeline(
-  id: string,
-  jd: string,
-  opts: { jobTitle?: string; company?: string }
-) {
-  let result;
+async function runSuggestPipeline(id: string, jd: string) {
   try {
-    result = await generateBestResume(jd, {
-      ...opts,
-      onProgress: (stage) => {
-        updateResumeStage(id, stage).catch((err) => {
-          console.error("[tailor] stage update failed:", err);
-        });
-      },
-    });
+    await updateResumeStage(id, "Analyzing job description");
+    const master = await getMasterResume();
+    const raw = await suggestKeywords(jd, master);
+    const suggestions: Suggestion[] = raw.map((s) => ({
+      ...s,
+      groundedness: labelGroundedness(master, s),
+      accepted: null,
+    }));
+    await setSuggestions(id, suggestions);
   } catch (err) {
-    console.error("[tailor] pipeline error:", err);
+    console.error("[tailor] suggestion pipeline error:", err);
     const credentialHint =
       LLM_PROVIDER === "openai" ? "check OPENAI_API_KEY" : "check CLAUDE_CODE_OAUTH_TOKEN";
-    await failTailoredResume(id, `Tailoring failed — ${credentialHint} and try again.`);
-    return;
-  }
-
-  // Fit to one page (page-count check + LLM trim/widow-fix loop). A failure
-  // here degrades gracefully — the resume still completes with the
-  // un-fitted markdown, and the PDF render further down reports the error
-  // via pdf_error, same as any other PDF render failure.
-  await updateResumeStage(id, "Finalizing formatting").catch((err) => {
-    console.error("[tailor] stage update failed:", err);
-  });
-  let finalMarkdown = result.markdown;
-  let fittedPdf: Buffer | null = null;
-  try {
-    const fitted = await fitToOnePage(result.markdown);
-    finalMarkdown = fitted.markdown;
-    fittedPdf = fitted.pdf;
-  } catch (err) {
-    console.error("[tailor] fitToOnePage failed, continuing with un-fitted markdown:", err);
-  }
-
-  try {
-    await completeTailoredResume(id, {
-      markdown: finalMarkdown,
-      criticScore: result.critic.finalScore,
-    });
-  } catch (err) {
-    console.error("[tailor] db error saving result:", err);
-    await failTailoredResume(id, "Failed to save resume — database error.").catch(() => {});
-    return;
-  }
-
-  // Store the PDF fitToOnePage already rendered, if it succeeded; otherwise
-  // fall back to rendering the un-fitted markdown directly, same as before
-  // this change. Either way this runs in the background — /pdf generates
-  // on-demand if not ready yet.
-  if (fittedPdf) {
-    storePdf(id, fittedPdf).catch((err) => {
-      console.error("[tailor] pdf store failed:", err);
-      setPdfError(id, err instanceof Error ? err.message : String(err)).catch(() => {});
-    });
-  } else {
-    renderPdf(finalMarkdown)
-      .then((pdf) => storePdf(id, pdf))
-      .catch((err) => {
-        console.error("[tailor] pdf render failed:", err);
-        const message = err instanceof Error ? err.message : String(err);
-        setPdfError(id, message).catch(() => {});
-      });
+    await failTailoredResume(id, `Generating suggestions failed — ${credentialHint} and try again.`);
   }
 }
 
