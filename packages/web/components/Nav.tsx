@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOutAction } from "../lib/actions";
 
 function DashboardIcon() {
   return (
@@ -116,7 +117,11 @@ export default function Sidebar() {
           <p className="text-sm text-white font-medium leading-tight truncate">Christopher Zhang</p>
           <p className="text-xs text-gray-400 leading-tight truncate">zhanggopher895@gmail.com</p>
         </div>
-        <button className="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0">
+        <button
+          onClick={() => signOutAction()}
+          title="Sign out"
+          className="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0"
+        >
           <ChevronUpIcon />
         </button>
       </div>
