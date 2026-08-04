@@ -116,3 +116,40 @@ export const TailoredResumeSchema = z.object({
   reasoning: z.string().default(""),
 });
 export type TailoredResume = z.infer<typeof TailoredResumeSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Keyword-insertion suggestions — the per-job tailoring flow's only  */
+/* output. The master resume itself is never reordered or cut; these  */
+/* are small, individually-approved wording/skill additions.          */
+/* ------------------------------------------------------------------ */
+
+export const RawSuggestionSchema = z.object({
+  /** Stable id for this suggestion within one batch, e.g. "sugg-1". */
+  id: z.string(),
+  kind: z.enum(["bullet-rewrite", "skill-addition"]),
+  /** bullet-rewrite: the master Bullet.id being reworded.
+   *  skill-addition: one of "languages" | "frameworks" | "tools" (never "interests"). */
+  targetId: z.string(),
+  /** The JD term this suggestion surfaces. */
+  keyword: z.string(),
+  /** bullet-rewrite only: the bullet's current text, verbatim. */
+  originalText: z.string().optional(),
+  /** bullet-rewrite: the full reworded bullet text.
+   *  skill-addition: the single skill/tool name to add. */
+  suggestedText: z.string(),
+  /** One sentence: why this JD keyword fits here. */
+  rationale: z.string(),
+});
+export type RawSuggestion = z.infer<typeof RawSuggestionSchema>;
+
+/**
+ * A RawSuggestion plus fields computed AFTER the LLM call, never
+ * self-reported by the model:
+ *   - groundedness: deterministic, via apply-suggestions.ts's labelGroundedness().
+ *   - accepted: review state — null until the user checks/unchecks it.
+ */
+export const SuggestionSchema = RawSuggestionSchema.extend({
+  groundedness: z.enum(["grounded", "extrapolated"]),
+  accepted: z.boolean().nullable().default(null),
+});
+export type Suggestion = z.infer<typeof SuggestionSchema>;

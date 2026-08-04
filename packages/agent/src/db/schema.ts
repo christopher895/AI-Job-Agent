@@ -168,6 +168,19 @@ export async function initSchema() {
     ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS stage TEXT;
   `);
 
+  // The suggestion-based tailoring flow (POST /api/tailor -> awaiting_review ->
+  // POST /api/resume/:id/apply-suggestions -> ready) stores its proposed keyword
+  // insertions here so the checklist can be re-rendered on reload and so accepted
+  // suggestions stay auditable after they're applied.
+  await pool.query(`
+    ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS suggestions JSONB;
+  `);
+  await pool.query(`
+    ALTER TABLE tailored_resumes DROP CONSTRAINT IF EXISTS tailored_resumes_status_check;
+    ALTER TABLE tailored_resumes ADD CONSTRAINT tailored_resumes_status_check
+      CHECK (status IN ('pending','awaiting_review','ready','failed'));
+  `);
+
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_tailored_resumes_created ON tailored_resumes(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_snapshots_company_scraped ON snapshots(company_id, scraped_at DESC);
