@@ -1,4 +1,4 @@
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001/api";
+const API = "/api/proxy";
 
 export type ResumeListItem = {
   id: string;
@@ -112,6 +112,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body !== undefined ? JSON.stringify(body) : undefined,
     cache: "no-store",
   });
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.location.href = "/login";
+    throw new Error("unauthorized");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
@@ -126,6 +130,10 @@ async function requestBlob(method: string, path: string, body?: unknown): Promis
     headers: body !== undefined ? { "Content-Type": "application/json" } : {},
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.location.href = "/login";
+    throw new Error("unauthorized");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
@@ -144,6 +152,10 @@ async function requestBlobWithFilename(
   path: string,
 ): Promise<{ blob: Blob; filename: string | null }> {
   const res = await fetch(`${API}${path}`, { method });
+  if (res.status === 401 && typeof window !== "undefined") {
+    window.location.href = "/login";
+    throw new Error("unauthorized");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as { error?: string }).error ?? res.statusText);
