@@ -297,6 +297,7 @@ APP_URL
 AGENT_API_URL                  # agent API URL the web app's server proxies to — private, server-only, not exposed to the browser
 AUTH_SECRET                    # session cookie signing secret for Auth.js
 AUTH_TRUST_HOST                # set to "true" on Railway (behind a reverse proxy)
+AUTH_URL                       # exact public URL for this environment — required on Railway; AUTH_TRUST_HOST alone isn't sufficient there
 GOOGLE_CLIENT_ID               # Google OAuth client, from console.cloud.google.com
 GOOGLE_CLIENT_SECRET
 AUTH_ALLOWED_EMAIL             # the only Google account allowed to sign in
