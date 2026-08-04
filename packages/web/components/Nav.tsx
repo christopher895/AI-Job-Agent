@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOutAction } from "../lib/actions";
 
 function DashboardIcon() {
   return (
@@ -52,12 +53,25 @@ function SettingsIcon() {
   );
 }
 
-function ChevronUpIcon() {
+function LogOutIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="m18 15-6-6-6 6" />
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   );
+}
+
+function initialsFrom(name: string | null | undefined, email: string | null | undefined): string {
+  const trimmedName = name?.trim();
+  if (trimmedName) {
+    const parts = trimmedName.split(/\s+/);
+    return parts.length >= 2
+      ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+      : parts[0].slice(0, 2).toUpperCase();
+  }
+  return (email?.trim() || "?").slice(0, 2).toUpperCase();
 }
 
 const navLinks = [
@@ -68,7 +82,12 @@ const navLinks = [
   { href: "/preferences", label: "Preferences", Icon: SettingsIcon },
 ];
 
-export default function Sidebar() {
+type SidebarUser = {
+  name?: string | null;
+  email?: string | null;
+};
+
+export default function Sidebar({ user }: { user: SidebarUser }) {
   const pathname = usePathname();
 
   function isActive(href: string) {
@@ -77,7 +96,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-52 flex-shrink-0 bg-gray-900 flex flex-col h-full">
+    <aside className="w-52 flex-shrink-0 bg-ink-850 flex flex-col h-full">
       {/* Logo */}
       <div className="px-4 py-5 flex items-center gap-2.5">
         <div className="w-7 h-7 bg-violet-600 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -86,7 +105,7 @@ export default function Sidebar() {
             <path d="M14 2v4a2 2 0 0 0 2 2h4" />
           </svg>
         </div>
-        <span className="text-white font-semibold text-sm tracking-tight">Resume Tailor</span>
+        <span className="font-serif text-white text-base tracking-tight">Resume Tailor</span>
       </div>
 
       {/* Nav links */}
@@ -98,7 +117,7 @@ export default function Sidebar() {
             className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
               isActive(href)
                 ? "bg-violet-600 text-white"
-                : "text-gray-400 hover:bg-gray-800 hover:text-white"
+                : "text-white/50 hover:bg-white/5 hover:text-white"
             }`}
           >
             <Icon />
@@ -108,16 +127,22 @@ export default function Sidebar() {
       </nav>
 
       {/* User profile */}
-      <div className="px-4 py-4 border-t border-gray-800 flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-          CZ
+      <div className="border-t border-white/10">
+        <div className="px-4 py-3 flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-full bg-violet-600 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+            {initialsFrom(user.name, user.email)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-white font-medium leading-tight truncate">{user.name ?? user.email}</p>
+            {user.name && <p className="text-xs text-white/40 leading-tight truncate">{user.email}</p>}
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm text-white font-medium leading-tight truncate">Christopher Zhang</p>
-          <p className="text-xs text-gray-400 leading-tight truncate">zhanggopher895@gmail.com</p>
-        </div>
-        <button className="text-gray-500 hover:text-gray-300 transition-colors flex-shrink-0">
-          <ChevronUpIcon />
+        <button
+          onClick={() => signOutAction()}
+          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-white/50 hover:bg-white/5 hover:text-white transition-colors"
+        >
+          <LogOutIcon />
+          Sign out
         </button>
       </div>
     </aside>

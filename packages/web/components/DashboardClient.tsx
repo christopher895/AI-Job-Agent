@@ -78,10 +78,10 @@ export default function DashboardClient({
       {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">
+          <h1 className="font-serif text-3xl text-foreground">
             {getGreeting()}, Christopher 👋
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-gray-500 mt-1.5">
             Here&apos;s your resume activity overview.
           </p>
         </div>
@@ -105,7 +105,7 @@ export default function DashboardClient({
       {/* Resume History */}
       <div>
         <div className="mb-4">
-          <h2 className="text-base font-semibold text-gray-900">Resume History</h2>
+          <h2 className="text-base font-semibold text-foreground">Resume History</h2>
           <p className="text-sm text-gray-500 mt-0.5">All your tailored resumes in one place.</p>
         </div>
 
@@ -113,7 +113,7 @@ export default function DashboardClient({
         <div className="flex items-center gap-3 mb-6">
           <div className="relative flex-1 max-w-xs">
             <svg
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-paper-muted"
               width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
             >
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
@@ -123,13 +123,13 @@ export default function DashboardClient({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search resumes..."
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+              className="w-full pl-9 pr-3 py-2 text-sm border border-paper-border rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-paper text-paper-ink placeholder:text-paper-muted"
             />
           </div>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white text-gray-700"
+            className="text-sm border border-paper-border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-500 bg-paper text-paper-ink"
           >
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
