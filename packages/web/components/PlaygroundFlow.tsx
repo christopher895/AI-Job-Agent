@@ -106,6 +106,9 @@ export default function PlaygroundFlow() {
     setError(null);
   }
 
+  const hasResume = resumeText.trim().length > 0 || !!resumeFile;
+  const canSubmit = hasResume && apiKey.trim().length > 0 && jdText.trim().length > 0;
+
   if (step === "input") {
     return (
       <form onSubmit={handleStart} className="bg-paper border border-paper-border rounded-xl p-6 flex flex-col gap-5">
@@ -192,7 +195,7 @@ export default function PlaygroundFlow() {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || !canSubmit}
           className="bg-violet-600 hover:bg-violet-700 text-white font-medium py-3 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? "Generating suggestions…" : "Generate suggestions"}
