@@ -159,6 +159,15 @@ async function requestBlobWithFilename(
   return { blob: await res.blob(), filename: filenameFromContentDisposition(res) };
 }
 
+async function requestFormData<T>(method: string, path: string, formData: FormData): Promise<T> {
+  const res = await fetch(`${API}${path}`, { method, body: formData });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<T>;
+}
+
 export const api = {
   listResumes: () => request<ResumeListItem[]>("GET", "/resumes"),
   getResume: (id: string) => request<Resume>("GET", `/resume/${id}`),
@@ -187,6 +196,13 @@ export const api = {
   getMasterResume: () => request<MasterResume>("GET", "/master-resume"),
   putMasterResume: (data: MasterResume) =>
     request<{ updated: boolean }>("PUT", "/master-resume", data),
+  importMasterResumeText: (text: string) =>
+    request<MasterResume>("POST", "/master-resume/import", { text }),
+  importMasterResumePdf: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return requestFormData<MasterResume>("POST", "/master-resume/import", fd);
+  },
   getGeneralResume: () => request<Resume>("GET", "/general-resume"),
   generateGeneralResume: () => request<{ id: string; status: "pending" }>("POST", "/general-resume/generate"),
   listApplied: () => request<AppliedJob[]>("GET", "/applied"),

@@ -98,6 +98,10 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [pageCount, setPageCount] = useState<number | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const prevBlobRef = useRef<string | null>(null);
   const hasAttemptedPreviewRef = useRef(false);
 
@@ -112,6 +116,36 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function importFromText() {
+    if (!importText.trim()) return;
+    setImporting(true);
+    setImportError(null);
+    try {
+      const parsed = await api.importMasterResumeText(importText);
+      setResume(parsed);
+      setShowImport(false);
+      setImportText("");
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function importFromPdf(file: File) {
+    setImporting(true);
+    setImportError(null);
+    try {
+      const parsed = await api.importMasterResumePdf(file);
+      setResume(parsed);
+      setShowImport(false);
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -451,6 +485,12 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               </button>
             )}
             <button
+              onClick={() => setShowImport((v) => !v)}
+              className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+            >
+              Import…
+            </button>
+            <button
               onClick={save}
               disabled={saving}
               className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 transition-colors"
@@ -464,6 +504,47 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             </button>
           </div>
         </div>
+
+        {showImport && (
+          <div className="mb-8 border border-gray-200 rounded-xl p-4 bg-gray-50">
+            <p className="text-sm text-gray-600 mb-3">
+              Paste your resume text below, or upload a PDF. This pre-fills the form for you to
+              review — nothing is saved until you click Save Changes.
+            </p>
+            <textarea
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              rows={6}
+              placeholder="Paste resume text here…"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white resize-none"
+            />
+            <div className="flex items-center gap-3 mt-3">
+              <button
+                onClick={importFromText}
+                disabled={importing || !importText.trim()}
+                className="text-sm px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {importing ? "Parsing…" : "Parse pasted text"}
+              </button>
+              <span className="text-xs text-gray-400">or</span>
+              <label className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 cursor-pointer transition-colors">
+                Upload PDF
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  disabled={importing}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) importFromPdf(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {importError && <span className="text-xs text-red-600">{importError}</span>}
+            </div>
+          </div>
+        )}
 
         {/* ── Basics ── */}
         {activeSection === "Basics" && (
