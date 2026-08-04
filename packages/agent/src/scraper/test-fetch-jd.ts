@@ -113,5 +113,131 @@ function check(label: string, ok: boolean, detail?: string) {
   );
 }
 
+// Case 6: real Responsibilities/Requirements content alongside headed Benefits,
+// Equal Employment Opportunity, About [Company], and How to Apply boilerplate.
+// This JD text gets sent to the LLM up to 6x per /tailor request (once per
+// tailorResume + evaluate call, across up to 3 generate-critique-revise
+// iterations in chain.ts), so every token of boilerplate that survives
+// extraction is billed repeatedly for zero tailoring value.
+{
+  const html = `
+<html>
+<head><title>Software Engineer - Acme Corp</title></head>
+<body>
+<article>
+<h1>Software Engineer</h1>
+<h2>Responsibilities</h2>
+<p>${"Build and maintain scalable backend services using Python and Kubernetes. ".repeat(6)}</p>
+<h2>Requirements</h2>
+<ul>
+<li>5+ years of experience with distributed systems and cloud infrastructure.</li>
+<li>Must be able to pass a background check for site access.</li>
+</ul>
+<h2>Benefits</h2>
+<ul>
+<li>Comprehensive health, dental, and vision insurance for you and your family.</li>
+<li>Generous 401k match and unlimited PTO policy for all full-time employees.</li>
+</ul>
+<h2>About Acme Corp</h2>
+<p>${"Acme Corp is a leading provider of cloud infrastructure solutions trusted by Fortune 500 companies worldwide. ".repeat(3)}</p>
+<h2>How to Apply</h2>
+<p>Submit your resume and cover letter through our careers portal to be considered for this position.</p>
+<h2>Equal Employment Opportunity</h2>
+<p>Acme Corp is proud to be an equal opportunity employer. All qualified applicants will receive consideration for employment without regard to race, religion, color, sex, national origin, or veteran status.</p>
+</article>
+</body>
+</html>`;
+  const url = "https://acmecorp.com/careers/software-engineer";
+  const result = extractFromHtml(html, url);
+
+  console.log("[boilerplate-strip] text length:", result.text.length);
+
+  check("boilerplate-strip", result.text.includes("Python and Kubernetes"), "Responsibilities content was stripped");
+  check(
+    "boilerplate-strip",
+    result.text.includes("Must be able to pass a background check"),
+    "short in-list requirement bullet was wrongly stripped alongside its longer sibling"
+  );
+  check("boilerplate-strip", !result.text.includes("401k"), "Benefits section leaked into extracted JD");
+  check("boilerplate-strip", !result.text.includes("Fortune 500"), "About [Company] section leaked into extracted JD");
+  check("boilerplate-strip", !result.text.includes("cover letter"), "How to Apply section leaked into extracted JD");
+  check(
+    "boilerplate-strip",
+    !result.text.includes("equal opportunity employer"),
+    "Equal Employment Opportunity section leaked into extracted JD"
+  );
+}
+
+// Case 7: pseudo-heading — many ATS templates render section titles as
+// <p><strong>Benefits</strong></p> instead of a real <h2>. Must still be
+// recognized and dropped.
+{
+  const html = `
+<html><head><title>Backend Engineer - Acme</title></head>
+<body><article>
+<h1>Backend Engineer</h1>
+<p>${"Design and operate backend services at scale for millions of users. ".repeat(6)}</p>
+<p><strong>Benefits</strong></p>
+<p>${"We offer health insurance, a 401k match, unlimited PTO, and remote-first work. ".repeat(3)}</p>
+</article></body></html>`;
+  const url = "https://acme.com/careers/backend-engineer";
+  const result = extractFromHtml(html, url);
+
+  check(
+    "pseudo-heading",
+    result.text.includes("Design and operate backend"),
+    "real job content was stripped alongside the pseudo-heading section"
+  );
+  check("pseudo-heading", !result.text.includes("401k"), "pseudo-heading Benefits section was not recognized/dropped");
+}
+
+// Case 8: "About the Role" is real job content (team mission, what you'll
+// work on), not a company blurb — must NOT be caught by the "About ..."
+// boilerplate match. Only "About [Company]" (using the company name already
+// resolved by extractTitleCompany) should be stripped.
+{
+  const html = `
+<html><head><title>Engineer - Acme Corp</title></head>
+<body><article>
+<h1>Engineer</h1>
+<h2>About the Role</h2>
+<p>${"You will own the payments infrastructure team and drive reliability improvements across our checkout stack. ".repeat(4)}</p>
+<h2>About Acme Corp</h2>
+<p>${"Acme Corp is a leading provider of cloud infrastructure solutions trusted by Fortune 500 companies worldwide. ".repeat(3)}</p>
+</article></body></html>`;
+  const url = "https://acmecorp.com/careers/engineer";
+  const result = extractFromHtml(html, url);
+
+  check(
+    "about-the-role",
+    result.text.includes("payments infrastructure team"),
+    "'About the Role' content was wrongly treated as company-blurb boilerplate"
+  );
+  check("about-the-role", !result.text.includes("Fortune 500"), "'About Acme Corp' company blurb was not stripped");
+}
+
+// Case 9: headerless boilerplate paragraph — the EEO statement is often
+// appended with no heading at all. Must still be stripped by content
+// signature, independent of the heading-based removal state machine.
+{
+  const html = `
+<html><head><title>Engineer - Acme Corp</title></head>
+<body><article>
+<h1>Engineer</h1>
+<h2>Requirements</h2>
+<p>${"Own the reliability of our payment processing pipeline end to end. ".repeat(5)}</p>
+<p>Acme Corp is proud to be an equal opportunity employer. All qualified applicants will receive consideration for employment without regard to race, religion, color, sex, national origin, or veteran status.</p>
+</article></body></html>`;
+  const url = "https://acmecorp.com/careers/engineer-2";
+  const result = extractFromHtml(html, url);
+
+  check("headerless-eeo", result.text.includes("payment processing pipeline"), "Requirements content was stripped");
+  check(
+    "headerless-eeo",
+    !result.text.includes("equal opportunity employer"),
+    "headerless EEO paragraph was not stripped"
+  );
+}
+
 console.log(allPass ? "\n✓ fetch-jd extraction test PASSED" : "\n✗ fetch-jd extraction test FAILED");
 process.exit(allPass ? 0 : 1);
