@@ -2,13 +2,15 @@
 
 :root {
   color-scheme: light;
-  --background: #fafaf9;
+  --background: #faf7f0;
   --foreground: #18181b;
 
   /* Paper/ink duality tokens — shared with the login screen and sidebar,
      which stay dark. Main page content uses --background/--foreground
      (light) directly instead, per feedback that a fully dark workspace
-     was hard to read for long stretches. */
+     was hard to read for long stretches. --background is warm/paper-tinted
+     rather than neutral gray so the paper cards read as one material with
+     the page, not cream islands on a generic SaaS-gray canvas. */
   --ink-950: #0b0b12;
   --ink-850: #1b1a24;
   --paper: #f6f1e4;
