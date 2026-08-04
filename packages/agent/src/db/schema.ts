@@ -193,6 +193,18 @@ export async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_applied_jobs_applied ON applied_jobs(applied_at DESC);
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS playground_usage (
+      id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      ip_hash    TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_playground_usage_ip_hash_created
+      ON playground_usage (ip_hash, created_at)
+  `);
+
   await seedMasterResume();
   await seedPreferences();
 

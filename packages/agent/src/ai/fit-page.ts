@@ -78,7 +78,7 @@ function findWidowBullets(markdown: string): string[] {
 
 const TrimSchema = z.object({ markdown: z.string() });
 
-async function trimToOnePage(markdown: string, overflowLines: number): Promise<string> {
+async function trimToOnePage(markdown: string, overflowLines: number, apiKey?: string): Promise<string> {
   const result = await completeJSON(TrimSchema, {
     system: `You are editing a résumé that overflows onto a second page by approximately ${overflowLines} printed lines.
 
@@ -92,6 +92,7 @@ Do NOT add any content.
 Return the complete résumé markdown as JSON: { "markdown": "..." }`,
     user: markdown,
     temperature: 0.15,
+    anthropicApiKey: apiKey,
   });
   return result.markdown;
 }
@@ -144,7 +145,7 @@ Return JSON: { "fixes": [{ "original": "...", "revised": "..." }] }`,
  */
 export async function fitToOnePage(
   markdown: string,
-  opts: { skipWidowFix?: boolean } = {},
+  opts: { skipWidowFix?: boolean; apiKey?: string } = {},
 ): Promise<{ markdown: string; pdf: Buffer }> {
   let current = markdown;
   let pdf = await renderPdf(current);
@@ -153,7 +154,7 @@ export async function fitToOnePage(
   let pages = await countPdfPages(pdf);
   for (let attempt = 0; attempt < 2 && pages > 1; attempt++) {
     const overflowLines = Math.ceil((pages - 1) * 50);
-    current = await trimToOnePage(current, overflowLines);
+    current = await trimToOnePage(current, overflowLines, opts.apiKey);
     pdf = await renderPdf(current);
     pages = await countPdfPages(pdf);
   }

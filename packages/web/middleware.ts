@@ -4,11 +4,12 @@ import { auth } from "./auth";
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const { pathname } = req.nextUrl;
-  const isPublicPage = pathname === "/login";
+  const isPublicPage = pathname === "/login" || pathname === "/playground";
   const isAuthApi = pathname.startsWith("/api/auth");
+  const isPublicApi = pathname.startsWith("/api/playground");
   const isApiRoute = pathname.startsWith("/api/");
 
-  if (isAuthApi) {
+  if (isAuthApi || isPublicApi) {
     return;
   }
 
