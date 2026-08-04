@@ -136,11 +136,17 @@ export async function initSchema() {
     ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ready';
     ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS error TEXT;
   `);
-  await pool.query(`
-    ALTER TABLE tailored_resumes DROP CONSTRAINT IF EXISTS tailored_resumes_status_check;
-    ALTER TABLE tailored_resumes ADD CONSTRAINT tailored_resumes_status_check
-      CHECK (status IN ('pending','ready','failed'));
-  `);
+  // The status CHECK constraint itself is defined once, further down (see the
+  // 'awaiting_review' migration below) — NOT here. An intermediate narrower
+  // constraint used to be added at this point and widened later; that meant
+  // every server restart briefly re-validated ALL existing rows against the
+  // narrower set first, which threw (and crashed startup) the instant any row
+  // legitimately held a newer status value added downstream — e.g. any resume
+  // sitting in 'awaiting_review' would fail this ADD CONSTRAINT on every
+  // restart. Postgres validates existing rows against a CHECK constraint at
+  // ADD time regardless of DROP CONSTRAINT IF EXISTS just having removed the
+  // (wider) previous version, so the fix is to never (re)assert a narrower
+  // constraint than the app currently allows — define it exactly once.
 
   // The general resume: a JD-less, one-page resume synced from Master, reusing
   // this same table/pipeline/editor as job-tailored resumes rather than a
