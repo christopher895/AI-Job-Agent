@@ -11,6 +11,7 @@
     "test:grounding": "tsx src/ai/test-grounding.ts",
     "test:format": "tsx src/ai/test-format.ts",
     "test:critic": "tsx src/ai/test-critic.ts",
+    "test:apply-suggestions": "tsx src/ai/test-apply-suggestions.ts",
     "test:general-resume": "tsx src/db/test-general-resume.ts",
     "test:import-master-resume": "tsx src/ai/test-import-master-resume.ts",
     "test:stage-tracking": "tsx src/db/test-stage-tracking.ts",
