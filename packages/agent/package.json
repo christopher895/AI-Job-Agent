@@ -16,6 +16,7 @@
     "test:stage-tracking": "tsx src/db/test-stage-tracking.ts",
     "test:chain-progress-labels": "tsx src/ai/test-chain-progress-labels.ts",
     "test:fetch-jd": "tsx src/scraper/test-fetch-jd.ts",
+    "test:github-repo": "tsx src/scraper/test-github-repo.ts",
     "test:claude-cli": "tsx src/ai/test-claude-cli.ts",
     "test:render-pdf": "tsx src/ai/test-render-pdf.ts",
     "test:internal-secret": "tsx src/api/test-internal-secret.ts",

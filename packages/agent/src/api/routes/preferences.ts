@@ -22,6 +22,7 @@ router.put("/", async (req, res) => {
       !Array.isArray(body.requiredKeywords) ||
       !Array.isArray(body.targetLocations) ||
       !Array.isArray(body.priorityCompanies) ||
+      !Array.isArray(body.watchedRepos) ||
       typeof body.maxPerEmail !== "number"
     ) {
       res.status(400).json({ error: "Invalid preferences shape" });

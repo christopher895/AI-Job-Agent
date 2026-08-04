@@ -120,7 +120,7 @@ export async function getPreferences(): Promise<Preferences> {
     );
     return FILTERS;
   }
-  return rows[0].data as Preferences;
+  return { ...FILTERS, ...(rows[0].data as Partial<Preferences>) };
 }
 
 export async function updatePreferences(data: Preferences): Promise<void> {
