@@ -20,14 +20,16 @@
     "tailor": "tsx src/ai/run-tailor.ts"
   },
   "dependencies": {
+    "@mozilla/readability": "^0.6.0",
     "cheerio": "^1.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "googleapis": "^173.0.0",
-    "@mozilla/readability": "^0.6.0",
     "jsdom": "^29.1.1",
+    "multer": "^2.2.0",
     "node-cron": "^3.0.3",
     "openai": "^4.52.7",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.12.0",
     "playwright": "^1.45.3",
     "resend": "^3.4.0",
@@ -39,6 +41,7 @@
     "@types/jsdom": "^21.1.7",
     "@types/node": "^20.14.12",
     "@types/node-cron": "^3.0.11",
+    "@types/pdf-parse": "^1.1.5",
     "@types/pg": "^8.11.6",
     "tsx": "^4.16.2",
     "typescript": "^5.5.3"
