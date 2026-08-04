@@ -141,6 +141,12 @@ function filenameFromContentDisposition(res: Response): string | null {
   return match ? match[1] : null;
 }
 
+function pageCountFromHeaders(res: Response): number | null {
+  const header = res.headers.get("X-Page-Count");
+  const n = header ? parseInt(header, 10) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 async function requestBlobWithFilename(
   method: string,
   path: string,
@@ -202,6 +208,16 @@ export const api = {
   pdfUrl: (id: string) => `${API}/resume/${id}/pdf`,
   getPdfBlob: (id: string) => requestBlob("GET", `/resume/${id}/pdf`),
   getPdfBlobWithFilename: (id: string) => requestBlobWithFilename("GET", `/resume/${id}/pdf`),
-  previewMasterResumePdf: (data: MasterResume) =>
-    requestBlob("POST", "/master-resume/preview-pdf", data),
+  previewMasterResumePdf: async (data: MasterResume): Promise<{ blob: Blob; pageCount: number | null }> => {
+    const res = await fetch(`${API}/master-resume/preview-pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error((err as { error?: string }).error ?? res.statusText);
+    }
+    return { blob: await res.blob(), pageCount: pageCountFromHeaders(res) };
+  },
 };

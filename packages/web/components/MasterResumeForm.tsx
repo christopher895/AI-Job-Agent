@@ -97,6 +97,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [pageCount, setPageCount] = useState<number | null>(null);
   const prevBlobRef = useRef<string | null>(null);
   const hasAttemptedPreviewRef = useRef(false);
 
@@ -119,11 +120,12 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     setPreviewError(null);
     setShowPreview(true);
     try {
-      const blob = await api.previewMasterResumePdf(resume);
+      const { blob, pageCount: pages } = await api.previewMasterResumePdf(resume);
       const url = URL.createObjectURL(blob);
       if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
       prevBlobRef.current = url;
       setPreviewBlobUrl(url);
+      setPageCount(pages);
     } catch (e) {
       setPreviewError(e instanceof Error ? e.message : "PDF generation failed.");
     } finally {
@@ -406,6 +408,11 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             <p className="text-sm text-gray-500 mt-1">
               This is the source of truth used to generate all tailored resumes.
             </p>
+            {pageCount != null && pageCount > 1 && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2 inline-block">
+                This master resume is {pageCount} pages — trim a bullet or shorten wording before saving.
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             {error && <span className="text-xs text-red-600">{error}</span>}

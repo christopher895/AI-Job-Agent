@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getMasterResume, updateMasterResume } from "../../db/queries";
 import { MasterResumeSchema } from "../../ai/types";
 import { renderMasterResumePdf } from "../../ai/render-pdf";
+import { countPdfPages } from "../../ai/fit-page";
 
 const router = Router();
 
@@ -31,8 +32,10 @@ router.post("/preview-pdf", async (req, res) => {
   }
   try {
     const pdf = await renderMasterResumePdf(parsed.data);
+    const pages = await countPdfPages(pdf);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", 'inline; filename="master-resume.pdf"');
+    res.setHeader("X-Page-Count", String(pages));
     res.send(pdf);
   } catch (err) {
     console.error("[master-resume] preview pdf failed:", err);
