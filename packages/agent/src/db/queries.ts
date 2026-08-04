@@ -258,7 +258,7 @@ export async function setSuggestions(id: string, suggestions: Suggestion[]): Pro
 
 /** Moves an awaiting_review row back into 'pending' right as POST /apply-suggestions starts its background work — reuses the same pending/polling UI the rest of the app already has. */
 export async function beginApplyingSuggestions(id: string): Promise<void> {
-  await pool.query(`UPDATE tailored_resumes SET status = 'pending', stage = NULL WHERE id = $1`, [id]);
+  await pool.query(`UPDATE tailored_resumes SET status = 'pending', stage = NULL, updated_at = NOW() WHERE id = $1`, [id]);
 }
 
 export async function storePdf(id: string, pdf: Buffer): Promise<void> {

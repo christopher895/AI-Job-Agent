@@ -17,10 +17,11 @@ import {
 import { renderPdf } from "../../ai/render-pdf";
 import { renderMarkdown } from "../../ai/format";
 import { fitToOnePage } from "../../ai/fit-page";
-import { applySuggestions } from "../../ai/apply-suggestions";
-import { Suggestion } from "../../ai/types";
+import { applySuggestions, labelGroundedness } from "../../ai/apply-suggestions";
+import { Suggestion, SuggestionSchema } from "../../ai/types";
 import { LLM_PROVIDER } from "../../ai/llm";
 import { buildResumeFilename } from "../../utils/filename";
+import { z } from "zod";
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -29,7 +30,11 @@ function errorMessage(err: unknown): string {
 /** Rejects with 409 unless the resume finished tailoring; shared by /pdf and /email. */
 function requireReady(row: { status: string }, res: import("express").Response): boolean {
   if (row.status !== "ready") {
-    res.status(409).json({ error: `Resume is still ${row.status === "pending" ? "generating" : "in an error state"} — no PDF yet.` });
+    const reason =
+      row.status === "pending" ? "generating" :
+      row.status === "awaiting_review" ? "awaiting your review" :
+      "in an error state";
+    res.status(409).json({ error: `Resume is still ${reason} — no PDF yet.` });
     return false;
   }
   return true;
@@ -115,11 +120,12 @@ router.patch("/resume/:id", async (req, res) => {
 // Same async shape as POST /api/tailor: responds immediately, runs in the
 // background, and reuses the existing pending/polling UI.
 router.post("/resume/:id/apply-suggestions", async (req, res) => {
-  const { accepted } = req.body as { accepted?: Suggestion[] };
-  if (!Array.isArray(accepted)) {
-    res.status(400).json({ error: "accepted must be an array of suggestions" });
+  const parsed = z.array(SuggestionSchema).safeParse(req.body?.accepted);
+  if (!parsed.success) {
+    res.status(400).json({ error: "accepted must be an array of valid suggestions" });
     return;
   }
+  const accepted = parsed.data;
 
   const row = await getTailoredResume(req.params.id);
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
@@ -131,29 +137,47 @@ router.post("/resume/:id/apply-suggestions", async (req, res) => {
   await beginApplyingSuggestions(req.params.id);
   res.status(202).json({ id: req.params.id, status: "pending" });
 
-  runApplyPipeline(req.params.id, accepted).catch((err) => {
+  runApplyPipeline(req.params.id, accepted, row.suggestions ?? []).catch((err) => {
     console.error("[resume] apply-suggestions pipeline crashed:", err);
   });
 });
 
-async function runApplyPipeline(id: string, accepted: Suggestion[]) {
+async function runApplyPipeline(id: string, accepted: Suggestion[], originalSuggestions: Suggestion[]) {
   try {
     await updateResumeStage(id, "Applying your selections");
     const master = await getMasterResume();
-    const { master: adjustedMaster, tailored } = applySuggestions(master, accepted);
+
+    // Re-label groundedness against the FINAL text — a user's hand-edit can
+    // turn a "grounded" suggestion into an "extrapolated" one (or vice versa);
+    // the stored label must reflect what was actually applied, not what the
+    // model originally proposed.
+    const relabeledAccepted = accepted.map((s) => ({
+      ...s,
+      groundedness: labelGroundedness(master, s),
+    }));
+
+    const { master: adjustedMaster, tailored } = applySuggestions(master, relabeledAccepted);
     let markdown = renderMarkdown(adjustedMaster, tailored);
 
     await updateResumeStage(id, "Finalizing formatting");
     let pdf: Buffer | null = null;
     try {
-      const fitted = await fitToOnePage(markdown);
+      const fitted = await fitToOnePage(markdown, { skipWidowFix: true });
       markdown = fitted.markdown;
       pdf = fitted.pdf;
     } catch (err) {
       console.error("[resume] fitToOnePage failed, continuing with un-fitted markdown:", err);
     }
 
-    await completeTailoredResume(id, { markdown, suggestions: accepted });
+    // Preserve the full suggestion set for audit: accepted ones with their
+    // final (possibly edited, re-labeled) state; everything the model
+    // proposed but the user did NOT check gets accepted: false, not dropped.
+    const finalSuggestions = originalSuggestions.map((orig) => {
+      const applied = relabeledAccepted.find((s) => s.id === orig.id);
+      return applied ? { ...applied, accepted: true } : { ...orig, accepted: false };
+    });
+
+    await completeTailoredResume(id, { markdown, suggestions: finalSuggestions });
 
     if (pdf) {
       await storePdf(id, pdf).catch((err) => {
