@@ -109,6 +109,19 @@ function stripJobBoardBrand(text: string, url: string): string {
 
 const HOST_SUBDOMAIN_PREFIXES = ["www", "jobs", "careers", "apply", "join", "join-us", "hiring"];
 
+// Company-microsite domains often fuse a prefix into the registrable label
+// itself rather than using a subdomain, e.g. "lifeattiktok.com" or
+// "lifeatspotify.com" -> strip "lifeat" so the guess is "Tiktok"/"Spotify"
+// instead of "Lifeattiktok".
+const SLD_PREFIX_PATTERNS = [/^lifeat/i, /^careersat/i, /^workat/i];
+
+// Segments like "2027 Summer" or "Class of 2027" are cohort/program labels,
+// not company names — a title of the form "{Job Title} - 2027 Summer" has no
+// company signal in it at all, so the trailing-segment heuristic must not
+// mistake the cohort label for one.
+const COHORT_LABEL_RE =
+  /^(?:(?:spring|summer|fall|autumn|winter)\s+)?(?:19|20)\d{2}(?:\s+(?:spring|summer|fall|autumn|winter))?$|^(?:class|cohort)\s+of\s+(?:19|20)\d{2}$/i;
+
 // Last-resort company guess from the URL's registrable domain, e.g.
 // "www.optiver.com" -> "Optiver". Used when the page has no title/og/JSON-LD
 // signal to extract a company name from at all.
@@ -127,13 +140,38 @@ function companyFromHost(url: string): string | undefined {
   }
   if (labels.length < 2) return undefined;
 
-  const sld = labels[labels.length - 2];
+  let sld = labels[labels.length - 2];
   if (!sld) return undefined;
+  for (const prefix of SLD_PREFIX_PATTERNS) {
+    const stripped = sld.replace(prefix, "");
+    if (stripped && stripped !== sld) {
+      sld = stripped;
+      break;
+    }
+  }
   return sld.charAt(0).toUpperCase() + sld.slice(1);
 }
 
 function normalize(s: string): string {
   return s.replace(/\s+/g, " ").trim();
+}
+
+// companyFromHost only knows how to capitalize the first letter ("tiktok" ->
+// "Tiktok"), which is wrong for camel-cased brand names. If the page's own
+// title/h1/og:title spells the guessed word out with different casing (e.g.
+// "TikTok"), prefer that — it's straight from the source.
+function improveCasing(guess: string, $: CheerioAPI): string {
+  const sources = [
+    $("title").first().text(),
+    $("h1").first().text(),
+    $('meta[property="og:title"]').attr("content") ?? "",
+  ];
+  const re = new RegExp(`\\b${escapeRegExp(guess)}\\b`, "i");
+  for (const src of sources) {
+    const m = src.match(re);
+    if (m) return m[0];
+  }
+  return guess;
 }
 
 function extractTitleCompany($: CheerioAPI, url: string): { title?: string; company?: string } {
@@ -153,18 +191,23 @@ function extractTitleCompany($: CheerioAPI, url: string): { title?: string; comp
     if (!pageTitle.includes(sep)) continue;
     const parts = pageTitle.split(sep).map(normalize).filter(Boolean);
     if (parts.length < 2) continue;
-    const company = parts[parts.length - 1];
+    const trailing = parts[parts.length - 1];
     const title = parts.slice(0, -1).join(sep);
-    return { title, company };
+    // A trailing "2027 Summer" or "Class of 2027" is a cohort/program label,
+    // not a company — strip it from the title but don't return it as company
+    // (let extractFromHtml fall back to companyFromHost instead).
+    if (COHORT_LABEL_RE.test(trailing)) return { title };
+    return { title, company: trailing };
   }
 
   return { title: h1 || pageTitle };
 }
 
 // Greenhouse, Lever, Ashby, and Workday all embed a schema.org JobPosting
-// block for SEO — it's the most reliable source for structured location data,
-// since scraping visible page text for "location" is brittle across ATS themes.
-function extractJsonLdLocation($: CheerioAPI): string | undefined {
+// block for SEO — it's the most reliable source for structured location and
+// company data, since scraping visible page text is brittle across ATS
+// themes. Extracted together in one scan since both live on the same node.
+function extractJsonLdJobPosting($: CheerioAPI): { location?: string; company?: string } {
   const scripts = $('script[type="application/ld+json"]');
   for (let i = 0; i < scripts.length; i++) {
     let parsed: unknown;
@@ -185,18 +228,54 @@ function extractJsonLdLocation($: CheerioAPI): string | undefined {
       if (!jobPosting) continue;
 
       const jp = jobPosting as Record<string, unknown>;
-      if (jp.jobLocationType === "TELECOMMUTE") return "Remote";
+      const result: { location?: string; company?: string } = {};
 
-      const jobLocation = Array.isArray(jp.jobLocation) ? jp.jobLocation[0] : jp.jobLocation;
-      const address = (jobLocation as Record<string, unknown> | undefined)?.address as
-        | Record<string, unknown>
-        | undefined;
-      if (!address) continue;
+      const org = jp.hiringOrganization as Record<string, unknown> | undefined;
+      if (org && typeof org.name === "string" && org.name.trim()) {
+        result.company = org.name.trim();
+      }
 
-      const parts = [address.addressLocality, address.addressRegion, address.addressCountry]
-        .filter((p): p is string => typeof p === "string" && p.length > 0);
-      if (parts.length) return parts.join(", ");
+      if (jp.jobLocationType === "TELECOMMUTE") {
+        result.location = "Remote";
+      } else {
+        const jobLocation = Array.isArray(jp.jobLocation) ? jp.jobLocation[0] : jp.jobLocation;
+        const address = (jobLocation as Record<string, unknown> | undefined)?.address as
+          | Record<string, unknown>
+          | undefined;
+        const parts = address
+          ? [address.addressLocality, address.addressRegion, address.addressCountry].filter(
+              (p): p is string => typeof p === "string" && p.length > 0
+            )
+          : [];
+        if (parts.length) result.location = parts.join(", ");
+      }
+
+      if (result.location || result.company) return result;
     }
+  }
+  return {};
+}
+
+const LOCATION_LABEL_RE = /^location:?$/i;
+
+// Custom-built career microsites (React/Next.js in-house career portals
+// without a schema.org JobPosting block) commonly render location as a bare
+// "Location:" label next to its value rather than semantic markup, e.g.
+// <p>Location:</p><p>San Jose</p> or <dt>Location</dt><dd>San Jose</dd>.
+function extractLabelLocation($: CheerioAPI): string | undefined {
+  const leaves = $("*").filter((_, el) => $(el).children().length === 0);
+  for (let i = 0; i < leaves.length; i++) {
+    const $el = $(leaves[i]);
+    if (!LOCATION_LABEL_RE.test(normalize($el.text()))) continue;
+
+    const sibling = $el.next();
+    const siblingText = normalize(sibling.text());
+    if (siblingText && sibling.children().length === 0) return siblingText;
+
+    const parent = $el.parent();
+    const parentText = normalize(parent.text());
+    const remainder = normalize(parentText.replace(/^location:?/i, ""));
+    if (remainder && remainder !== parentText) return remainder;
   }
   return undefined;
 }
@@ -273,13 +352,13 @@ function stripBoilerplate(contentHtml: string, company?: string): string {
     const text = normalize($el.text());
     const tag = $el.prop("tagName")?.toLowerCase() ?? "";
 
-    // Many ATS templates render section titles as <p><strong>Benefits</strong></p>
-    // instead of a real heading tag.
-    const isPseudoHeading =
-      tag === "p" &&
-      text.length > 0 &&
-      text.length <= PSEUDO_HEADING_MAX_LENGTH &&
-      normalize($el.children("strong, b").text()) === text;
+    // Many ATS templates render section titles as <p><strong>Benefits</strong></p>,
+    // or — on custom-built career microsites with no semantic heading tags at
+    // all — as a bare short <p>Benefits</p> styled bold purely via CSS class.
+    // Treating any short standalone <p> as heading-like is safe: it only
+    // resets `dropping` state, which is a no-op unless the text also matches
+    // the boilerplate blacklist below.
+    const isPseudoHeading = tag === "p" && text.length > 0 && text.length <= PSEUDO_HEADING_MAX_LENGTH;
 
     const isHeading = HEADING_TAGS.has(tag) || isPseudoHeading;
 
@@ -297,64 +376,122 @@ function stripBoilerplate(contentHtml: string, company?: string): string {
   return normalize($.root().text());
 }
 
-export function extractFromHtml(
-  html: string,
-  url: string
-): { text: string; title?: string; company?: string; location?: string } {
+// Common JD section headers/phrases. Used as a sanity check that extracted
+// text is actually the job description and not page furniture (nav menus,
+// unrelated marketing copy) that merely happened to clear MIN_LENGTH — e.g.
+// on client-rendered career microsites, the raw (pre-JS) HTML body is often
+// all nav/footer text with no JD content anywhere in the DOM yet.
+const JD_SIGNAL_RE =
+  /\bresponsibilit(?:y|ies)\b|\brequirements?\b|\bqualifications?\b|\bwhat you.?ll do\b|\bwho you are\b|\bwhat we.?re looking for\b|\bduties\b|\bminimum qualifications\b/i;
+
+function hasJdSignal(text: string): boolean {
+  return JD_SIGNAL_RE.test(text);
+}
+
+type ExtractResult = {
+  text: string;
+  title?: string;
+  company?: string;
+  location?: string;
+  // False when `text` had to fall back to raw, unfiltered body text with no
+  // JD-signal confirmation anywhere — i.e. we're not confident this is
+  // actually the job description. Callers should treat this as a failed
+  // extraction rather than a low-quality success.
+  confident: boolean;
+};
+
+export function extractFromHtml(html: string, url: string): ExtractResult {
   const $ = cheerio.load(html);
   const titleCompany = extractTitleCompany($, url);
-  if (!titleCompany.company) {
-    titleCompany.company = companyFromHost(url);
-  }
-  const location = extractJsonLdLocation($);
+  const jsonLd = extractJsonLdJobPosting($);
+  const hostGuess = companyFromHost(url);
+  const company = jsonLd.company ?? titleCompany.company ?? (hostGuess ? improveCasing(hostGuess, $) : undefined);
+  const location = jsonLd.location ?? extractLabelLocation($);
 
   $(NOISE_SELECTORS).remove();
   const cleanedHtml = $.html();
 
   let text = "";
+  let confident = false;
+
   try {
     const dom = new JSDOM(cleanedHtml, { url });
     const article = new Readability(dom.window.document).parse();
     if (article) {
-      const stripped = stripBoilerplate(article.content ?? "", titleCompany.company);
-      text = stripped.length >= MIN_LENGTH ? stripped : normalize(article.textContent ?? "");
+      const stripped = stripBoilerplate(article.content ?? "", company);
+      const candidate = stripped.length >= MIN_LENGTH ? stripped : normalize(article.textContent ?? "");
+      if (candidate.length >= MIN_LENGTH) {
+        text = candidate;
+        confident = true;
+      }
     }
   } catch {
-    text = "";
+    // fall through to other extraction strategies
   }
 
-  if (text.length < MIN_LENGTH) {
+  // Readability's content-scoring can pick the wrong container on
+  // custom-built career microsites with flat, non-semantic div layouts
+  // (no <article>, generic Tailwind classes) — it may exclude the actual JD
+  // section entirely while including marketing/benefits copy instead. Retry
+  // by applying the same boilerplate-stripping walk to the whole cleaned
+  // page rather than just Readability's chosen subset, and prefer it when
+  // it clearly contains JD content Readability's pick is missing (longer,
+  // and mentions Responsibilities/Requirements/etc. the original lacks).
+  // Gated this way rather than always preferring it, since real JDs often
+  // don't use any of those exact words and Readability's narrower pick is
+  // usually the cleaner result.
+  //
+  // Strip <a> tags first: nav menus on these sites are rarely wrapped in a
+  // <nav>/[role=navigation] element (so NOISE_SELECTORS misses them), but
+  // are reliably just a wall of <a> links with no whitespace between them —
+  // unlike JD prose, which essentially never depends on link text.
+  const $bodyOnly = cheerio.load($("body").html() ?? cleanedHtml);
+  $bodyOnly("a").remove();
+  const fullBody = stripBoilerplate($bodyOnly("body").html() ?? "", company);
+  if (
+    fullBody.length >= MIN_LENGTH &&
+    hasJdSignal(fullBody) &&
+    (!confident || (!hasJdSignal(text) && fullBody.length > text.length * 1.3))
+  ) {
+    text = fullBody;
+    confident = true;
+  }
+
+  if (!confident) {
     for (const sel of CONTAINER_SELECTORS) {
       const candidate = normalize($(sel).first().text());
       if (candidate.length >= MIN_LENGTH) {
         text = candidate;
+        confident = true;
         break;
       }
     }
   }
 
-  if (text.length < MIN_LENGTH) {
+  if (!confident) {
     text = normalize($("body").text());
   }
 
-  return { text, ...titleCompany, location };
+  return { text, ...titleCompany, company, location, confident };
 }
 
-async function tryCheerio(
-  url: string
-): Promise<{ text: string; title?: string; company?: string; location?: string }> {
+async function tryCheerio(url: string): Promise<ExtractResult> {
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; JobAgent/1.0)" },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  if (!res.ok) return { text: "" };
+  if (!res.ok) return { text: "", confident: false };
   const html = await res.text();
-  return extractFromHtml(html, url);
+  const result = extractFromHtml(html, url);
+  // Cheerio only sees pre-JS HTML. If extraction had to fall back to raw,
+  // unconfirmed body text, that's a strong signal the real content is
+  // client-rendered and absent from this HTML — don't accept it as success,
+  // let fetchJd() escalate to the Playwright (JS-rendering) path instead.
+  if (!result.confident) return { ...result, text: "" };
+  return result;
 }
 
-async function tryPlaywright(
-  url: string
-): Promise<{ text: string; title?: string; company?: string; location?: string }> {
+async function tryPlaywright(url: string): Promise<ExtractResult> {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ args: ["--disable-dev-shm-usage"] });
   try {
