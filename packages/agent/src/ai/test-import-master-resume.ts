@@ -1,5 +1,5 @@
-import { importMasterResume } from "./import-master-resume";
-import { MasterResumeSchema } from "./types";
+import { importMasterResume, dedupeIds } from "./import-master-resume";
+import { MasterResumeSchema, MasterResume } from "./types";
 
 // A small, deliberately plain-text fixture — the kind of thing pasted straight
 // from a Google Doc or extracted from a PDF, with no markdown/LaTeX structure.
@@ -52,7 +52,71 @@ async function main() {
   console.log("Has stable ids:", hasStableIds);
   console.log("Name:", result.basics.name, "| Email:", result.basics.email);
 
-  const pass = parsed.success && preservesWording && hasStableIds;
+  // --- Offline check: dedupeIds() must resolve colliding ids without any LLM call ---
+  // Simulates what an LLM might produce: two experience entries that both got
+  // slugged to "exp-engineer" (e.g. two different companies, same job title).
+  const collidingFixture: MasterResume = {
+    basics: { name: "Test User", location: "", email: "", phone: "", github: "", linkedin: "", portfolio: "", summary: "" },
+    education: [],
+    experience: [
+      {
+        id: "exp-engineer",
+        company: "Acme Corp",
+        title: "Engineer",
+        location: "",
+        start: "",
+        end: "",
+        bullets: [
+          { id: "exp-engineer-1", text: "Did thing A", tech: [], metrics: [], tags: [] },
+          { id: "exp-engineer-2", text: "Did thing B", tech: [], metrics: [], tags: [] },
+        ],
+      },
+      {
+        id: "exp-engineer",
+        company: "Widget Inc",
+        title: "Engineer",
+        location: "",
+        start: "",
+        end: "",
+        bullets: [
+          { id: "exp-engineer-1", text: "Did thing C", tech: [], metrics: [], tags: [] },
+        ],
+      },
+    ],
+    projects: [],
+    extracurriculars: [],
+    skills: { languages: [], frameworks: [], tools: [], interests: [] },
+  };
+
+  const deduped = dedupeIds(collidingFixture);
+  const [first, second] = deduped.experience;
+
+  const idsAreUnique = first.id !== second.id;
+  const firstIdUnchanged = first.id === "exp-engineer";
+  const secondIdRenumbered = second.id === "exp-engineer-2";
+  const firstBulletsRenumbered =
+    first.bullets[0].id === `${first.id}-1` && first.bullets[1].id === `${first.id}-2`;
+  const secondBulletsRenumbered = second.bullets[0].id === `${second.id}-1`;
+  const bulletTextPreserved =
+    first.bullets[0].text === "Did thing A" &&
+    first.bullets[1].text === "Did thing B" &&
+    second.bullets[0].text === "Did thing C";
+
+  const dedupePass =
+    idsAreUnique &&
+    firstIdUnchanged &&
+    secondIdRenumbered &&
+    firstBulletsRenumbered &&
+    secondBulletsRenumbered &&
+    bulletTextPreserved;
+
+  console.log("\n--- dedupeIds() offline check ---");
+  console.log("Entry ids are unique:", idsAreUnique, `(${first.id}, ${second.id})`);
+  console.log("Bullets renumbered under new entry ids:", firstBulletsRenumbered && secondBulletsRenumbered);
+  console.log("Bullet text preserved verbatim:", bulletTextPreserved);
+  console.log("dedupeIds offline check:", dedupePass ? "PASSED" : "FAILED");
+
+  const pass = parsed.success && preservesWording && hasStableIds && dedupePass;
   console.log(pass ? "\n✓ import-master-resume test PASSED" : "\n✗ import-master-resume test FAILED");
   process.exit(pass ? 0 : 1);
 }

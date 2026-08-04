@@ -127,13 +127,24 @@ Return JSON: { "fixes": [{ "original": "...", "revised": "..." }] }`,
  * Fits the résumé markdown to one page:
  *   1. Renders to PDF and counts pages.
  *   2. If > 1 page, runs an LLM trim pass (up to 2 attempts).
- *   3. Runs a heuristic widow-word scan and one LLM fix pass if any are found.
+ *   3. Runs a heuristic widow-word scan and one LLM fix pass if any are found
+ *      — unless `opts.skipWidowFix` is set, in which case this pass is
+ *      skipped entirely, even on an unchanged, already-one-page resume.
+ *
+ * `opts.skipWidowFix` exists for flows where bullets must stay verbatim
+ * except for explicitly-approved edits (the suggestion-based tailoring
+ * flow) — the widow-fix pass sends untouched bullets to an LLM to reword
+ * them, which would silently violate that guarantee. The old general-resume
+ * flow, which already does full AI rewriting, keeps the widow-fix on.
  *
  * Returns the final (possibly shortened) markdown alongside the PDF so both
- * can be stored consistently in the database.
+ * can be stored consistently in the database. Logs a warning if the content
+ * was modified at all (page-count trim and/or widow-fix), since callers that
+ * expect verbatim output should not see this happen.
  */
 export async function fitToOnePage(
   markdown: string,
+  opts: { skipWidowFix?: boolean } = {},
 ): Promise<{ markdown: string; pdf: Buffer }> {
   let current = markdown;
   let pdf = await renderPdf(current);
@@ -150,11 +161,18 @@ export async function fitToOnePage(
     console.warn(`[fit-page] resume still ${pages} pages after 2 trim passes`);
   }
 
-  // Widow word fix (one pass after page is stable)
-  const widows = findWidowBullets(current);
+  // Widow word fix (one pass after page is stable). Skipped for flows where
+  // bullets must stay verbatim except for explicitly-approved edits (the
+  // suggestion-based tailoring flow) — an unconditional LLM rewording pass
+  // here would silently undo that guarantee.
+  const widows = opts.skipWidowFix ? [] : findWidowBullets(current);
   if (widows.length > 0) {
     current = await fixWidowBullets(current, widows);
     pdf = await renderPdf(current);
+  }
+
+  if (current !== markdown) {
+    console.warn(`[fit-page] content modified during fit (page-count trim and/or widow-fix) for a resume that may have expected to stay verbatim`);
   }
 
   return { markdown: current, pdf };
