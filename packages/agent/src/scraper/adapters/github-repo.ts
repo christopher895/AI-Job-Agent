@@ -89,6 +89,13 @@ export async function scrapeGithubRepo(repoUrl: string): Promise<JobListing[]> {
     return [];
   }
 
-  const raw = await res.text();
+  let raw: string;
+  try {
+    raw = await res.text();
+  } catch (err) {
+    console.warn(`[github-repo] ${owner}/${repo}: failed reading response body — ${err instanceof Error ? err.message : err}`);
+    return [];
+  }
+
   return parseListingsJson(raw);
 }
