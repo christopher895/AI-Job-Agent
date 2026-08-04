@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { pool } from "./pool";
 import { MasterResume, MasterResumeSchema, Suggestion } from "../ai/types";
 import { Preferences, FILTERS } from "../config";
@@ -326,4 +327,23 @@ export async function updateAppliedJob(
     [fields.status !== undefined, fields.status || null, fields.sheetsRow ?? null, id]
   );
   return rows[0] ?? null;
+}
+
+const PLAYGROUND_IP_PEPPER = process.env.PLAYGROUND_IP_PEPPER ?? "dev-only-pepper-set-a-real-one-in-prod";
+
+/** Hashes an IP with a server-only pepper so raw IPs never sit in the DB. */
+export function hashIp(ip: string): string {
+  return crypto.createHash("sha256").update(`${PLAYGROUND_IP_PEPPER}:${ip}`).digest("hex");
+}
+
+export async function logPlaygroundUsage(ipHash: string): Promise<void> {
+  await pool.query(`INSERT INTO playground_usage (ip_hash) VALUES ($1)`, [ipHash]);
+}
+
+export async function countRecentPlaygroundUsage(ipHash: string): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM playground_usage WHERE ip_hash = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+    [ipHash]
+  );
+  return rows[0].count;
 }

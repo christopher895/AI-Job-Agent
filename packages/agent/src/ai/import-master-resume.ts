@@ -81,11 +81,12 @@ export function dedupeIds(mr: MasterResume): MasterResume {
   return { ...mr, experience, projects, extracurriculars };
 }
 
-export async function importMasterResume(rawText: string): Promise<MasterResume> {
+export async function importMasterResume(rawText: string, apiKey?: string): Promise<MasterResume> {
   const parsed = await completeJSON(MasterResumeSchema, {
     system: SYSTEM_PROMPT,
     user: rawText,
     temperature: 0.1,
+    anthropicApiKey: apiKey,
   });
   return dedupeIds(parsed);
 }

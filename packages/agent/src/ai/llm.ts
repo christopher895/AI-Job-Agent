@@ -40,6 +40,43 @@ async function callOpenAIOnce(system: string, user: string, model: string, tempe
   return res.choices[0]?.message?.content ?? "";
 }
 
+const ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929";
+
+async function callAnthropicWithKey(
+  system: string,
+  user: string,
+  apiKey: string,
+  temperature: number
+): Promise<string> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: ANTHROPIC_MODEL,
+      max_tokens: 4096,
+      temperature,
+      system,
+      messages: [{ role: "user", content: user }],
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Anthropic API request failed (${res.status}): ${body.slice(0, 300)}`);
+  }
+
+  const data = (await res.json()) as { content?: { type: string; text?: string }[] };
+  const textBlock = data.content?.find((b) => b.type === "text");
+  if (!textBlock?.text) {
+    throw new Error("Anthropic API response had no text content");
+  }
+  return textBlock.text;
+}
+
 export async function completeJSON<T>(
   // `any` for the input type so schemas using `.default()` (output ≠ input) infer T as the output.
   schema: z.ZodType<T, z.ZodTypeDef, any>,
@@ -49,9 +86,13 @@ export async function completeJSON<T>(
     model?: string;
     temperature?: number;
     maxRetries?: number;
+    /** When set, calls Anthropic's API directly with this key instead of the
+     *  server's own LLM_PROVIDER dispatch — used only by the public playground,
+     *  where the visitor brings their own key. Omit for every other call site. */
+    anthropicApiKey?: string;
   }
 ): Promise<T> {
-  const { system, user, model, temperature = 0.4, maxRetries = 2 } = opts;
+  const { system, user, model, temperature = 0.4, maxRetries = 2, anthropicApiKey } = opts;
   let lastError = "";
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -62,14 +103,17 @@ export async function completeJSON<T>(
 
     const startedAt = Date.now();
     try {
-      const parsed =
-        LLM_PROVIDER === "openai"
+      const parsed = anthropicApiKey
+        ? JSON.parse(await callAnthropicWithKey(system, userContent, anthropicApiKey, temperature))
+        : LLM_PROVIDER === "openai"
           ? JSON.parse(await callOpenAIOnce(system, userContent, model ?? DEFAULT_MODEL, temperature))
           : await callClaudeCli(schema, { system, user: userContent, model: model ?? process.env.CLAUDE_MODEL });
-      console.log(`[llm] provider=${LLM_PROVIDER} attempt=${attempt + 1} ok in ${Date.now() - startedAt}ms`);
+      const provider = anthropicApiKey ? "anthropic-key" : LLM_PROVIDER;
+      console.log(`[llm] provider=${provider} attempt=${attempt + 1} ok in ${Date.now() - startedAt}ms`);
       return schema.parse(parsed);
     } catch (err) {
-      console.log(`[llm] provider=${LLM_PROVIDER} attempt=${attempt + 1} FAILED in ${Date.now() - startedAt}ms`);
+      const provider = anthropicApiKey ? "anthropic-key" : LLM_PROVIDER;
+      console.log(`[llm] provider=${provider} attempt=${attempt + 1} FAILED in ${Date.now() - startedAt}ms`);
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
