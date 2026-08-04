@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "npm run test:resume-stage && npm run test:auth-allowlist",
+    "test:resume-stage": "tsx lib/test-resume-stage.ts",
     "test:auth-allowlist": "tsx lib/test-auth-allowlist.ts"
   },
   "dependencies": {
