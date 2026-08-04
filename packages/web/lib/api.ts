@@ -13,6 +13,8 @@ export type ResumeListItem = {
   status: "pending" | "ready" | "failed";
   /** Error from the tailoring pipeline itself, set when status = 'failed'. */
   error: string | null;
+  /** Current pipeline step while status = 'pending' (e.g. "Drafting resume (pass 1)"); null otherwise. */
+  stage: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -139,6 +141,12 @@ function filenameFromContentDisposition(res: Response): string | null {
   return match ? match[1] : null;
 }
 
+function pageCountFromHeaders(res: Response): number | null {
+  const header = res.headers.get("X-Page-Count");
+  const n = header ? parseInt(header, 10) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
+
 async function requestBlobWithFilename(
   method: string,
   path: string,
@@ -149,6 +157,15 @@ async function requestBlobWithFilename(
     throw new Error((err as { error?: string }).error ?? res.statusText);
   }
   return { blob: await res.blob(), filename: filenameFromContentDisposition(res) };
+}
+
+async function requestFormData<T>(method: string, path: string, formData: FormData): Promise<T> {
+  const res = await fetch(`${API}${path}`, { method, body: formData });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((err as { error?: string }).error ?? res.statusText);
+  }
+  return res.json() as Promise<T>;
 }
 
 export const api = {
@@ -179,6 +196,13 @@ export const api = {
   getMasterResume: () => request<MasterResume>("GET", "/master-resume"),
   putMasterResume: (data: MasterResume) =>
     request<{ updated: boolean }>("PUT", "/master-resume", data),
+  importMasterResumeText: (text: string) =>
+    request<MasterResume>("POST", "/master-resume/import", { text }),
+  importMasterResumePdf: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return requestFormData<MasterResume>("POST", "/master-resume/import", fd);
+  },
   getGeneralResume: () => request<Resume>("GET", "/general-resume"),
   generateGeneralResume: () => request<{ id: string; status: "pending" }>("POST", "/general-resume/generate"),
   listApplied: () => request<AppliedJob[]>("GET", "/applied"),
@@ -200,6 +224,16 @@ export const api = {
   pdfUrl: (id: string) => `${API}/resume/${id}/pdf`,
   getPdfBlob: (id: string) => requestBlob("GET", `/resume/${id}/pdf`),
   getPdfBlobWithFilename: (id: string) => requestBlobWithFilename("GET", `/resume/${id}/pdf`),
-  previewMasterResumePdf: (data: MasterResume) =>
-    requestBlob("POST", "/master-resume/preview-pdf", data),
+  previewMasterResumePdf: async (data: MasterResume): Promise<{ blob: Blob; pageCount: number | null }> => {
+    const res = await fetch(`${API}/master-resume/preview-pdf`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error((err as { error?: string }).error ?? res.statusText);
+    }
+    return { blob: await res.blob(), pageCount: pageCountFromHeaders(res) };
+  },
 };

@@ -27,7 +27,7 @@ export type GroundingReport = {
 };
 
 /** Extracts numeric tokens (money, %, counts, +, k/m/b, million/billion) from text. */
-function numbers(text: string): Set<string> {
+export function numbers(text: string): Set<string> {
   const out = new Set<string>();
   const re = /\$?\d[\d,]*\.?\d*\s*(?:%|\+|k|m|b|million|billion|thousand)?/gi;
   for (const match of text.matchAll(re)) {

@@ -16,6 +16,8 @@ export type GenerateOptions = TailorOptions & {
   maxIterations?: number;
   /** Stop early once a non-gated draft reaches this score (default 80). */
   targetScore?: number;
+  /** Reports the pipeline's current step (e.g. "Drafting resume (pass 1)") as it runs. */
+  onProgress?: (stage: string) => void;
 };
 
 export type GenerateResult = {
@@ -27,6 +29,11 @@ export type GenerateResult = {
   history: { iteration: number; finalScore: number; gated: boolean }[];
 };
 
+/** Label for the draft step of a given iteration — pass 1 is a fresh draft, later passes are revisions. */
+export function draftStageLabel(iteration: number): string {
+  return iteration === 1 ? "Drafting resume (pass 1)" : `Revising resume (pass ${iteration})`;
+}
+
 export async function generateBestResume(jd: string, opts: GenerateOptions = {}): Promise<GenerateResult> {
   const master = opts.master ?? await getMasterResume();
   const maxIterations = opts.maxIterations ?? 3;
@@ -37,6 +44,8 @@ export async function generateBestResume(jd: string, opts: GenerateOptions = {})
   const history: GenerateResult["history"] = [];
 
   for (let i = 1; i <= maxIterations; i++) {
+    opts.onProgress?.(draftStageLabel(i));
+
     let tailored: TailoredResume;
     try {
       ({ tailored } = await tailorResume(jd, { ...opts, master, feedback }));
@@ -44,6 +53,8 @@ export async function generateBestResume(jd: string, opts: GenerateOptions = {})
       console.error(`[chain] iteration ${i} tailor step failed:`, err);
       throw err;
     }
+
+    opts.onProgress?.("Critiquing draft");
 
     let critic: CriticResult;
     try {

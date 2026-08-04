@@ -16,7 +16,7 @@ const CHARS_PER_BULLET_LINE = 88;
 
 // Tectonic emits PDF 1.5 with compressed object streams, so the page tree
 // isn't visible to a raw byte/string scan — shell out to pdfinfo instead.
-async function countPdfPages(pdf: Buffer): Promise<number> {
+export async function countPdfPages(pdf: Buffer): Promise<number> {
   const tmpFile = path.join(os.tmpdir(), `fit-page-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`);
   try {
     await fs.writeFile(tmpFile, pdf);

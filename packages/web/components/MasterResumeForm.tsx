@@ -3,7 +3,6 @@ import { useState, useRef, useEffect } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, MasterResume, ExperienceEntry, ProjectEntry, EducationEntry } from "../lib/api";
 import { SortableSection, DragHandle } from "./SortableSection";
-import GeneralResumeTab from "./GeneralResumeTab";
 
 const SECTIONS = ["Basics", "Experience", "Projects", "Skills", "Education", "Extracurriculars"] as const;
 type Section = (typeof SECTIONS)[number];
@@ -98,25 +97,13 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [pageCount, setPageCount] = useState<number | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const prevBlobRef = useRef<string | null>(null);
   const hasAttemptedPreviewRef = useRef(false);
-  const [mode, setMode] = useState<"master" | "general">("master");
-  const [dirty, setDirty] = useState(false);
-  const isFirstRenderRef = useRef(true);
-  const [syncing, setSyncing] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
-
-  // Any edit to the Master form marks it dirty; "Sync to General" is
-  // disabled while dirty because syncing always reads the DB-persisted
-  // master resume (same source getMasterResume() uses everywhere else),
-  // so unsaved form edits would silently not be reflected in a sync.
-  useEffect(() => {
-    if (isFirstRenderRef.current) {
-      isFirstRenderRef.current = false;
-      return;
-    }
-    setDirty(true);
-  }, [resume]);
 
   async function save() {
     setSaving(true);
@@ -124,7 +111,6 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     try {
       await api.putMasterResume(resume);
       setSaved(true);
-      setDirty(false);
       setTimeout(() => setSaved(false), 2500);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
@@ -133,16 +119,33 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     }
   }
 
-  async function syncToGeneral() {
-    setSyncing(true);
-    setSyncError(null);
+  async function importFromText() {
+    if (!importText.trim()) return;
+    setImporting(true);
+    setImportError(null);
     try {
-      await api.generateGeneralResume();
-      setMode("general");
+      const parsed = await api.importMasterResumeText(importText);
+      setResume(parsed);
+      setShowImport(false);
+      setImportText("");
     } catch (e) {
-      setSyncError(e instanceof Error ? e.message : "Sync failed");
+      setImportError(e instanceof Error ? e.message : "Import failed");
     } finally {
-      setSyncing(false);
+      setImporting(false);
+    }
+  }
+
+  async function importFromPdf(file: File) {
+    setImporting(true);
+    setImportError(null);
+    try {
+      const parsed = await api.importMasterResumePdf(file);
+      setResume(parsed);
+      setShowImport(false);
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setImporting(false);
     }
   }
 
@@ -151,11 +154,12 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     setPreviewError(null);
     setShowPreview(true);
     try {
-      const blob = await api.previewMasterResumePdf(resume);
+      const { blob, pageCount: pages } = await api.previewMasterResumePdf(resume);
       const url = URL.createObjectURL(blob);
       if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
       prevBlobRef.current = url;
       setPreviewBlobUrl(url);
+      setPageCount(pages);
     } catch (e) {
       setPreviewError(e instanceof Error ? e.message : "PDF generation failed.");
     } finally {
@@ -410,49 +414,23 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     <div className="flex h-full">
       {/* Section tabs */}
       <div className="w-44 flex-shrink-0 border-r border-gray-200 bg-white px-3 py-6">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">Resume</p>
-        {(["master", "general"] as const).map((m) => (
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2">Sections</p>
+        {SECTIONS.map((s) => (
           <button
-            key={m}
-            onClick={() => setMode(m)}
+            key={s}
+            onClick={() => setActiveSection(s)}
             className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-0.5 transition-colors ${
-              mode === m
+              activeSection === s
                 ? "bg-violet-50 text-violet-700 font-medium"
                 : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
             }`}
           >
-            {m === "master" ? "Master Resume" : "General Resume"}
+            {s}
           </button>
         ))}
-
-        {mode === "master" && (
-          <>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 mb-2 mt-6">
-              Sections
-            </p>
-            {SECTIONS.map((s) => (
-              <button
-                key={s}
-                onClick={() => setActiveSection(s)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-0.5 transition-colors ${
-                  activeSection === s
-                    ? "bg-violet-50 text-violet-700 font-medium"
-                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </>
-        )}
       </div>
 
-      {/* Content + optional preview panel */}
-      {mode === "general" ? (
-        <div className="flex-1 min-w-0">
-          <GeneralResumeTab />
-        </div>
-      ) : (
+      {/* Content + preview panel */}
       <PanelGroup direction="horizontal" className="flex-1 min-w-0">
         <Panel id="form-content" order={1} defaultSize={50} minSize={20}>
         {/* Form content */}
@@ -464,6 +442,11 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             <p className="text-sm text-gray-500 mt-1">
               This is the source of truth used to generate all tailored resumes.
             </p>
+            {pageCount != null && pageCount > 1 && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2 inline-block">
+                This master resume is {pageCount} pages — trim a bullet or shorten wording before saving.
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             {error && <span className="text-xs text-red-600">{error}</span>}
@@ -501,14 +484,11 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                 ✕
               </button>
             )}
-            {syncError && <span className="text-xs text-red-600">{syncError}</span>}
             <button
-              onClick={syncToGeneral}
-              disabled={dirty || syncing}
-              title={dirty ? "Save changes first" : "Regenerate the General Resume from this Master Resume"}
-              className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors font-medium"
+              onClick={() => setShowImport((v) => !v)}
+              className="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium"
             >
-              {syncing ? "Syncing…" : "Sync to General ⟳"}
+              Import…
             </button>
             <button
               onClick={save}
@@ -524,6 +504,47 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             </button>
           </div>
         </div>
+
+        {showImport && (
+          <div className="mb-8 border border-gray-200 rounded-xl p-4 bg-gray-50">
+            <p className="text-sm text-gray-600 mb-3">
+              Paste your resume text below, or upload a PDF. This pre-fills the form for you to
+              review — nothing is saved until you click Save Changes.
+            </p>
+            <textarea
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              rows={6}
+              placeholder="Paste resume text here…"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white resize-none"
+            />
+            <div className="flex items-center gap-3 mt-3">
+              <button
+                onClick={importFromText}
+                disabled={importing || !importText.trim()}
+                className="text-sm px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {importing ? "Parsing…" : "Parse pasted text"}
+              </button>
+              <span className="text-xs text-gray-400">or</span>
+              <label className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 cursor-pointer transition-colors">
+                Upload PDF
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  disabled={importing}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) importFromPdf(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+              {importError && <span className="text-xs text-red-600">{importError}</span>}
+            </div>
+          </div>
+        )}
 
         {/* ── Basics ── */}
         {activeSection === "Basics" && (
@@ -795,7 +816,6 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
           </>
         )}
       </PanelGroup>
-      )}
     </div>
   );
 }
