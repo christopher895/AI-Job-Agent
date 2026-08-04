@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An autonomous AI agent that monitors 80+ company career pages 24/7, detects new job postings via each company's ATS API (Greenhouse/Ashby/Lever/Amazon) and snapshot diffing, auto-tailors Christopher's resume per role by suggesting JD keyword insertions against his fixed master resume for Christopher to review and approve, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, review/approve suggested edits, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — all without auth (private URL, single user).
+An autonomous AI agent that monitors 80+ company career pages 24/7, detects new job postings via each company's ATS API (Greenhouse/Ashby/Lever/Amazon) and snapshot diffing, auto-tailors Christopher's resume per role by suggesting JD keyword insertions against his fixed master resume for Christopher to review and approve, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, review/approve suggested edits, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — gated behind Google sign-in restricted to his email.
 
 Owner: **Christopher Zhang** (Summer 2026 build)
 

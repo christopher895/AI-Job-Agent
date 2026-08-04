@@ -1,6 +1,6 @@
 # AI Job Hunting Agent
 
-An autonomous agent that monitors 80+ company career pages 24/7, detects new job postings via snapshot diffing, auto-tailors Christopher's resume per role by suggesting JD keyword insertions against his fixed master resume for review and approval, and sends email alerts with a one-click link to generate a tailored resume. A web app lets you paste a job description or URL, review/approve suggested edits, edit the tailored output, download a PDF, and log applications to Google Sheets — no auth required.
+An autonomous agent that monitors 80+ company career pages 24/7, detects new job postings via snapshot diffing, auto-tailors Christopher's resume per role by suggesting JD keyword insertions against his fixed master resume for review and approval, and sends email alerts with a one-click link to generate a tailored resume. A web app lets you paste a job description or URL, review/approve suggested edits, edit the tailored output, download a PDF, and log applications to Google Sheets — gated behind Google sign-in.
 
 ---
 
@@ -41,7 +41,7 @@ Edit inline → Download PDF → Log to Google Sheets
 | PDF           | Tectonic (LaTeX compiler), custom `czresume.cls` template            |
 | Notifications | Resend (job alert emails + "Email to me" from editor)                |
 | Sheets        | Google Sheets API v4 (application log)                               |
-| Auth          | None — private Railway URL, single user                              |
+| Auth          | Google OAuth (Auth.js), single-email allowlist; agent API locked to a shared-secret header |
 | Infra         | Railway (deployment), Docker Compose (local Postgres)        |
 
 ---
@@ -276,4 +276,4 @@ Both services share the same Railway Postgres instance. Set `WEB_URL` on the age
 
 **Resume-Worded-style critic rubric** — `critic_score` is a blend of an LLM holistic score (60%, graded against a Weak-roles/Brevity-&-Style rubric), a deterministic format score (25%, quantified-impact ratio, weak/repeated verbs, verb tenses, buzzwords/filler/pronouns, passive voice, spelling, readability/ATS-glyph safety), and JD keyword coverage (15%), with a hard grounding gate that caps the score at 25 on any fabricated claim. It intentionally does not score candidate credentials (open-source contributions, prior employers, portfolio links) — those can't be changed by rewriting a bullet, so scoring them just adds noise the tailoring loop can't act on. Only signals a rewrite can actually move are scored.
 
-**No auth** — Single user, private Railway URL. Adding auth would add overhead with zero security benefit in this setup.
+**Google OAuth, single-email allowlist** — The web app is gated behind Google sign-in restricted to one email; a BFF proxy is the only caller of the agent API, which rejects anything lacking the shared `INTERNAL_API_SECRET` header. See `docs/superpowers/specs/2026-08-03-private-auth-design.md`.
