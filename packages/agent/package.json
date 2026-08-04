@@ -15,6 +15,7 @@
     "test:fetch-jd": "tsx src/scraper/test-fetch-jd.ts",
     "test:claude-cli": "tsx src/ai/test-claude-cli.ts",
     "test:render-pdf": "tsx src/ai/test-render-pdf.ts",
+    "test:internal-secret": "tsx src/api/test-internal-secret.ts",
     "tailor": "tsx src/ai/run-tailor.ts"
   },
   "dependencies": {
