@@ -5,6 +5,7 @@ export type Preferences = {
   targetLocations: string[];
   maxPerEmail: number;
   priorityCompanies: string[];
+  watchedRepos: string[];
 };
 
 export const FILTERS: Preferences = {
@@ -43,4 +44,5 @@ export const FILTERS: Preferences = {
     "Perplexity",
     "Cursor",
   ],
+  watchedRepos: ["https://github.com/vanshb03/Summer2027-Internships"],
 };

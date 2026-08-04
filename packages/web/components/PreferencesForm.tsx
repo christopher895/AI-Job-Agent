@@ -334,6 +334,20 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
             </div>
           </div>
         </div>
+
+        {/* Watched GitHub repos */}
+        <div className="border border-paper-border rounded-xl p-5 bg-paper">
+          <SectionHeader
+            title="Watched GitHub Repos"
+            description="Community internship-tracker repos to poll for new postings. Checked on the same 15-minute cycle as company pages, but jobs found here aren't filtered by title/location and are emailed separately, uncapped."
+          />
+          <Label>Repo URLs</Label>
+          <TagInput
+            tags={prefs.watchedRepos ?? []}
+            onChange={(v) => set("watchedRepos", v)}
+            placeholder="https://github.com/owner/repo"
+          />
+        </div>
       </div>
 
       {/* Bottom save */}

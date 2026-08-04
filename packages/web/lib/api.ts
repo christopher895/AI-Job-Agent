@@ -105,6 +105,7 @@ export type Preferences = {
   targetLocations: string[];
   maxPerEmail: number;
   priorityCompanies: string[];
+  watchedRepos: string[];
 };
 
 export type MasterResume = {
