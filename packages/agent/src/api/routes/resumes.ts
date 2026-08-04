@@ -9,8 +9,17 @@ import {
   storePdf,
   setPdfError,
   getMasterResume,
+  beginApplyingSuggestions,
+  completeTailoredResume,
+  failTailoredResume,
+  updateResumeStage,
 } from "../../db/queries";
 import { renderPdf } from "../../ai/render-pdf";
+import { renderMarkdown } from "../../ai/format";
+import { fitToOnePage } from "../../ai/fit-page";
+import { applySuggestions } from "../../ai/apply-suggestions";
+import { Suggestion } from "../../ai/types";
+import { LLM_PROVIDER } from "../../ai/llm";
 import { buildResumeFilename } from "../../utils/filename";
 
 function errorMessage(err: unknown): string {
@@ -100,6 +109,73 @@ router.patch("/resume/:id", async (req, res) => {
     company: updated.company,
   });
 });
+
+// POST /api/resume/:id/apply-suggestions — applies the accepted suggestions
+// from the awaiting_review checklist and produces the final one-page resume.
+// Same async shape as POST /api/tailor: responds immediately, runs in the
+// background, and reuses the existing pending/polling UI.
+router.post("/resume/:id/apply-suggestions", async (req, res) => {
+  const { accepted } = req.body as { accepted?: Suggestion[] };
+  if (!Array.isArray(accepted)) {
+    res.status(400).json({ error: "accepted must be an array of suggestions" });
+    return;
+  }
+
+  const row = await getTailoredResume(req.params.id);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (row.status !== "awaiting_review") {
+    res.status(409).json({ error: `Resume is ${row.status}, not awaiting review.` });
+    return;
+  }
+
+  await beginApplyingSuggestions(req.params.id);
+  res.status(202).json({ id: req.params.id, status: "pending" });
+
+  runApplyPipeline(req.params.id, accepted).catch((err) => {
+    console.error("[resume] apply-suggestions pipeline crashed:", err);
+  });
+});
+
+async function runApplyPipeline(id: string, accepted: Suggestion[]) {
+  try {
+    await updateResumeStage(id, "Applying your selections");
+    const master = await getMasterResume();
+    const { master: adjustedMaster, tailored } = applySuggestions(master, accepted);
+    let markdown = renderMarkdown(adjustedMaster, tailored);
+
+    await updateResumeStage(id, "Finalizing formatting");
+    let pdf: Buffer | null = null;
+    try {
+      const fitted = await fitToOnePage(markdown);
+      markdown = fitted.markdown;
+      pdf = fitted.pdf;
+    } catch (err) {
+      console.error("[resume] fitToOnePage failed, continuing with un-fitted markdown:", err);
+    }
+
+    await completeTailoredResume(id, { markdown, suggestions: accepted });
+
+    if (pdf) {
+      await storePdf(id, pdf).catch((err) => {
+        console.error("[resume] pdf store failed:", err);
+        setPdfError(id, errorMessage(err)).catch(() => {});
+      });
+    } else {
+      try {
+        const rendered = await renderPdf(markdown);
+        await storePdf(id, rendered);
+      } catch (err) {
+        console.error("[resume] pdf render failed:", err);
+        await setPdfError(id, errorMessage(err));
+      }
+    }
+  } catch (err) {
+    console.error("[resume] apply-suggestions pipeline error:", err);
+    const credentialHint =
+      LLM_PROVIDER === "openai" ? "check OPENAI_API_KEY" : "check CLAUDE_CODE_OAUTH_TOKEN";
+    await failTailoredResume(id, `Applying suggestions failed — ${credentialHint} and try again.`);
+  }
+}
 
 // DELETE /api/resume/:id
 router.delete("/resume/:id", async (req, res) => {
