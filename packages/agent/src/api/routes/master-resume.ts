@@ -76,6 +76,12 @@ router.post("/import", upload.single("file"), async (req, res) => {
     return;
   }
 
+  const MAX_IMPORT_TEXT_CHARS = 60_000;
+  if (rawText.length > MAX_IMPORT_TEXT_CHARS) {
+    console.warn(`[master-resume] import text truncated from ${rawText.length} to ${MAX_IMPORT_TEXT_CHARS} chars`);
+    rawText = rawText.slice(0, MAX_IMPORT_TEXT_CHARS);
+  }
+
   try {
     const master = await importMasterResume(rawText);
     res.json(master);

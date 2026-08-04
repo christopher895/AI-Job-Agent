@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An autonomous AI agent that monitors 80+ company career pages 24/7, detects new job postings via each company's ATS API (Greenhouse/Ashby/Lever/Amazon) and snapshot diffing, auto-tailors Christopher's resume per role using a generate → critique → revise AI loop, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — all without auth (private URL, single user).
+An autonomous AI agent that monitors 80+ company career pages 24/7, detects new job postings via each company's ATS API (Greenhouse/Ashby/Lever/Amazon) and snapshot diffing, auto-tailors Christopher's resume per role by suggesting JD keyword insertions against his fixed master resume for Christopher to review and approve, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, review/approve suggested edits, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — all without auth (private URL, single user).
 
 Owner: **Christopher Zhang** (Summer 2026 build)
 
@@ -12,13 +12,15 @@ Everything below is implemented and running in production, not aspirational — 
 
 - **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon adapters (80+ companies); snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
 - **Alert emails** — Resend email listing new jobs (title, company, link) with a "Tailor resume" link per job → `/tailor?jobUrl=...&title=...&company=...`
-- **AI tailoring pipeline** — `generateBestResume(jd)` in `packages/agent/src/ai/chain.ts`: generate → critique → revise loop (up to 3 passes), scored against a resume-worded-style rubric, outputs ATS-safe Markdown
+- **AI tailoring pipeline** — `suggestKeywords(jd, master)` in `packages/agent/src/ai/suggest-keywords.ts`: a single pass proposes keyword-insertion suggestions (bullet rewrites and skill additions) against the fixed, one-page master resume, which is never reordered or cut. Christopher reviews, edits, and checks off suggestions in a checklist; `POST /api/resume/:id/apply-suggestions` applies only the accepted ones and renders the final one-page Markdown. The old 3-pass generate→critique→revise loop (`chain.ts`) still exists but now only backs the dormant, UI-removed general-resume feature
 - **LLM provider** — Claude by default, via the headless `claude -p` CLI (`packages/agent/src/ai/claude-cli.ts`), authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing). OpenAI/GPT-4o is a manual fallback (`LLM_PROVIDER=openai`)
 - **Master resume** — source facts live in `packages/agent/src/ai/master-resume.ts`, seeded once into the `master_resume` DB table; `/resume/master` reads and writes the DB copy directly (see Deployment below — always edit on production, not locally)
+- **Master resume import** — `/resume/master` can parse pasted text or an uploaded PDF into a `MasterResume` via `importMasterResume()` (LLM-parsed, ids deduplicated deterministically after the fact); the result loads into the existing form as unsaved state for review before saving, never written to the DB directly
+- **One-page overflow warning** — `/resume/master` shows a warning banner when the rendered preview PDF exceeds one page, since the master resume is meant to stay a fixed one-page source of truth for suggestion-based tailoring
 - **PDF generation** — Markdown → LaTeX → PDF via Tectonic + the custom `Resume_Template/czresume.cls` template, for both tailored resumes and the master resume preview
 - **Web app** — `/`, `/tailor`, `/resume/[id]`, `/resume/master`, `/applied`, `/preferences` all built (see table below)
 - **Cron scheduler** — scraper runs every 15 min, in-process (no queue layer), guarded against overlapping ticks
-- **Async tailoring** — `POST /api/tailor` returns immediately (202) with a `pending` row; the generate → critique → revise loop and PDF render run in the background since they routinely exceed Railway's ~300s edge-proxy timeout. The editor polls `GET /api/resumes/:id` until status flips to `ready` or `failed`
+- **Async tailoring** — `POST /api/tailor` returns immediately (202) with a `pending` row; the background job runs `suggestKeywords(jd, master)` and lands the row at `awaiting_review` with proposed suggestions attached (not `ready`). After Christopher reviews and approves suggestions in the checklist, `POST /api/resume/:id/apply-suggestions` runs the rest of the pipeline (apply, render, fit-to-page, PDF) in the background and takes the row to `ready`. The editor polls `GET /api/resumes/:id` until status leaves `pending`
 
 ## Core Flows
 
@@ -198,9 +200,10 @@ tailored_resumes (
   markdown      text,           -- current editor content (editable)
   pdf           bytea,          -- rendered PDF blob
   pdf_error     text,           -- error from the most recent PDF render attempt, if any
-  critic_score  int,            -- final score from the critique loop
-  status        text,           -- 'pending' | 'ready' | 'failed' — tailoring runs as a background job
+  critic_score  int,            -- final score from the critique loop (general-resume path only)
+  status        text,           -- 'pending' | 'awaiting_review' | 'ready' | 'failed' — tailoring runs as a background job
   error         text,           -- error message if status = 'failed'
+  suggestions   jsonb,          -- proposed keyword-insertion suggestions; accepted/rejected state stored per item after review
   created_at    timestamptz,
   updated_at    timestamptz
 )
@@ -246,13 +249,19 @@ cron (every 15 min, in-process, guarded against overlapping ticks)
 POST /api/tailor (jd text or job URL)
   → if URL: auto-fetch JD synchronously via Playwright/Cheerio + Readability (capped at 15s)
     → create tailored_resumes row with status='pending', respond 202 immediately
-      → [background] generateBestResume(jd) — up to 3 passes via Claude CLI (or OpenAI if LLM_PROVIDER=openai)
-        → update row: markdown, critic_score, status='ready' (or 'failed' + error message)
-          → [background] render PDF via Tectonic/czresume.cls → store in tailored_resumes.pdf (or pdf_error)
-  → frontend polls GET /api/resumes/:id until status leaves 'pending'
+      → [background] suggestKeywords(jd, master) via Claude CLI (or OpenAI if LLM_PROVIDER=openai)
+        → update row: suggestions, status='awaiting_review' (or 'failed' + error message)
+  → frontend polls GET /api/resumes/:id until status leaves 'pending', shows suggestion checklist
+    → user reviews/edits/checks off suggestions
+      → POST /api/resume/:id/apply-suggestions (accepted suggestions)
+        → row back to status='pending', respond 202 immediately
+          → [background] applySuggestions(master, accepted) + renderMarkdown + fitToOnePage(skipWidowFix)
+            → update row: markdown, suggestions (full accepted+rejected set), status='ready' (or 'failed')
+              → [background] render PDF via Tectonic/czresume.cls → store in tailored_resumes.pdf (or pdf_error)
+        → frontend polls GET /api/resumes/:id again until status leaves 'pending'
 ```
 
-Async because the generate → critique → revise loop routinely exceeds Railway's ~300s edge-proxy timeout, which would otherwise kill the request and surface as a generic "Failed to fetch" in the browser.
+Async because even a single LLM call can exceed Railway's ~300s edge-proxy timeout, which would otherwise kill the request and surface as a generic "Failed to fetch" in the browser.
 
 ### Apply → Google Sheets
 ```
