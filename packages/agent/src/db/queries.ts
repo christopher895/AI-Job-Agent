@@ -1,5 +1,5 @@
 import { pool } from "./pool";
-import { MasterResume, MasterResumeSchema } from "../ai/types";
+import { MasterResume, MasterResumeSchema, Suggestion } from "../ai/types";
 import { Preferences, FILTERS } from "../config";
 
 export type TailoredResumeRow = {
@@ -14,9 +14,12 @@ export type TailoredResumeRow = {
   /** Error from the most recent PDF render attempt; null if the last attempt succeeded. */
   pdf_error: string | null;
   /** 'pending' while the generate->critique->revise pipeline is still running in the background. */
-  status: "pending" | "ready" | "failed";
+  status: "pending" | "awaiting_review" | "ready" | "failed";
   /** Error from the tailoring pipeline itself, set when status = 'failed'. */
   error: string | null;
+  /** Current pipeline step while status = 'pending' (e.g. "Drafting resume (pass 1)"); null otherwise. */
+  stage: string | null;
+  suggestions: Suggestion[] | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -129,7 +132,7 @@ export async function updatePreferences(data: Preferences): Promise<void> {
 // ── Tailored resumes ───────────────────────────────────────────────────────────
 
 const TAILORED_RESUME_COLUMNS =
-  "id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, status, error, created_at, updated_at";
+  "id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, status, error, stage, suggestions, created_at, updated_at";
 
 /** Inserts a placeholder row immediately so POST /api/tailor can respond before the pipeline runs. */
 export async function createPendingResume(fields: {
@@ -152,17 +155,18 @@ export async function createPendingResume(fields: {
 /** Marks a pending resume as ready once the tailoring pipeline finishes successfully. */
 export async function completeTailoredResume(
   id: string,
-  fields: { markdown: string; criticScore?: number }
+  fields: { markdown: string; criticScore?: number; suggestions?: Suggestion[] }
 ): Promise<void> {
   const { rowCount } = await pool.query(
     `UPDATE tailored_resumes
      SET markdown     = $1,
          critic_score = $2,
+         suggestions  = COALESCE($3, suggestions),
          status       = 'ready',
          error        = NULL,
          updated_at   = NOW()
-     WHERE id = $3`,
-    [fields.markdown, fields.criticScore ?? null, id]
+     WHERE id = $4`,
+    [fields.markdown, fields.criticScore ?? null, fields.suggestions ? JSON.stringify(fields.suggestions) : null, id]
   );
   if (rowCount === 0) {
     console.warn(`[queries] completeTailoredResume: row ${id} no longer exists (deleted mid-generation?)`);
@@ -215,7 +219,7 @@ export async function upsertPendingGeneralResume(): Promise<TailoredResumeRow> {
     `INSERT INTO tailored_resumes (job_title, company, markdown, status, kind)
      VALUES ('General Software Engineer', NULL, '', 'pending', 'general')
      ON CONFLICT ((true)) WHERE kind = 'general'
-     DO UPDATE SET status = 'pending', error = NULL, updated_at = NOW()
+     DO UPDATE SET status = 'pending', error = NULL, stage = NULL, updated_at = NOW()
      RETURNING ${TAILORED_RESUME_COLUMNS}`
   );
   return rows[0];
@@ -236,6 +240,24 @@ export async function updateTailoredResume(
     [fields.markdown ?? null, fields.jobTitle ?? null, fields.company ?? null, id]
   );
   return rows[0] ?? null;
+}
+
+/** Records the pipeline's current step for a pending row. Fire-and-forget by callers — a failed write must never abort generation. */
+export async function updateResumeStage(id: string, stage: string): Promise<void> {
+  await pool.query("UPDATE tailored_resumes SET stage = $1 WHERE id = $2", [stage, id]);
+}
+
+/** Stores the freshly generated suggestions and moves the row into human review. */
+export async function setSuggestions(id: string, suggestions: Suggestion[]): Promise<void> {
+  await pool.query(
+    `UPDATE tailored_resumes SET suggestions = $1, status = 'awaiting_review', stage = NULL, updated_at = NOW() WHERE id = $2`,
+    [JSON.stringify(suggestions), id]
+  );
+}
+
+/** Moves an awaiting_review row back into 'pending' right as POST /apply-suggestions starts its background work — reuses the same pending/polling UI the rest of the app already has. */
+export async function beginApplyingSuggestions(id: string): Promise<void> {
+  await pool.query(`UPDATE tailored_resumes SET status = 'pending', stage = NULL WHERE id = $1`, [id]);
 }
 
 export async function storePdf(id: string, pdf: Buffer): Promise<void> {

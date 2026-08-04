@@ -6,6 +6,7 @@ import {
   failTailoredResume,
   storePdf,
   setPdfError,
+  updateResumeStage,
 } from "../../db/queries";
 import { generateGeneralResume } from "../../ai/general-resume";
 import { LLM_PROVIDER } from "../../ai/llm";
@@ -46,7 +47,11 @@ router.post("/generate", async (_req, res) => {
 async function runGeneralResumePipeline(id: string) {
   let result;
   try {
-    result = await generateGeneralResume();
+    result = await generateGeneralResume((stage) => {
+      updateResumeStage(id, stage).catch((err) => {
+        console.error("[general-resume] stage update failed:", err);
+      });
+    });
   } catch (err) {
     console.error("[general-resume] pipeline error:", err);
     const credentialHint =

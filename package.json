@@ -13,7 +13,8 @@
     "lint": "npm run lint --workspaces",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:resume-stage": "tsx packages/web/lib/test-resume-stage.ts"
   },
   "engines": {
     "node": ">=18"
