@@ -93,9 +93,9 @@ agent/src/
 │   ├── index.ts          # Express router mount
 │   └── routes/
 │       ├── tailor.ts        # POST /api/tailor
-│       ├── resumes.ts       # GET /api/resumes, GET /api/resume/:id, PATCH /api/resume/:id
+│       ├── resumes.ts       # GET /api/resumes, GET /api/resume/:id, PATCH /api/resume/:id, POST /api/resume/:id/apply-suggestions
 │       ├── applied.ts       # GET/POST /api/applied, PATCH /api/applied/:id
-│       ├── master-resume.ts # GET/PUT /api/master-resume, POST /api/master-resume/preview-pdf
+│       ├── master-resume.ts # GET/PUT /api/master-resume, POST /api/master-resume/preview-pdf, POST /api/master-resume/import
 │       ├── preferences.ts   # GET/PUT /api/preferences — scraper filter settings
 │       └── places.ts        # GET /api/places — static US city list for location autocomplete
 ├── integrations/

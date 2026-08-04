@@ -76,15 +76,19 @@ agent/src/
 │   ├── run-companies.ts    # CLI entry — `npm run scrape:companies`
 │   └── adapters/           # greenhouse.ts, ashby.ts, lever.ts, amazon.ts
 ├── ai/
-│   ├── chain.ts             # generate → critique → revise loop (ENTRY POINT)
-│   ├── tailor.ts            # Single-pass tailoring (LLM call)
-│   ├── critic.ts            # Scores a draft against the resume-worded-style rubric
-│   ├── grounding.ts         # Checks no invented facts
-│   ├── format.ts            # Deterministic ATS checks + Markdown renderer
-│   ├── fit-page.ts          # Trims tailored output to fit one page
+│   ├── suggest-keywords.ts    # Single-pass JD keyword-suggestion call (current tailoring ENTRY POINT)
+│   ├── apply-suggestions.ts   # Deterministic groundedness labeling + applies only accepted suggestions
+│   ├── import-master-resume.ts # Parses pasted/PDF resume text into MasterResume (LLM call + id dedup)
+│   ├── general-resume.ts    # Dormant (UI removed) — JD-less resume generation via the old 3-pass loop
+│   ├── chain.ts             # generate → critique → revise loop — now only backs the dormant general-resume path
+│   ├── tailor.ts            # Single-pass tailoring (LLM call) — used by chain.ts, general-resume path only
+│   ├── critic.ts            # Scores a draft against the resume-worded-style rubric — general-resume path only
+│   ├── grounding.ts         # Checks no invented facts; numbers() also reused by apply-suggestions.ts's groundedness labeling
+│   ├── format.ts            # Deterministic ATS checks + Markdown renderer; renderMarkdown() reused by apply-suggestions.ts
+│   ├── fit-page.ts          # Trims tailored output to fit one page (skipWidowFix option for the suggestion-based flow)
 │   ├── render-pdf.ts        # Markdown/MasterResume → LaTeX → PDF via tectonic
-│   ├── master-resume.ts     # Hardcoded facts, seeded once into the `master_resume` DB row
-│   ├── types.ts             # Zod schemas for MasterResume, TailoredResume
+│   ├── master-resume.ts     # Hardcoded seed facts — obsolete after the first master-resume import; the DB row is the real source of truth thereafter
+│   ├── types.ts             # Zod schemas for MasterResume, TailoredResume, Suggestion
 │   ├── llm.ts               # completeJSON() — dispatches to Claude CLI or OpenAI per LLM_PROVIDER
 │   ├── claude-cli.ts        # Headless `claude -p` backend (default provider)
 │   └── knowledge/
@@ -121,17 +125,19 @@ web/
 │   └── preferences/
 │       └── page.tsx          # /preferences — edit scraper filters
 ├── components/
-│   ├── ResumeEditor.tsx      # Inline text editor with Download/Email buttons
+│   ├── ResumeEditor.tsx      # Inline text editor with Download/Email buttons; renders the awaiting_review checklist via SuggestionChecklist
+│   ├── SuggestionChecklist.tsx # Review UI for a suggestion batch — checkbox, grounded/extrapolated badge, editable text, rationale
 │   ├── ResumeCard.tsx        # Card used in history dashboard
 │   ├── DashboardClient.tsx   # Client-side dashboard wrapper
 │   ├── AppliedTable.tsx      # Application log table
-│   ├── MasterResumeForm.tsx  # Form for editing master resume fields
+│   ├── MasterResumeForm.tsx  # Form for editing master resume fields; Import panel (paste/PDF) and one-page warning banner
 │   ├── SortableSection.tsx   # Drag-to-reorder for master resume sections/bullets
 │   ├── TailorForm.tsx        # JD input + generate button
 │   ├── PreferencesForm.tsx   # Scraper filter settings form
 │   └── Nav.tsx                # Top navigation bar
 └── lib/
-    └── api.ts                # Typed fetch wrappers for agent API
+    ├── api.ts                # Typed fetch wrappers for agent API
+    └── resumeStage.ts        # Maps a raw backend stage string to the 3-segment pending-screen stepper
 ```
 
 ## Tech Stack
@@ -203,7 +209,9 @@ tailored_resumes (
   critic_score  int,            -- final score from the critique loop (general-resume path only)
   status        text,           -- 'pending' | 'awaiting_review' | 'ready' | 'failed' — tailoring runs as a background job
   error         text,           -- error message if status = 'failed'
+  stage         text,           -- current pipeline step while status = 'pending' (e.g. "Analyzing job description"); null otherwise
   suggestions   jsonb,          -- proposed keyword-insertion suggestions; accepted/rejected state stored per item after review
+  kind          text,           -- 'tailored' | 'general' — distinguishes the (at most one) dormant general-resume row
   created_at    timestamptz,
   updated_at    timestamptz
 )
