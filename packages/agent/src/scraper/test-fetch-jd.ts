@@ -239,5 +239,83 @@ function check(label: string, ok: boolean, detail?: string) {
   );
 }
 
+// Case 10: title's trailing segment is a cohort/program label ("2027
+// Summer"), not a company — happens on pages with no <h1> at all (common on
+// client-rendered career microsites) so the h1-based branch never applies.
+// Must not mistake the cohort label for the company; must fall back to the
+// URL's registrable domain instead.
+{
+  const html = `<html><head><title>Software Engineer Intern (Acme - Widgets Team) - 2027 Summer</title></head>
+    <body><main>${"Build widget rendering pipelines used by millions of people. ".repeat(20)}</main></body></html>`;
+  const url = "https://lifeatacme.com/jobs/123";
+  const result = extractFromHtml(html, url);
+
+  console.log("[cohort-label] title:", result.title);
+  console.log("[cohort-label] company:", result.company);
+
+  check(
+    "cohort-label",
+    result.title === "Software Engineer Intern (Acme - Widgets Team)",
+    `title mismatch: got ${JSON.stringify(result.title)}`
+  );
+  check("cohort-label", result.company === "Acme", `company mismatch: got ${JSON.stringify(result.company)}`);
+}
+
+// Case 11: no schema.org JobPosting block, so location must come from a bare
+// "Location:" label/value pair in the DOM — the common pattern on
+// custom-built career microsites that don't emit structured data.
+{
+  const html = `<html><head><title>Engineer - Acme</title></head>
+    <body><article>
+    <div class="flex"><p class="font-bold">Location:</p><p>Austin</p></div>
+    <main>${"Build widget rendering pipelines used by millions of people. ".repeat(20)}</main>
+    </article></body></html>`;
+  const url = "https://acme.com/careers/engineer";
+  const result = extractFromHtml(html, url);
+
+  console.log("[label-location] location:", result.location);
+  check("label-location", result.location === "Austin", `location mismatch: got ${JSON.stringify(result.location)}`);
+}
+
+// Case 12: flat, non-semantic div layout (no <article>, no heading tags) —
+// the pattern on custom-built React/Next.js career microsites. Readability's
+// content-scoring can pick the wrong container and exclude the real JD
+// section (single giant <p> scores lower than a company-blurb block with
+// many short <p>s); the page's nav menu also isn't wrapped in <nav> so
+// NOISE_SELECTORS can't remove it structurally. Both must still be handled:
+// full JD content recovered, nav link text excluded, boilerplate stripped.
+{
+  const navLinks = Array.from({ length: 40 }, (_, i) => `<a href="/l${i}">Link${i}</a>`).join("");
+  const html = `
+<html><head><title>Software Engineer Intern (Acme - Widgets Team) - 2027 Summer</title></head>
+<body>
+<div>${navLinks}</div>
+<div>
+  <p class="font-bold">Location:</p><p>Austin</p>
+  <p style="font-weight:700">Responsibilities</p>
+  <p style="white-space:pre-line">${"Design and build the widget rendering pipeline used by millions of users every day. ".repeat(
+    8
+  )}Minimum Qualifications: currently pursuing a degree in CS.</p>
+</div>
+<div>
+  <p>About Acme</p>
+  <p>${"Acme is a leading provider of enterprise widgets trusted by Fortune 500 companies worldwide. ".repeat(4)}</p>
+  <p>Why Join Us</p>
+  <p>${"We offer a fun and inclusive culture where everyone can do their best work every day. ".repeat(4)}</p>
+</div>
+</body></html>`;
+  const url = "https://lifeatacme.com/jobs/123";
+  const result = extractFromHtml(html, url);
+
+  console.log("[flat-spa] company:", result.company, "location:", result.location, "text length:", result.text.length);
+
+  check("flat-spa", result.company === "Acme", `company mismatch: got ${JSON.stringify(result.company)}`);
+  check("flat-spa", result.location === "Austin", `location mismatch: got ${JSON.stringify(result.location)}`);
+  check("flat-spa", result.text.includes("widget rendering pipeline"), "real JD content was excluded");
+  check("flat-spa", result.text.includes("Minimum Qualifications"), "Minimum Qualifications content was excluded");
+  check("flat-spa", !result.text.includes("Fortune 500"), "About [Company] blurb leaked into extracted JD");
+  check("flat-spa", !result.text.includes("Link0"), "nav link text leaked into extracted JD");
+}
+
 console.log(allPass ? "\n✓ fetch-jd extraction test PASSED" : "\n✗ fetch-jd extraction test FAILED");
 process.exit(allPass ? 0 : 1);
