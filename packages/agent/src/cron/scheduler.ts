@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { runAllCompanyScrapes } from "../scraper/index";
+import { runWatchedRepoScrapes } from "../scraper/github-repos";
 
 // Guards against a slow/hung run still being in flight when the next 15-min
 // tick fires — without this, an overlapping tick launches a second batch of
@@ -14,7 +15,8 @@ async function runTick() {
   }
   tickInFlight = true;
   try {
-    await runAllCompanyScrapes().catch((err) => console.error("[scheduler] Run failed:", err));
+    await runAllCompanyScrapes().catch((err) => console.error("[scheduler] Company scrape run failed:", err));
+    await runWatchedRepoScrapes().catch((err) => console.error("[scheduler] Watched repo scrape run failed:", err));
   } finally {
     tickInFlight = false;
   }
