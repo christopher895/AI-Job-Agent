@@ -84,6 +84,33 @@ async function main() {
   check("history cursor did NOT advance past the failed batch", after === before && after === `cursor-before-${run}`);
   check("failing message sent no notification", notified === 1);
 
+  // Terminal states must never be resurrected by a later email (defense-in-depth
+  // alongside status-order.ts's canAdvance guard, which also blocks leaving rejected/no_response).
+  const rejectedCompany = `Terminal Co ${run}`;
+  const rejectedRole = `Terminal Role ${run}`;
+  const rejectedApp = await createAppliedJob({ company: rejectedCompany, jobTitle: rejectedRole, status: "rejected" });
+  const terminalEmailId = `e-terminal-${run}`;
+  const terminalResult = await runEmailIngest({
+    fetch: async () => ({
+      messages: [mk({ id: terminalEmailId, subject: "OA", body: `assessment for ${rejectedCompany} ${rejectedRole}` })],
+      newHistoryId: `cursor-terminal-${run}`,
+    }),
+    classify: async () => ({ isJobRelated: true, status: "assessment", company: rejectedCompany, role: rejectedRole, deadlineAt: null }),
+    notify: async () => { notified++; },
+  });
+  const rejectedAfter = await getAppliedJob(rejectedApp.id);
+  check("terminal application not resurrected: status still rejected", rejectedAfter?.status === "rejected");
+  const terminalEvents = (await listStatusEventsByApplication())[rejectedApp.id] ?? [];
+  check(
+    "no email-source status_event advanced the terminal application",
+    !terminalEvents.some((e) => e.source === "email" && e.status === "assessment")
+  );
+  check(
+    "terminal-application email routed to review queue instead",
+    (await listPendingReviews()).some((r) => r.email_message_id === terminalEmailId)
+  );
+  check("terminal-application email queued, not applied", terminalResult.applied === 0 && terminalResult.queued === 1);
+
   await pool.end();
   console.log(pass ? "\n✓ email-ingest test PASSED" : "\n✗ email-ingest test FAILED");
   process.exit(pass ? 0 : 1);

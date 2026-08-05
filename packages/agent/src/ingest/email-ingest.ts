@@ -98,9 +98,12 @@ export async function runEmailIngest(
         continue;
       }
 
-      const candidates: MatchCandidate[] = (await listAppliedJobs()).map((a) => ({
-        id: a.id, company: a.company, role: a.job_title,
-      }));
+      // Terminal applications (rejected/no_response) are never live match candidates — a
+      // later email about them must fall through to the review queue for a human decision,
+      // not silently resurrect a dead application (status-order.ts guards this too).
+      const candidates: MatchCandidate[] = (await listAppliedJobs())
+        .filter((a) => a.status !== "rejected" && a.status !== "no_response")
+        .map((a) => ({ id: a.id, company: a.company, role: a.job_title }));
       const match = matchApplication(candidates, { company: classified.company, role: classified.role });
 
       const app = match ? await getAppliedJob(match.applicationId) : null;

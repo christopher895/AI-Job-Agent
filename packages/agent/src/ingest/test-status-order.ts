@@ -15,6 +15,9 @@ check("no regress interviewing -> assessment", !canAdvance("interviewing", "asse
 check("same status is no-op", !canAdvance("assessment", "assessment"));
 check("rejected from any state", canAdvance("interviewing", "rejected"));
 check("no_response from any state", canAdvance("assessment", "no_response"));
+check("no leaving rejected -> assessment", !canAdvance("rejected", "assessment"));
+check("no leaving rejected -> offer", !canAdvance("rejected", "offer"));
+check("no leaving no_response -> interviewing", !canAdvance("no_response", "interviewing"));
 
 console.log(pass ? "\n✓ status-order test PASSED" : "\n✗ status-order test FAILED");
 process.exit(pass ? 0 : 1);
