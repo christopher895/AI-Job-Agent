@@ -12,7 +12,7 @@ Everything below is implemented and running in production, not aspirational — 
 
 - **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon adapters (80+ companies); snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
 - **Alert emails** — Resend email listing new jobs (title, company, link) with a "Tailor resume" link per job → `/tailor?jobUrl=...&title=...&company=...`
-- **AI tailoring pipeline** — `suggestKeywords(jd, master)` in `packages/agent/src/ai/suggest-keywords.ts`: a single pass proposes keyword-insertion suggestions (bullet rewrites and skill additions) against the fixed, one-page master resume, which is never reordered or cut. Christopher reviews, edits, and checks off suggestions in a checklist; `POST /api/resume/:id/apply-suggestions` applies only the accepted ones and renders the final one-page Markdown. The old 3-pass generate→critique→revise loop (`chain.ts`) still exists but now only backs the dormant, UI-removed general-resume feature
+- **AI tailoring pipeline** — `suggestKeywords(jd, master)` in `packages/agent/src/ai/suggest-keywords.ts`: a single pass proposes keyword-insertion suggestions (bullet rewrites and skill additions) against the fixed, one-page master resume, which is never reordered or cut. Christopher reviews, edits, and checks off suggestions in a checklist; `POST /api/resume/:id/apply-suggestions` applies only the accepted ones and renders the final one-page Markdown. (The old 3-pass generate→critique→revise loop and the JD-less "general resume" feature it backed have been removed — the suggestion-based flow is the only tailoring path.)
 - **LLM provider** — Claude by default, via the headless `claude -p` CLI (`packages/agent/src/ai/claude-cli.ts`), authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing). OpenAI/GPT-4o is a manual fallback (`LLM_PROVIDER=openai`)
 - **Master resume** — source facts live in `packages/agent/src/ai/master-resume.ts`, seeded once into the `master_resume` DB table; `/resume/master` reads and writes the DB copy directly (see Deployment below — always edit on production, not locally)
 - **Master resume import** — `/resume/master` can parse pasted text or an uploaded PDF into a `MasterResume` via `importMasterResume()` (LLM-parsed, ids deduplicated deterministically after the fact); the result loads into the existing form as unsaved state for review before saving, never written to the DB directly
@@ -21,6 +21,7 @@ Everything below is implemented and running in production, not aspirational — 
 - **Web app** — `/`, `/tailor`, `/resume/[id]`, `/resume/master`, `/applied`, `/preferences` all built (see table below)
 - **Cron scheduler** — scraper runs every 15 min, in-process (no queue layer), guarded against overlapping ticks
 - **Async tailoring** — `POST /api/tailor` returns immediately (202) with a `pending` row; the background job runs `suggestKeywords(jd, master)` and lands the row at `awaiting_review` with proposed suggestions attached (not `ready`). After Christopher reviews and approves suggestions in the checklist, `POST /api/resume/:id/apply-suggestions` runs the rest of the pipeline (apply, render, fit-to-page, PDF) in the background and takes the row to `ready`. The editor polls `GET /api/resumes/:id` until status leaves `pending`
+- **Gmail status ingestion** — opt-in cron tick (`GMAIL_INGEST_ENABLED=true`) reads Christopher's Gmail via a dedicated OAuth2 client (`GMAIL_OAUTH_*`, `gmail.readonly` scope — separate from the Sheets service account, which can't read consumer Gmail), classifies recruiter emails with the LLM, deterministically matches them to an existing `applied_jobs` row, and advances that row's status forward-only, logging every event and notifying on the statuses that matter. See `packages/agent/src/ingest/` and the pipeline below
 
 ## Core Flows
 
@@ -79,10 +80,6 @@ agent/src/
 │   ├── suggest-keywords.ts    # Single-pass JD keyword-suggestion call (current tailoring ENTRY POINT)
 │   ├── apply-suggestions.ts   # Deterministic groundedness labeling + applies only accepted suggestions
 │   ├── import-master-resume.ts # Parses pasted/PDF resume text into MasterResume (LLM call + id dedup)
-│   ├── general-resume.ts    # Dormant (UI removed) — JD-less resume generation via the old 3-pass loop
-│   ├── chain.ts             # generate → critique → revise loop — now only backs the dormant general-resume path
-│   ├── tailor.ts            # Single-pass tailoring (LLM call) — used by chain.ts, general-resume path only
-│   ├── critic.ts            # Scores a draft against the resume-worded-style rubric — general-resume path only
 │   ├── grounding.ts         # Checks no invented facts; numbers() also reused by apply-suggestions.ts's groundedness labeling
 │   ├── format.ts            # Deterministic ATS checks + Markdown renderer; renderMarkdown() reused by apply-suggestions.ts
 │   ├── fit-page.ts          # Trims tailored output to fit one page (skipWidowFix option for the suggestion-based flow)
@@ -206,12 +203,12 @@ tailored_resumes (
   markdown      text,           -- current editor content (editable)
   pdf           bytea,          -- rendered PDF blob
   pdf_error     text,           -- error from the most recent PDF render attempt, if any
-  critic_score  int,            -- final score from the critique loop (general-resume path only)
+  critic_score  int,            -- vestigial: scored by the removed critique loop; always null on new rows
   status        text,           -- 'pending' | 'awaiting_review' | 'ready' | 'failed' — tailoring runs as a background job
   error         text,           -- error message if status = 'failed'
   stage         text,           -- current pipeline step while status = 'pending' (e.g. "Analyzing job description"); null otherwise
   suggestions   jsonb,          -- proposed keyword-insertion suggestions; accepted/rejected state stored per item after review
-  kind          text,           -- 'tailored' | 'general' — distinguishes the (at most one) dormant general-resume row
+  kind          text,           -- vestigial: always 'tailored' now; the 'general' path was removed (column + partial index retained)
   created_at    timestamptz,
   updated_at    timestamptz
 )
@@ -279,6 +276,23 @@ POST /api/applied (resume_id, status, applied_at)
       (date, company, location, job_url, status, resume link)
 ```
 
+### Gmail status ingestion (opt-in, `GMAIL_INGEST_ENABLED=true`)
+```
+cron tick (every 15 min, guarded against overlapping ticks, no-op unless GMAIL_INGEST_ENABLED=true)
+  → getGmailClient() + fetchNewMessages() (since gmail_sync_state.history_id, 7-day fallback if unset)
+    → skip already-seen ids (gmail_processed_messages)
+      → isCandidateEmail() prefilter (sender allowlist + recruiting keywords — keeps the LLM off most inbox noise)
+        → classifyEmail() (LLM: isJobRelated, status, company, role, deadlineAt)
+          → matchApplication() — deterministic Jaccard match against open applied_jobs, with a minimum score and an ambiguity margin
+            → match found: applyStatusEvent() — logs a status_events row every time; advances applied_jobs.status
+              only if canAdvance() says the new status is forward-only (rejected/no_response always terminal;
+              out-of-order/duplicate emails are logged but don't move the row), syncs Sheets, and notifies
+              (Resend) when the new status is in {assessment, interviewing, offer}
+            → no confident/unambiguous match: enqueueReview() — row in email_review_queue for manual triage
+      → advance gmail_sync_state.history_id only after a clean tick (a failed message is left unprocessed so it retries next tick)
+```
+Tables: `gmail_sync_state` (history cursor), `gmail_processed_messages` (idempotency), `status_events` (full audit trail, source `'manual' | 'email'`), `email_review_queue` (unmatched/ambiguous emails awaiting manual resolution). Requires `GMAIL_OAUTH_CLIENT_ID` / `GMAIL_OAUTH_CLIENT_SECRET` / `GMAIL_OAUTH_REFRESH_TOKEN` (minted via `scripts/mint-gmail-token.ts`) — a dedicated OAuth2 client with `gmail.readonly` scope, since the Sheets service account can't read consumer Gmail.
+
 ## Environment Variables
 
 ```
@@ -307,6 +321,11 @@ GOOGLE_SHEETS_SPREADSHEET_ID
 GOOGLE_SERVICE_ACCOUNT_JSON   # stringified service account credentials
 
 TECTONIC_PATH                 # path to the tectonic binary (PDF generation)
+
+GMAIL_OAUTH_CLIENT_ID          # Gmail ingestion — dedicated OAuth2 client (gmail.readonly scope), separate from Sheets
+GMAIL_OAUTH_CLIENT_SECRET
+GMAIL_OAUTH_REFRESH_TOKEN     # minted via `npx tsx scripts/mint-gmail-token.ts`
+GMAIL_INGEST_ENABLED          # "true" to enable the ingest cron tick (leave unset/false until verified)
 ```
 
 See `.env.example` for the authoritative, commented list.
@@ -338,3 +357,4 @@ Use these proactively:
 - Master resume is the single source of truth — the AI may only select/rephrase facts that exist in it, never invent
 - Alert score threshold: top-ranked jobs by keyword score, capped at `FILTERS.maxPerEmail`
 - PDF design: renders via the custom `Resume_Template/czresume.cls` LaTeX template, ATS-safe
+- Tests: `npm test` (from the repo root) runs the fast, self-contained unit tests across both workspaces — no DB/LLM/network needed. Each `test-*.ts` script exits non-zero on failure so the chain fails fast. `npm run test:integration` runs the tests that need live infra (Postgres, LLM, Tectonic); run those manually, not in the default gate.

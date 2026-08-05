@@ -1,6 +1,5 @@
 import { MASTER_RESUME } from "./master-resume";
 import { renderMarkdown, lintFormat, keywordCoverage } from "./format";
-import { gatherSignals } from "./critic";
 import { TailoredResume } from "./types";
 
 const JD = `Backend Software Engineer. We run Kubernetes on AWS, services in TypeScript and
@@ -163,14 +162,9 @@ const weakHasWeakOpenerError = lintWeak.issues.some((i) => i.rule === "weak-open
 const covStrong = keywordCoverage(MASTER_RESUME, strong, JD);
 const covWeak = keywordCoverage(MASTER_RESUME, weak, JD);
 
-// --- Combined deterministic signal discrimination (the "good critic" proof) ---
-const sigStrong = gatherSignals(MASTER_RESUME, strong, JD);
-const sigWeak = gatherSignals(MASTER_RESUME, weak, JD);
-
 console.log("FORMAT  standard headings:", hasStandardHeadings, "| no table rows:", noTableRows, "| single column:", singleColumn);
 console.log(`LINT    strong score ${lintStrong.score} vs weak ${lintWeak.score} | weak flags weak-opener: ${weakHasWeakOpenerError}`);
 console.log(`COVERAGE strong ${(covStrong.ratio * 100).toFixed(0)}% (missing: ${covStrong.missing.join(",") || "none"}) vs weak ${(covWeak.ratio * 100).toFixed(0)}%`);
-console.log(`SIGNALS  strong grounded:${sigStrong.grounding.ok} fmt:${sigStrong.format.score} | weak grounded:${sigWeak.grounding.ok} fmt:${sigWeak.format.score}`);
 
 const pass =
   hasStandardHeadings &&
@@ -179,9 +173,7 @@ const pass =
   lintStrong.score > lintWeak.score &&
   weakHasWeakOpenerError &&
   covStrong.ratio > covWeak.ratio &&
-  sigStrong.grounding.ok &&
-  sigWeak.grounding.ok &&
   newChecksPass;
 
-console.log(pass ? "\n✓ format + signal-discrimination test PASSED" : "\n✗ test FAILED");
+console.log(pass ? "\n✓ format test PASSED" : "\n✗ test FAILED");
 process.exit(pass ? 0 : 1);

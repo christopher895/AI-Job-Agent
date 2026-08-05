@@ -1,5 +1,6 @@
 import { api, AppliedJob } from "../../lib/api";
 import AppliedTable from "../../components/AppliedTable";
+import ReviewPanel from "../../components/ReviewPanel";
 
 export default async function AppliedPage() {
   let jobs: AppliedJob[] = [];
@@ -41,6 +42,8 @@ export default async function AppliedPage() {
           {error}
         </div>
       )}
+
+      <ReviewPanel applications={jobs} />
 
       <AppliedTable initial={jobs} />
     </div>

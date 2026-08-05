@@ -1,0 +1,45 @@
+[
+  {
+    "id": "aaa",
+    "company_name": "Rippling",
+    "title": "Software Engineer Intern",
+    "locations": ["New York, NY", "San Francisco, CA"],
+    "url": "https://ats.rippling.com/jobs/abc123",
+    "active": true,
+    "is_visible": true
+  },
+  {
+    "id": "bbb",
+    "company_name": "Acme Corp",
+    "title": "Backend Intern",
+    "locations": ["Remote"],
+    "url": "https://acme.example.com/jobs/xyz",
+    "active": true
+  },
+  {
+    "id": "ccc",
+    "company_name": "Closed Co",
+    "title": "Closed Role",
+    "locations": ["Chicago, IL"],
+    "url": "https://closedco.example.com/jobs/1",
+    "active": false,
+    "is_visible": true
+  },
+  {
+    "id": "ddd",
+    "company_name": "Hidden Co",
+    "title": "Hidden Role",
+    "locations": ["Austin, TX"],
+    "url": "https://hiddenco.example.com/jobs/2",
+    "active": true,
+    "is_visible": false
+  },
+  {
+    "id": "eee",
+    "company_name": "NoLoc Inc",
+    "title": "Mystery Intern",
+    "url": "https://noloc.example.com/jobs/1",
+    "active": true,
+    "is_visible": true
+  }
+]
