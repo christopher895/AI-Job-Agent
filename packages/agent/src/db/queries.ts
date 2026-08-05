@@ -201,31 +201,6 @@ export async function listTailoredResumes(): Promise<ResumeListItem[]> {
   return rows;
 }
 
-/** The singleton general (JD-less) resume, or null if never generated. */
-export async function getGeneralResume(): Promise<TailoredResumeRow | null> {
-  const { rows } = await pool.query(
-    `SELECT ${TAILORED_RESUME_COLUMNS} FROM tailored_resumes WHERE kind = 'general' LIMIT 1`
-  );
-  return rows[0] ?? null;
-}
-
-/**
- * Upserts the singleton general-resume row to 'pending', reusing the same
- * row id across every regeneration (so its URL/PDF link never changes).
- * The ON CONFLICT target matches idx_tailored_resumes_one_general exactly —
- * Postgres requires the inference expression/predicate to match the index.
- */
-export async function upsertPendingGeneralResume(): Promise<TailoredResumeRow> {
-  const { rows } = await pool.query(
-    `INSERT INTO tailored_resumes (job_title, company, markdown, status, kind)
-     VALUES ('General Software Engineer', NULL, '', 'pending', 'general')
-     ON CONFLICT ((true)) WHERE kind = 'general'
-     DO UPDATE SET status = 'pending', error = NULL, stage = NULL, updated_at = NOW()
-     RETURNING ${TAILORED_RESUME_COLUMNS}`
-  );
-  return rows[0];
-}
-
 export async function updateTailoredResume(
   id: string,
   fields: { markdown?: string; jobTitle?: string; company?: string }
