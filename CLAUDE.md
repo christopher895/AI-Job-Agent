@@ -12,7 +12,7 @@ Everything below is implemented and running in production, not aspirational — 
 
 - **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon adapters (80+ companies); snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
 - **Alert emails** — Resend email listing new jobs (title, company, link) with a "Tailor resume" link per job → `/tailor?jobUrl=...&title=...&company=...`
-- **AI tailoring pipeline** — `suggestKeywords(jd, master)` in `packages/agent/src/ai/suggest-keywords.ts`: a single pass proposes keyword-insertion suggestions (bullet rewrites and skill additions) against the fixed, one-page master resume, which is never reordered or cut. Christopher reviews, edits, and checks off suggestions in a checklist; `POST /api/resume/:id/apply-suggestions` applies only the accepted ones and renders the final one-page Markdown. The old 3-pass generate→critique→revise loop (`chain.ts`) still exists but now only backs the dormant, UI-removed general-resume feature
+- **AI tailoring pipeline** — `suggestKeywords(jd, master)` in `packages/agent/src/ai/suggest-keywords.ts`: a single pass proposes keyword-insertion suggestions (bullet rewrites and skill additions) against the fixed, one-page master resume, which is never reordered or cut. Christopher reviews, edits, and checks off suggestions in a checklist; `POST /api/resume/:id/apply-suggestions` applies only the accepted ones and renders the final one-page Markdown. (The old 3-pass generate→critique→revise loop and the JD-less "general resume" feature it backed have been removed — the suggestion-based flow is the only tailoring path.)
 - **LLM provider** — Claude by default, via the headless `claude -p` CLI (`packages/agent/src/ai/claude-cli.ts`), authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing). OpenAI/GPT-4o is a manual fallback (`LLM_PROVIDER=openai`)
 - **Master resume** — source facts live in `packages/agent/src/ai/master-resume.ts`, seeded once into the `master_resume` DB table; `/resume/master` reads and writes the DB copy directly (see Deployment below — always edit on production, not locally)
 - **Master resume import** — `/resume/master` can parse pasted text or an uploaded PDF into a `MasterResume` via `importMasterResume()` (LLM-parsed, ids deduplicated deterministically after the fact); the result loads into the existing form as unsaved state for review before saving, never written to the DB directly
@@ -80,10 +80,6 @@ agent/src/
 │   ├── suggest-keywords.ts    # Single-pass JD keyword-suggestion call (current tailoring ENTRY POINT)
 │   ├── apply-suggestions.ts   # Deterministic groundedness labeling + applies only accepted suggestions
 │   ├── import-master-resume.ts # Parses pasted/PDF resume text into MasterResume (LLM call + id dedup)
-│   ├── general-resume.ts    # Dormant (UI removed) — JD-less resume generation via the old 3-pass loop
-│   ├── chain.ts             # generate → critique → revise loop — now only backs the dormant general-resume path
-│   ├── tailor.ts            # Single-pass tailoring (LLM call) — used by chain.ts, general-resume path only
-│   ├── critic.ts            # Scores a draft against the resume-worded-style rubric — general-resume path only
 │   ├── grounding.ts         # Checks no invented facts; numbers() also reused by apply-suggestions.ts's groundedness labeling
 │   ├── format.ts            # Deterministic ATS checks + Markdown renderer; renderMarkdown() reused by apply-suggestions.ts
 │   ├── fit-page.ts          # Trims tailored output to fit one page (skipWidowFix option for the suggestion-based flow)
@@ -207,12 +203,12 @@ tailored_resumes (
   markdown      text,           -- current editor content (editable)
   pdf           bytea,          -- rendered PDF blob
   pdf_error     text,           -- error from the most recent PDF render attempt, if any
-  critic_score  int,            -- final score from the critique loop (general-resume path only)
+  critic_score  int,            -- vestigial: scored by the removed critique loop; always null on new rows
   status        text,           -- 'pending' | 'awaiting_review' | 'ready' | 'failed' — tailoring runs as a background job
   error         text,           -- error message if status = 'failed'
   stage         text,           -- current pipeline step while status = 'pending' (e.g. "Analyzing job description"); null otherwise
   suggestions   jsonb,          -- proposed keyword-insertion suggestions; accepted/rejected state stored per item after review
-  kind          text,           -- 'tailored' | 'general' — distinguishes the (at most one) dormant general-resume row
+  kind          text,           -- vestigial: always 'tailored' now; the 'general' path was removed (column + partial index retained)
   created_at    timestamptz,
   updated_at    timestamptz
 )
