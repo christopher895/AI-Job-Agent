@@ -70,3 +70,49 @@ export async function sendJobEmail(jobs: JobListing[], source: string) {
     html: buildEmailHtml(jobs, source),
   });
 }
+
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  assessment: "OA", interviewing: "Interview", offer: "Offer",
+};
+
+/** High-signal subject that leads with the deadline when one exists. */
+export function statusChangeSubject(company: string, status: string, deadlineAt: Date | null): string {
+  const label = STATUS_LABEL[status] ?? status;
+  if (status === "assessment" && deadlineAt) return `⚠️ OA due ${fmtDate(deadlineAt)} — ${company}`;
+  if (deadlineAt) return `${label} ${fmtDate(deadlineAt)} — ${company}`;
+  return `${label} — ${company}`;
+}
+
+export async function sendStatusChangeEmail(
+  app: { company: string; job_title: string; id: string },
+  event: { status: string; deadline_at: Date | null; email_link: string | null; email_snippet: string | null }
+): Promise<void> {
+  const toEmail = process.env.YOUR_EMAIL;
+  if (!toEmail) throw new Error("YOUR_EMAIL is not set");
+  const appUrl = process.env.WEB_URL ?? process.env.APP_URL ?? "http://localhost:3000";
+  const from = process.env.EMAIL_FROM ?? "Job Agent <onboarding@resend.dev>";
+
+  const subject = statusChangeSubject(app.company, event.status, event.deadline_at);
+  const deadlineLine = event.deadline_at
+    ? `<p style="font-size:14px;"><strong>Deadline:</strong> ${esc(fmtDate(event.deadline_at))}</p>` : "";
+  const gmailLink = event.email_link
+    ? `<a href="${esc(event.email_link)}" style="color:#0066cc;">Open email →</a>` : "";
+
+  const html = `
+    <div style="font-family:sans-serif; max-width:600px; margin:0 auto; padding:24px;">
+      <h2 style="font-size:18px;">${esc(app.company)} — ${esc(app.job_title)}</h2>
+      <p style="font-size:14px;">New status: <strong>${esc(event.status)}</strong></p>
+      ${deadlineLine}
+      ${event.email_snippet ? `<p style="color:#555; font-size:13px;">${esc(event.email_snippet)}</p>` : ""}
+      <p style="margin-top:16px;">
+        ${gmailLink}
+        <a href="${esc(appUrl)}/applied" style="color:#0066cc; margin-left:16px;">View in tracker →</a>
+      </p>
+    </div>`;
+
+  await getResend().emails.send({ from, to: toEmail, subject, html });
+}

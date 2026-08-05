@@ -21,6 +21,7 @@ Everything below is implemented and running in production, not aspirational — 
 - **Web app** — `/`, `/tailor`, `/resume/[id]`, `/resume/master`, `/applied`, `/preferences` all built (see table below)
 - **Cron scheduler** — scraper runs every 15 min, in-process (no queue layer), guarded against overlapping ticks
 - **Async tailoring** — `POST /api/tailor` returns immediately (202) with a `pending` row; the background job runs `suggestKeywords(jd, master)` and lands the row at `awaiting_review` with proposed suggestions attached (not `ready`). After Christopher reviews and approves suggestions in the checklist, `POST /api/resume/:id/apply-suggestions` runs the rest of the pipeline (apply, render, fit-to-page, PDF) in the background and takes the row to `ready`. The editor polls `GET /api/resumes/:id` until status leaves `pending`
+- **Gmail status ingestion** — opt-in cron tick (`GMAIL_INGEST_ENABLED=true`) reads Christopher's Gmail via a dedicated OAuth2 client (`GMAIL_OAUTH_*`, `gmail.readonly` scope — separate from the Sheets service account, which can't read consumer Gmail), classifies recruiter emails with the LLM, deterministically matches them to an existing `applied_jobs` row, and advances that row's status forward-only, logging every event and notifying on the statuses that matter. See `packages/agent/src/ingest/` and the pipeline below
 
 ## Core Flows
 
@@ -275,6 +276,23 @@ POST /api/applied (resume_id, status, applied_at)
       (date, company, location, job_url, status, resume link)
 ```
 
+### Gmail status ingestion (opt-in, `GMAIL_INGEST_ENABLED=true`)
+```
+cron tick (every 15 min, guarded against overlapping ticks, no-op unless GMAIL_INGEST_ENABLED=true)
+  → getGmailClient() + fetchNewMessages() (since gmail_sync_state.history_id, 7-day fallback if unset)
+    → skip already-seen ids (gmail_processed_messages)
+      → isCandidateEmail() prefilter (sender allowlist + recruiting keywords — keeps the LLM off most inbox noise)
+        → classifyEmail() (LLM: isJobRelated, status, company, role, deadlineAt)
+          → matchApplication() — deterministic Jaccard match against open applied_jobs, with a minimum score and an ambiguity margin
+            → match found: applyStatusEvent() — logs a status_events row every time; advances applied_jobs.status
+              only if canAdvance() says the new status is forward-only (rejected/no_response always terminal;
+              out-of-order/duplicate emails are logged but don't move the row), syncs Sheets, and notifies
+              (Resend) when the new status is in {assessment, interviewing, offer}
+            → no confident/unambiguous match: enqueueReview() — row in email_review_queue for manual triage
+      → advance gmail_sync_state.history_id only after a clean tick (a failed message is left unprocessed so it retries next tick)
+```
+Tables: `gmail_sync_state` (history cursor), `gmail_processed_messages` (idempotency), `status_events` (full audit trail, source `'manual' | 'email'`), `email_review_queue` (unmatched/ambiguous emails awaiting manual resolution). Requires `GMAIL_OAUTH_CLIENT_ID` / `GMAIL_OAUTH_CLIENT_SECRET` / `GMAIL_OAUTH_REFRESH_TOKEN` (minted via `scripts/mint-gmail-token.ts`) — a dedicated OAuth2 client with `gmail.readonly` scope, since the Sheets service account can't read consumer Gmail.
+
 ## Environment Variables
 
 ```
@@ -303,6 +321,11 @@ GOOGLE_SHEETS_SPREADSHEET_ID
 GOOGLE_SERVICE_ACCOUNT_JSON   # stringified service account credentials
 
 TECTONIC_PATH                 # path to the tectonic binary (PDF generation)
+
+GMAIL_OAUTH_CLIENT_ID          # Gmail ingestion — dedicated OAuth2 client (gmail.readonly scope), separate from Sheets
+GMAIL_OAUTH_CLIENT_SECRET
+GMAIL_OAUTH_REFRESH_TOKEN     # minted via `npx tsx scripts/mint-gmail-token.ts`
+GMAIL_INGEST_ENABLED          # "true" to enable the ingest cron tick (leave unset/false until verified)
 ```
 
 See `.env.example` for the authoritative, commented list.

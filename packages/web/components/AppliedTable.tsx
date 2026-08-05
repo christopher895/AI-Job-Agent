@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AppliedJob, api } from "../lib/api";
+import StatusTimeline from "./StatusTimeline";
 
 const STATUSES = ["applied", "interviewing", "assessment", "no_response", "offer", "rejected"] as const;
 type Status = (typeof STATUSES)[number];
@@ -116,6 +117,7 @@ export default function AppliedTable({ initial }: { initial: AppliedJob[] }) {
             <th className="py-3 px-4 font-medium">Status</th>
             <th className="py-3 px-4 font-medium">Source</th>
             <th className="py-3 px-4 font-medium">Actions</th>
+            <th className="py-3 px-4 font-medium">History</th>
           </tr>
         </thead>
         <tbody>
@@ -186,6 +188,16 @@ export default function AppliedTable({ initial }: { initial: AppliedJob[] }) {
                       </svg>
                     </button>
                   </div>
+                </td>
+                <td className="py-3 px-4">
+                  <details>
+                    <summary className="cursor-pointer text-xs text-paper-muted hover:text-paper-ink transition-colors">
+                      History
+                    </summary>
+                    <div className="mt-2">
+                      <StatusTimeline events={job.status_events ?? []} />
+                    </div>
+                  </details>
                 </td>
               </tr>
             );

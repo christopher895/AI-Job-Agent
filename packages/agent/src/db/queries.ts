@@ -322,3 +322,148 @@ export async function countRecentPlaygroundUsage(ipHash: string): Promise<number
   );
   return rows[0].count;
 }
+
+// ── Gmail ingestion: sync state + processed messages ─────────────────────────
+
+export async function getGmailSyncState(): Promise<{ history_id: string | null; last_synced_at: Date | null }> {
+  const { rows } = await pool.query("SELECT history_id, last_synced_at FROM gmail_sync_state WHERE id = 1");
+  return rows[0] ?? { history_id: null, last_synced_at: null };
+}
+
+export async function setGmailSyncState(historyId: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO gmail_sync_state (id, history_id, last_synced_at)
+     VALUES (1, $1, NOW())
+     ON CONFLICT (id) DO UPDATE SET history_id = EXCLUDED.history_id, last_synced_at = NOW()`,
+    [historyId]
+  );
+}
+
+export async function isMessageProcessed(messageId: string): Promise<boolean> {
+  const { rowCount } = await pool.query("SELECT 1 FROM gmail_processed_messages WHERE message_id = $1", [messageId]);
+  return (rowCount ?? 0) > 0;
+}
+
+export async function markMessageProcessed(messageId: string): Promise<void> {
+  await pool.query(
+    "INSERT INTO gmail_processed_messages (message_id) VALUES ($1) ON CONFLICT (message_id) DO NOTHING",
+    [messageId]
+  );
+}
+
+// ── Gmail ingestion: status events ───────────────────────────────────────────
+
+export type StatusEventRow = {
+  id: string;
+  application_id: string;
+  status: string;
+  source: "manual" | "email";
+  deadline_at: Date | null;
+  email_message_id: string | null;
+  email_subject: string | null;
+  email_snippet: string | null;
+  email_link: string | null;
+  occurred_at: Date;
+};
+
+export async function createStatusEvent(fields: {
+  applicationId: string;
+  status: string;
+  source: "manual" | "email";
+  deadlineAt?: Date | null;
+  emailMessageId?: string | null;
+  emailSubject?: string | null;
+  emailSnippet?: string | null;
+  emailLink?: string | null;
+}): Promise<StatusEventRow> {
+  const { rows } = await pool.query(
+    `INSERT INTO status_events
+       (application_id, status, source, deadline_at, email_message_id, email_subject, email_snippet, email_link)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     RETURNING *`,
+    [
+      fields.applicationId, fields.status, fields.source, fields.deadlineAt ?? null,
+      fields.emailMessageId ?? null, fields.emailSubject ?? null,
+      fields.emailSnippet ?? null, fields.emailLink ?? null,
+    ]
+  );
+  return rows[0];
+}
+
+/** All status events, grouped by application_id, each list ascending by occurred_at. */
+export async function listStatusEventsByApplication(): Promise<Record<string, StatusEventRow[]>> {
+  const { rows } = await pool.query<StatusEventRow>(
+    "SELECT * FROM status_events ORDER BY occurred_at ASC"
+  );
+  const out: Record<string, StatusEventRow[]> = {};
+  for (const r of rows) (out[r.application_id] ??= []).push(r);
+  return out;
+}
+
+// ── Gmail ingestion: review queue ────────────────────────────────────────────
+
+export type ReviewQueueRow = {
+  id: string;
+  email_message_id: string;
+  email_from: string | null;
+  email_subject: string | null;
+  email_snippet: string | null;
+  email_link: string | null;
+  detected_status: string | null;
+  detected_deadline_at: Date | null;
+  suggested_application_id: string | null;
+  match_score: number | null;
+  created_at: Date;
+  resolved_at: Date | null;
+};
+
+export async function enqueueReview(fields: {
+  emailMessageId: string;
+  emailFrom?: string;
+  emailSubject?: string;
+  emailSnippet?: string;
+  emailLink?: string;
+  detectedStatus?: string;
+  detectedDeadlineAt?: Date | null;
+  suggestedApplicationId?: string | null;
+  matchScore?: number | null;
+}): Promise<ReviewQueueRow> {
+  const { rows } = await pool.query(
+    `INSERT INTO email_review_queue
+       (email_message_id, email_from, email_subject, email_snippet, email_link,
+        detected_status, detected_deadline_at, suggested_application_id, match_score)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     ON CONFLICT (email_message_id) DO NOTHING
+     RETURNING *`,
+    [
+      fields.emailMessageId, fields.emailFrom ?? null, fields.emailSubject ?? null,
+      fields.emailSnippet ?? null, fields.emailLink ?? null, fields.detectedStatus ?? null,
+      fields.detectedDeadlineAt ?? null, fields.suggestedApplicationId ?? null, fields.matchScore ?? null,
+    ]
+  );
+  // ON CONFLICT DO NOTHING returns no row when the message is already queued — read it back.
+  if (rows[0]) return rows[0];
+  const existing = await pool.query("SELECT * FROM email_review_queue WHERE email_message_id = $1", [fields.emailMessageId]);
+  return existing.rows[0];
+}
+
+export async function listPendingReviews(): Promise<ReviewQueueRow[]> {
+  const { rows } = await pool.query(
+    "SELECT * FROM email_review_queue WHERE resolved_at IS NULL ORDER BY created_at DESC"
+  );
+  return rows;
+}
+
+export async function getReview(id: string): Promise<ReviewQueueRow | null> {
+  const { rows } = await pool.query("SELECT * FROM email_review_queue WHERE id = $1", [id]);
+  return rows[0] ?? null;
+}
+
+export async function resolveReview(id: string): Promise<void> {
+  await pool.query("UPDATE email_review_queue SET resolved_at = NOW() WHERE id = $1", [id]);
+}
+
+export async function getAppliedJob(id: string): Promise<AppliedJobRow | null> {
+  const { rows } = await pool.query("SELECT * FROM applied_jobs WHERE id = $1", [id]);
+  return rows[0] ?? null;
+}

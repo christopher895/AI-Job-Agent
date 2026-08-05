@@ -187,6 +187,59 @@ export async function initSchema() {
       CHECK (status IN ('pending','awaiting_review','ready','failed'));
   `);
 
+  // ── Gmail application-status ingestion ────────────────────────────────────
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS gmail_sync_state (
+      id             INT PRIMARY KEY DEFAULT 1,
+      history_id     TEXT,
+      last_synced_at TIMESTAMPTZ
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS gmail_processed_messages (
+      message_id   TEXT PRIMARY KEY,
+      processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS status_events (
+      id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      application_id   UUID NOT NULL REFERENCES applied_jobs(id) ON DELETE CASCADE,
+      status           TEXT NOT NULL,
+      source           TEXT NOT NULL CHECK (source IN ('manual','email')),
+      deadline_at      TIMESTAMPTZ,
+      email_message_id TEXT,
+      email_subject    TEXT,
+      email_snippet    TEXT,
+      email_link       TEXT,
+      occurred_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS email_review_queue (
+      id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email_message_id         TEXT NOT NULL UNIQUE,
+      email_from               TEXT,
+      email_subject            TEXT,
+      email_snippet            TEXT,
+      email_link               TEXT,
+      detected_status          TEXT,
+      detected_deadline_at     TIMESTAMPTZ,
+      suggested_application_id  UUID REFERENCES applied_jobs(id) ON DELETE SET NULL,
+      match_score              REAL,
+      created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      resolved_at              TIMESTAMPTZ
+    )
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_status_events_application ON status_events(application_id, occurred_at);
+    CREATE INDEX IF NOT EXISTS idx_review_queue_unresolved ON email_review_queue(created_at) WHERE resolved_at IS NULL;
+  `);
+
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_tailored_resumes_created ON tailored_resumes(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_snapshots_company_scraped ON snapshots(company_id, scraped_at DESC);

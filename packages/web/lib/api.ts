@@ -57,6 +57,33 @@ export type AppliedJob = {
   applied_at: string;
   resume_id: string | null;
   sheets_row: number | null;
+  status_events?: StatusEvent[];
+};
+
+export type StatusEvent = {
+  id: string;
+  application_id: string;
+  status: string;
+  source: "manual" | "email";
+  deadline_at: string | null;
+  email_subject: string | null;
+  email_snippet: string | null;
+  email_link: string | null;
+  occurred_at: string;
+};
+
+export type ReviewItem = {
+  id: string;
+  email_message_id: string;
+  email_from: string | null;
+  email_subject: string | null;
+  email_snippet: string | null;
+  email_link: string | null;
+  detected_status: string | null;
+  detected_deadline_at: string | null;
+  suggested_application_id: string | null;
+  match_score: number | null;
+  created_at: string;
 };
 
 export type Bullet = {
@@ -253,6 +280,10 @@ export const api = {
   }) => request<AppliedJob>("POST", "/applied", body),
   patchApplied: (id: string, status: string) =>
     request<AppliedJob>("PATCH", `/applied/${id}`, { status }),
+  listReviews: () => request<ReviewItem[]>("GET", "/review"),
+  confirmReview: (id: string, applicationId: string) =>
+    request<{ ok: true }>("POST", `/review/${id}/confirm`, { applicationId }),
+  dismissReview: (id: string) => request<{ ok: true }>("POST", `/review/${id}/dismiss`),
   getPlaces: (q: string) =>
     request<{ name: string }[]>("GET", `/places?q=${encodeURIComponent(q)}`),
   getPreferences: () => request<Preferences>("GET", "/preferences"),
