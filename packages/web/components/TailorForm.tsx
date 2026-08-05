@@ -33,9 +33,9 @@ export default function TailorForm({
       const { text, title: fetchedTitle, company: fetchedCompany, location: fetchedLocation } =
         await api.fetchJd(trimmed);
       setJdText(text);
-      setTitle((current) => (current.trim() ? current : fetchedTitle ?? current));
-      setCompany((current) => (current.trim() ? current : fetchedCompany ?? current));
-      setLocation((current) => (current.trim() ? current : fetchedLocation ?? current));
+      setTitle((current) => fetchedTitle ?? current);
+      setCompany((current) => fetchedCompany ?? current);
+      setLocation((current) => fetchedLocation ?? current);
       setFetchStatus("done");
     } catch {
       setFetchStatus("failed");
