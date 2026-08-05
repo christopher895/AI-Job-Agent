@@ -7,7 +7,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "npm run test:grounding && npm run test:format && npm run test:chain-progress-labels && npm run test:internal-secret && npm run test:fetch-jd && npm run test:github-repo && npm run test:match && npm run test:prefilter && npm run test:status-order && npm run test:gmail-parse && npm run test:status-email",
-    "test:integration": "npm run test:db && npm run test:critic && npm run test:stage-tracking && npm run test:general-resume && npm run test:import-master-resume && npm run test:claude-cli && npm run test:render-pdf && npm run test:playground-usage && npm run test:anthropic-key-path && npm run test:ingest-queries && npm run test:classify-email",
+    "test:integration": "npm run test:db && npm run test:critic && npm run test:stage-tracking && npm run test:general-resume && npm run test:import-master-resume && npm run test:claude-cli && npm run test:render-pdf && npm run test:playground-usage && npm run test:anthropic-key-path && npm run test:ingest-queries && npm run test:classify-email && npm run test:email-ingest",
     "test:db": "tsx src/db/test-connection.ts",
     "scrape:companies": "tsx src/scraper/run-companies.ts",
     "test:grounding": "tsx src/ai/test-grounding.ts",
@@ -31,6 +31,7 @@
     "test:ingest-queries": "tsx src/db/test-ingest-queries.ts",
     "test:classify-email": "tsx src/ai/test-classify-email.ts",
     "test:status-email": "tsx src/notifications/test-status-email.ts",
+    "test:email-ingest": "tsx src/ingest/test-email-ingest.ts",
     "tailor": "tsx src/ai/run-tailor.ts"
   },
   "dependencies": {
