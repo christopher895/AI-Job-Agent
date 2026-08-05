@@ -46,3 +46,7 @@ export const FILTERS: Preferences = {
   ],
   watchedRepos: ["https://github.com/vanshb03/Summer2027-Internships"],
 };
+
+// ── Gmail ingestion tuning ───────────────────────────────────────────────────
+export const MATCH_MIN_SCORE = 0.6;      // below this → review queue
+export const MATCH_AMBIGUITY_MARGIN = 0.15; // top-2 within this → ambiguous → review queue
