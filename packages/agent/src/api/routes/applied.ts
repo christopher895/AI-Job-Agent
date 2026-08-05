@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createAppliedJob, listAppliedJobs, updateAppliedJob } from "../../db/queries";
+import { createAppliedJob, listAppliedJobs, updateAppliedJob, createStatusEvent, listStatusEventsByApplication } from "../../db/queries";
 import { appendRow, syncStatusToSheet } from "../../integrations/sheets";
 
 const router = Router();
@@ -33,6 +33,11 @@ router.post("/", async (req, res) => {
 
   res.status(201).json(row);
 
+  if (row.status) {
+    createStatusEvent({ applicationId: row.id, status: row.status, source: "manual" })
+      .catch((err) => console.error("[applied] status event failed:", err));
+  }
+
   // Sync to Google Sheets in the background — don't block the response
   const appUrl = process.env.WEB_URL ?? process.env.APP_URL ?? "http://localhost:3000";
   appendRow({
@@ -50,10 +55,10 @@ router.post("/", async (req, res) => {
     .catch((err) => console.error("[sheets] appendRow failed:", err));
 });
 
-// GET /api/applied
+// GET /api/applied  (each row carries its status_events timeline)
 router.get("/", async (_req, res) => {
-  const rows = await listAppliedJobs();
-  res.json(rows);
+  const [rows, eventsByApp] = await Promise.all([listAppliedJobs(), listStatusEventsByApplication()]);
+  res.json(rows.map((r) => ({ ...r, status_events: eventsByApp[r.id] ?? [] })));
 });
 
 // PATCH /api/applied/:id
@@ -62,6 +67,11 @@ router.patch("/:id", async (req, res) => {
   const row = await updateAppliedJob(req.params.id, { status, sheetsRow });
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);
+
+  if (status) {
+    createStatusEvent({ applicationId: row.id, status, source: "manual" })
+      .catch((err) => console.error("[applied] status event failed:", err));
+  }
 
   // Sync status change to Sheets in the background
   if (status && row.sheets_row) {

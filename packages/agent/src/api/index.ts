@@ -7,6 +7,7 @@ import preferencesRouter from "./routes/preferences";
 import placesRouter from "./routes/places";
 import generalResumeRouter from "./routes/general-resume";
 import playgroundRouter from "./routes/playground";
+import reviewRouter from "./routes/review";
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use("/preferences", preferencesRouter);
 router.use("/places", placesRouter);
 router.use("/general-resume", generalResumeRouter);
 router.use("/playground", playgroundRouter);
+router.use("/review", reviewRouter);
 
 export default router;
