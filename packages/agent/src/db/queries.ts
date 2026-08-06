@@ -276,7 +276,7 @@ export async function createAppliedJob(fields: {
      RETURNING *`,
     [
       fields.company, fields.jobTitle, fields.location ?? null, fields.jobUrl ?? null,
-      fields.status || null, fields.appliedAt ?? new Date(), fields.resumeId ?? null,
+      fields.status ?? "applied", fields.appliedAt ?? new Date(), fields.resumeId ?? null,
     ]
   );
   return rows[0];
