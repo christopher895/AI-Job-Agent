@@ -1,6 +1,6 @@
 import { JobListing } from "./types";
 import { hashJob, diffSnapshots } from "./diff";
-import { getOrCreateCompany, getLatestSnapshot, saveSnapshot, getPreferences } from "../db/queries";
+import { getOrCreateCompany, getLatestSnapshot, saveSnapshot, getPreferences, upsertJob } from "../db/queries";
 import { sendJobEmail } from "../notifications/email";
 import { scrapeGithubRepo, parseRepoUrl } from "./adapters/github-repo";
 
@@ -39,9 +39,21 @@ async function processWatchedRepo(repoUrl: string): Promise<JobListing[]> {
 
   const newHashSet = new Set(diffSnapshots(prevHashes, currentHashes));
   const hashToJob = new Map(currentJobs.map((j, i) => [currentHashes[i], j]));
-  const newJobs = [...newHashSet].map((h) => hashToJob.get(h)!).filter(Boolean);
+  const candidateJobs = [...newHashSet].map((h) => hashToJob.get(h)!).filter(Boolean);
 
   await saveSnapshot(record.id, currentHashes);
+
+  // The snapshot diff above isn't atomic across concurrent processes (e.g. a
+  // rolling deploy briefly running old + new containers): both could read the
+  // same prior snapshot and compute the same "new" jobs. `jobs.url` is UNIQUE,
+  // so upsertJob's ON CONFLICT DO NOTHING is the real, race-safe gate — only
+  // a job this call actually inserted gets emailed, so at most one process
+  // wins per job and duplicate alert emails can't go out.
+  const newJobs: JobListing[] = [];
+  for (const job of candidateJobs) {
+    const inserted = await upsertJob(record.id, job.title, job.company, job.url);
+    if (inserted) newJobs.push(job);
+  }
 
   if (newJobs.length > 0) {
     console.log(`[github-repo] ${name}: ${newJobs.length} new job(s)`);

@@ -46,12 +46,20 @@ async function processCompany(company: Company): Promise<JobListing[]> {
 
   const newHashSet = new Set(diffSnapshots(prevHashes, currentHashes));
   const hashToJob = new Map(locationFiltered.map((j, i) => [currentHashes[i], j]));
-  const newJobs = [...newHashSet].map((h) => hashToJob.get(h)!).filter(Boolean);
+  const candidateJobs = [...newHashSet].map((h) => hashToJob.get(h)!).filter(Boolean);
 
-  for (const job of newJobs) {
-    await upsertJob(record.id, job.title, job.company, job.url);
-  }
   await saveSnapshot(record.id, currentHashes);
+
+  // The snapshot diff isn't atomic across concurrent processes (e.g. a
+  // rolling deploy briefly running old + new containers), so gate on
+  // upsertJob's ON CONFLICT (url) DO NOTHING — the UNIQUE constraint on
+  // jobs.url means only the process that actually inserts a given job's row
+  // includes it in newJobs, preventing duplicate alert emails.
+  const newJobs: JobListing[] = [];
+  for (const job of candidateJobs) {
+    const inserted = await upsertJob(record.id, job.title, job.company, job.url);
+    if (inserted) newJobs.push(job);
+  }
 
   if (newJobs.length > 0) {
     console.log(`[${company.name}] ${newJobs.length} new job(s)`);
