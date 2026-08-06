@@ -122,7 +122,7 @@ export default function ResumeEditor({
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [applyForm, setApplyForm] = useState<ApplyForm>({
-    status: "",
+    status: "applied",
     appliedAt: new Date().toISOString().split("T")[0],
   });
   const [applyStatus, setApplyStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
@@ -319,7 +319,7 @@ export default function ResumeEditor({
         jobTitle: jobTitle,
         location: meta.location ?? undefined,
         jobUrl: meta.job_url ?? undefined,
-        status: applyForm.status || undefined,
+        status: applyForm.status,
         appliedAt: applyForm.appliedAt,
         resumeId: resume.id,
       });
@@ -634,7 +634,6 @@ export default function ResumeEditor({
                 onChange={(e) => setApplyForm((f) => ({ ...f, status: e.target.value }))}
                 className="border border-paper-border rounded-lg px-2 py-1 text-xs bg-paper focus:outline-none focus:ring-1 focus:ring-violet-500"
               >
-                <option value="">Select status</option>
                 <option value="applied">Applied</option>
                 <option value="interviewing">Interviewing</option>
                 <option value="assessment">Assessment</option>
