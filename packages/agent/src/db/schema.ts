@@ -174,6 +174,15 @@ export async function initSchema() {
     ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS stage TEXT;
   `);
 
+  // Timestamp of the most recent `stage` transition above — lets the
+  // pending-state UI show an elapsed-time-vs-typical progress estimate
+  // instead of a plain spinner. Set alongside `stage` in updateResumeStage()
+  // and nulled out alongside it in setSuggestions()/beginApplyingSuggestions()
+  // so the two columns never disagree about whether a stage is in flight.
+  await pool.query(`
+    ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS stage_started_at TIMESTAMPTZ;
+  `);
+
   // The suggestion-based tailoring flow (POST /api/tailor -> awaiting_review ->
   // POST /api/resume/:id/apply-suggestions -> ready) stores its proposed keyword
   // insertions here so the checklist can be re-rendered on reload and so accepted

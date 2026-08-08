@@ -20,6 +20,8 @@ export type TailoredResumeRow = {
   error: string | null;
   /** Current pipeline step while status = 'pending' (e.g. "Drafting resume (pass 1)"); null otherwise. */
   stage: string | null;
+  /** When the current `stage` began — used to estimate progress; null whenever `stage` is null. */
+  stage_started_at: Date | null;
   suggestions: Suggestion[] | null;
   created_at: Date;
   updated_at: Date;
@@ -133,7 +135,7 @@ export async function updatePreferences(data: Preferences): Promise<void> {
 // ── Tailored resumes ───────────────────────────────────────────────────────────
 
 const TAILORED_RESUME_COLUMNS =
-  "id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, status, error, stage, suggestions, created_at, updated_at";
+  "id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, status, error, stage, stage_started_at, suggestions, created_at, updated_at";
 
 /** Inserts a placeholder row immediately so POST /api/tailor can respond before the pipeline runs. */
 export async function createPendingResume(fields: {
@@ -220,20 +222,20 @@ export async function updateTailoredResume(
 
 /** Records the pipeline's current step for a pending row. Fire-and-forget by callers — a failed write must never abort generation. */
 export async function updateResumeStage(id: string, stage: string): Promise<void> {
-  await pool.query("UPDATE tailored_resumes SET stage = $1 WHERE id = $2", [stage, id]);
+  await pool.query("UPDATE tailored_resumes SET stage = $1, stage_started_at = NOW() WHERE id = $2", [stage, id]);
 }
 
 /** Stores the freshly generated suggestions and moves the row into human review. */
 export async function setSuggestions(id: string, suggestions: Suggestion[]): Promise<void> {
   await pool.query(
-    `UPDATE tailored_resumes SET suggestions = $1, status = 'awaiting_review', stage = NULL, updated_at = NOW() WHERE id = $2`,
+    `UPDATE tailored_resumes SET suggestions = $1, status = 'awaiting_review', stage = NULL, stage_started_at = NULL, updated_at = NOW() WHERE id = $2`,
     [JSON.stringify(suggestions), id]
   );
 }
 
 /** Moves an awaiting_review row back into 'pending' right as POST /apply-suggestions starts its background work — reuses the same pending/polling UI the rest of the app already has. */
 export async function beginApplyingSuggestions(id: string): Promise<void> {
-  await pool.query(`UPDATE tailored_resumes SET status = 'pending', stage = NULL, updated_at = NOW() WHERE id = $1`, [id]);
+  await pool.query(`UPDATE tailored_resumes SET status = 'pending', stage = NULL, stage_started_at = NULL, updated_at = NOW() WHERE id = $1`, [id]);
 }
 
 export async function storePdf(id: string, pdf: Buffer): Promise<void> {
