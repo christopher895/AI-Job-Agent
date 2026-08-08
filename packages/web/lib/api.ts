@@ -37,6 +37,8 @@ export type ResumeListItem = {
   /** Error from the tailoring pipeline itself, set when status = 'failed'. */
   error: string | null;
   stage: string | null;
+  /** When the current `stage` began (ISO string); null whenever `stage` is null. Used to estimate pending-screen progress. */
+  stage_started_at: string | null;
   suggestions: Suggestion[] | null;
   created_at: string;
   updated_at: string;
