@@ -3,7 +3,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, Resume } from "../lib/api";
-import { STAGE_SEGMENTS, segmentIndex } from "../lib/resumeStage";
+import { STAGE_SEGMENTS, segmentIndex, estimateStageProgress } from "../lib/resumeStage";
 import SuggestionChecklist from "./SuggestionChecklist";
 
 type ApplyForm = { status: string; appliedAt: string };
@@ -116,6 +116,7 @@ export default function ResumeEditor({
     job_url: resume.job_url,
     created_at: resume.created_at,
     stage: resume.stage,
+    stage_started_at: resume.stage_started_at,
     suggestions: resume.suggestions,
   });
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
@@ -252,7 +253,9 @@ export default function ResumeEditor({
         if (fresh.status === "pending") {
           // Still running — just surface the current stage, nothing else has
           // changed yet (markdown/PDF are only written once status flips).
-          setMeta((m) => (m.stage === fresh.stage ? m : { ...m, stage: fresh.stage }));
+          setMeta((m) =>
+            m.stage === fresh.stage ? m : { ...m, stage: fresh.stage, stage_started_at: fresh.stage_started_at }
+          );
           return;
         }
         // Let the PDF pane's auto-load effect retry now that a PDF might exist —
@@ -266,6 +269,7 @@ export default function ResumeEditor({
           job_url: fresh.job_url,
           created_at: fresh.created_at,
           stage: fresh.stage,
+          stage_started_at: fresh.stage_started_at,
           suggestions: fresh.suggestions,
         });
         setMarkdown(fresh.markdown);
@@ -284,6 +288,16 @@ export default function ResumeEditor({
       clearInterval(interval);
     };
   }, [meta.status, resume.id]);
+
+  // Ticks once a second while a stage is in flight, purely to animate the
+  // elapsed-time-vs-typical progress bar between polls — the 4s poll above
+  // remains the sole source of truth for `stage` / `stage_started_at`.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (meta.status !== "pending") return;
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, [meta.status]);
 
   async function handleDownload() {
     try {
@@ -345,6 +359,7 @@ export default function ResumeEditor({
 
   if (meta.status === "pending") {
     const activeIndex = segmentIndex(meta.stage);
+    const progress = estimateStageProgress(meta.stage, meta.stage_started_at, now);
     return (
       <div className="flex flex-col h-full bg-paper">
         <div className="border-b border-paper-border px-6 py-3 flex-shrink-0">
@@ -360,7 +375,7 @@ export default function ResumeEditor({
             <p className="text-sm font-medium text-paper-ink">
               Generating your tailored resume{title ? ` for ${title}` : ""}…
             </p>
-            {activeIndex === -1 ? (
+            {activeIndex === -1 || !progress ? (
               <>
                 <svg className="animate-spin mx-auto text-violet-600 mt-4" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 12a9 9 0 1 1-6.219-8.56" />
@@ -398,6 +413,17 @@ export default function ResumeEditor({
                   ))}
                 </div>
                 <p className="text-xs text-paper-muted mt-6">{meta.stage}</p>
+                <div className="mt-3">
+                  <div className="h-1 w-full rounded-full bg-paper-border overflow-hidden">
+                    <div
+                      className="h-full bg-violet-600 transition-all duration-1000 ease-linear"
+                      style={{ width: `${progress.percent}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-paper-muted mt-1.5">
+                    {progress.elapsedSeconds}s / ~{progress.expectedSeconds}s typical
+                  </p>
+                </div>
               </>
             )}
           </div>
