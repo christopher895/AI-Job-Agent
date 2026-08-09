@@ -14,6 +14,9 @@ import {
   createAppliedJob,
   listAppliedJobs,
   updateAppliedJob,
+  updateResumeStage,
+  setSuggestions,
+  beginApplyingSuggestions,
 } from "./queries";
 
 let passed = 0;
@@ -149,6 +152,37 @@ async function main() {
     .then(() => false)
     .catch(() => true);
   ok("CHECK constraint rejects invalid status", invalidStatus);
+
+  console.log("\n── 12. updateResumeStage / setSuggestions / beginApplyingSuggestions stage_started_at ──");
+  const stageRow = await createPendingResume({
+    jobTitle: "Stage Test Role",
+    company: "StageCo",
+    jobUrl: "https://stageco.com/jobs/1",
+    jdText: "Testing stage timestamps.",
+  });
+  ok("stage_started_at starts null", stageRow.stage_started_at === null);
+
+  await updateResumeStage(stageRow.id, "Analyzing job description");
+  const afterFirstStage = await getTailoredResume(stageRow.id);
+  ok("stage set", afterFirstStage?.stage === "Analyzing job description");
+  ok("stage_started_at set", afterFirstStage?.stage_started_at !== null);
+
+  await setSuggestions(stageRow.id, []);
+  const afterSuggestions = await getTailoredResume(stageRow.id);
+  ok("stage cleared by setSuggestions", afterSuggestions?.stage === null);
+  ok("stage_started_at cleared by setSuggestions", afterSuggestions?.stage_started_at === null);
+
+  await updateResumeStage(stageRow.id, "Applying your selections");
+  const afterSecondStage = await getTailoredResume(stageRow.id);
+  ok("stage set again", afterSecondStage?.stage === "Applying your selections");
+  ok("stage_started_at set again", afterSecondStage?.stage_started_at !== null);
+
+  await beginApplyingSuggestions(stageRow.id);
+  const afterBegin = await getTailoredResume(stageRow.id);
+  ok("stage cleared by beginApplyingSuggestions", afterBegin?.stage === null);
+  ok("stage_started_at cleared by beginApplyingSuggestions", afterBegin?.stage_started_at === null);
+
+  await cleanup(stageRow.id);
 
   console.log("\n── Cleanup ──────────────────────────────────────────────────");
   await cleanup(pending.id, applied.id);

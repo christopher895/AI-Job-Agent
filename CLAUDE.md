@@ -207,6 +207,7 @@ tailored_resumes (
   status        text,           -- 'pending' | 'awaiting_review' | 'ready' | 'failed' — tailoring runs as a background job
   error         text,           -- error message if status = 'failed'
   stage         text,           -- current pipeline step while status = 'pending' (e.g. "Analyzing job description"); null otherwise
+  stage_started_at timestamptz, -- when the current `stage` began; null whenever `stage` is null. Drives the pending-screen's elapsed-vs-typical progress estimate
   suggestions   jsonb,          -- proposed keyword-insertion suggestions; accepted/rejected state stored per item after review
   kind          text,           -- vestigial: always 'tailored' now; the 'general' path was removed (column + partial index retained)
   created_at    timestamptz,
