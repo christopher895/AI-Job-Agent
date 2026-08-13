@@ -17,6 +17,7 @@ export const COMPANIES: Company[] = [
   { name: "Lyft",            platform: "greenhouse", slug: "lyft" },
   { name: "Affirm",          platform: "greenhouse", slug: "affirm" },
   { name: "Anduril",         platform: "greenhouse", slug: "andurilindustries" },
+  { name: "SpaceX",          platform: "greenhouse", slug: "spacex" },
   { name: "xAI",             platform: "greenhouse", slug: "xai" },
   { name: "Discord",         platform: "greenhouse", slug: "discord" },
   { name: "Duolingo",        platform: "greenhouse", slug: "duolingo" },
