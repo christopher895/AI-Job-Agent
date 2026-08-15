@@ -25,17 +25,34 @@ import {
 
 type SectionMeta = { header: string; link: string };
 
+/**
+ * "Start–End", or just whichever end is filled in — and an empty string when
+ * neither is. An entry with no dates (projects, typically) must not emit a lone
+ * "–": the PDF renderer prints that dangling dash verbatim.
+ */
+export function dateRange(start: string, end: string): string {
+  const s = (start ?? "").trim();
+  const e = (end ?? "").trim();
+  if (s && e) return `${s}–${e}`;
+  return s || e;
+}
+
+/** Joins header segments with " · ", dropping the empty ones. */
+function headerSegments(...segments: string[]): string {
+  return segments.filter((s) => s && s.trim()).join(" · ");
+}
+
 function buildMeta(master: MasterResume): Map<string, SectionMeta> {
   const meta = new Map<string, SectionMeta>();
   for (const e of [...master.experience, ...master.extracurriculars]) {
     meta.set(e.id, {
-      header: `**${e.company}** — ${e.title} · ${e.location} · ${e.start}–${e.end}`,
+      header: `**${e.company}** — ${headerSegments(e.title, e.location, dateRange(e.start, e.end))}`,
       link: "",
     });
   }
   for (const p of master.projects) {
     meta.set(p.id, {
-      header: `**${p.name}** · ${p.tech.join(", ")} · ${p.start}–${p.end}`,
+      header: `**${p.name}** · ${headerSegments(p.tech.join(", "), dateRange(p.start, p.end))}`,
       link: p.link,
     });
   }
@@ -87,7 +104,7 @@ export function renderMarkdown(master: MasterResume, tailored: TailoredResume): 
   if (master.extracurriculars.length) {
     lines.push("", "## Extracurriculars");
     for (const ex of master.extracurriculars) {
-      lines.push("", `**${ex.company}** — ${ex.title} · ${ex.location} · ${ex.start}–${ex.end}`);
+      lines.push("", `**${ex.company}** — ${headerSegments(ex.title, ex.location, dateRange(ex.start, ex.end))}`);
       for (const bullet of ex.bullets) lines.push(`- ${bullet.text}`);
     }
   }

@@ -130,6 +130,26 @@ function splitDots(s: string): string[] {
   return s.split(" · ").map((p) => p.trim());
 }
 
+/** A segment that is nothing but dash(es) — what "Start–End" collapses to when both are blank. */
+function isBareDash(s: string): boolean {
+  return /^[-–—]+$/.test(s.trim());
+}
+
+/**
+ * True for the date-range shape a header's trailing segment takes ("June 2025 –
+ * Present", "2024", "Jan 2024–Mar 2025"). Deliberately narrow: anything that
+ * isn't clearly a date stays in the tech list, since misreading a tech stack as
+ * dates is the more visible failure.
+ */
+const MONTHS = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec";
+function isDateRange(s: string): boolean {
+  const t = s.trim();
+  if (!t) return false;
+  if (/present|current|ongoing/i.test(t)) return true;
+  if (new RegExp(`\\b(${MONTHS})`, "i").test(t) && /\d{4}/.test(t)) return true;
+  return /^\d{4}\s*[-–—]?\s*(\d{4})?$/.test(t);
+}
+
 type ExpEntry  = { company: string; title: string; location: string; dates: string; bullets: string[] };
 type ProjEntry = { name: string; tech: string; dates: string; link: string; bullets: string[] };
 type EduEntry  = { school: string; degrees: string; location: string; graduation: string; gpa?: string; notes?: string; coursework?: string };
@@ -220,11 +240,19 @@ function parseMd(md: string): ParsedDoc {
           if (!m) {
             throw new Error(
               `Couldn't parse project entry header: "${l}" — expected ` +
-              `"**Name** · Tech · Start–End"`
+              `"**Name** · Tech" (an optional "· Start–End" may follow)`
             );
           }
-          const parts = splitDots(m[2]);
-          const dates = (parts.pop() ?? "").replace(/–/g, "--");
+          // The trailing "· Start–End" segment is optional — a dateless project
+          // is just "**Name** · Tech". Popping the last segment unconditionally
+          // ate the tech stack in that case, and \hfill then flung it out to the
+          // right margin. A leftover lone dash (what "–" collapses to when both
+          // dates are blank) is dropped rather than printed.
+          const parts = splitDots(m[2]).filter((p) => p && !isBareDash(p));
+          const dates =
+            parts.length > 1 && isDateRange(parts[parts.length - 1])
+              ? (parts.pop() as string).replace(/–/g, "--")
+              : "";
           cur = { name: m[1], tech: parts.join(", "), dates, link: "", bullets: [] };
         } else if ((l.startsWith("http") || l.startsWith("www.")) && !l.startsWith("- ")) {
           if (!cur) throw new Error(`Project link "${l}" appears before any project header`);
@@ -297,6 +325,15 @@ function buildLatex(doc: ParsedDoc): string {
   lines.push(
     `\\documentclass[10pt]{czresume}`,
     `\\usepackage[left=0.4in,top=0.4in,right=0.4in,bottom=0.4in]{geometry}`,
+    // No hyphenation anywhere: a word that doesn't fit moves to the next line
+    // whole instead of breaking as "correc-tion". The infinite penalties kill
+    // both automatic breaks and breaks at existing hyphens ("full-stack"); the
+    // loosened tolerance plus emergencystretch let TeX absorb the resulting
+    // slack as interword space instead of pushing text past the right margin.
+    `\\hyphenpenalty=10000`,
+    `\\exhyphenpenalty=10000`,
+    `\\tolerance=9999`,
+    `\\emergencystretch=3em`,
     ``,
     `\\name{${tex(doc.name)}}`,
     `\\address{${addrParts.join(" \\\\ ")}}`,
@@ -356,7 +393,11 @@ function buildLatex(doc: ParsedDoc): string {
   if (doc.projects.length) {
     lines.push(``, `\\begin{rSection}{Projects}`, `\\vspace{-1em}`, ``);
     for (const p of doc.projects) {
-      lines.push(`\\item \\textbf{${tex(p.name)},} {\\em ${tex(p.tech)}} \\hfill {\\em ${tex(p.dates)}}`);
+      // Tech sits inline right after the project name rather than flushed to the
+      // right margin: with project dates gone there is nothing anchoring the
+      // right edge, and a lone right-aligned tech stack reads as a stray column.
+      const header = `\\item \\textbf{${tex(p.name)},} {\\em ${tex(p.tech)}}`;
+      lines.push(p.dates ? `${header} \\hfill {\\em ${tex(p.dates)}}` : header);
       if (p.bullets.length) {
         lines.push(`\\begin{itemize}`);
         for (const b of p.bullets) lines.push(`    \\item ${tex(b)}`);
