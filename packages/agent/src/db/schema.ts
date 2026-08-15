@@ -190,10 +190,13 @@ export async function initSchema() {
   await pool.query(`
     ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS suggestions JSONB;
   `);
+  // 'cancelled' is set by POST /api/resume/:id/cancel when the user stops a run
+  // that had not produced suggestions yet. The row is kept (not deleted) so its
+  // jd_text can drive an in-place retry.
   await pool.query(`
     ALTER TABLE tailored_resumes DROP CONSTRAINT IF EXISTS tailored_resumes_status_check;
     ALTER TABLE tailored_resumes ADD CONSTRAINT tailored_resumes_status_check
-      CHECK (status IN ('pending','awaiting_review','ready','failed'));
+      CHECK (status IN ('pending','awaiting_review','ready','failed','cancelled'));
   `);
 
   // ── Gmail application-status ingestion ────────────────────────────────────

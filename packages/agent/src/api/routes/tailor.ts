@@ -10,6 +10,7 @@ import {
 } from "../../db/queries";
 import { fetchJd } from "../../scraper/fetch-jd";
 import { LLM_PROVIDER } from "../../ai/llm";
+import { registerRun, clearRun, isCancelledError } from "../../ai/cancellation";
 import { Suggestion } from "../../ai/types";
 
 const router = Router();
@@ -78,11 +79,12 @@ router.post("/", async (req, res) => {
   });
 });
 
-async function runSuggestPipeline(id: string, jd: string) {
+export async function runSuggestPipeline(id: string, jd: string) {
+  const signal = registerRun(id);
   try {
     await updateResumeStage(id, "Analyzing job description");
     const master = await getMasterResume();
-    const raw = await suggestKeywords(jd, master);
+    const raw = await suggestKeywords(jd, master, undefined, signal);
     const suggestions: Suggestion[] = raw.map((s) => ({
       ...s,
       groundedness: labelGroundedness(master, s),
@@ -90,10 +92,18 @@ async function runSuggestPipeline(id: string, jd: string) {
     }));
     await setSuggestions(id, suggestions);
   } catch (err) {
+    // POST /api/resume/:id/cancel already wrote status='cancelled'; writing
+    // 'failed' here would clobber it and show an error for a deliberate stop.
+    if (isCancelledError(err) || signal.aborted) {
+      console.log(`[tailor] suggestion pipeline cancelled for ${id}`);
+      return;
+    }
     console.error("[tailor] suggestion pipeline error:", err);
     const credentialHint =
       LLM_PROVIDER === "openai" ? "check OPENAI_API_KEY" : "check CLAUDE_CODE_OAUTH_TOKEN";
     await failTailoredResume(id, `Generating suggestions failed — ${credentialHint} and try again.`);
+  } finally {
+    clearRun(id);
   }
 }
 

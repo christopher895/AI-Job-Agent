@@ -13,7 +13,12 @@ import {
   completeTailoredResume,
   failTailoredResume,
   updateResumeStage,
+  cancelResumeGeneration,
+  revertToAwaitingReview,
+  restartSuggestions,
 } from "../../db/queries";
+import { registerRun, clearRun, abortRun, isCancelledError, CancelledError } from "../../ai/cancellation";
+import { runSuggestPipeline } from "./tailor";
 import { renderPdf } from "../../ai/render-pdf";
 import { renderMarkdown } from "../../ai/format";
 import { fitToOnePage } from "../../ai/fit-page";
@@ -143,6 +148,7 @@ router.post("/resume/:id/apply-suggestions", async (req, res) => {
 });
 
 async function runApplyPipeline(id: string, accepted: Suggestion[], originalSuggestions: Suggestion[]) {
+  const signal = registerRun(id);
   try {
     await updateResumeStage(id, "Applying your selections");
     const master = await getMasterResume();
@@ -159,13 +165,16 @@ async function runApplyPipeline(id: string, accepted: Suggestion[], originalSugg
     const { master: adjustedMaster, tailored } = applySuggestions(master, relabeledAccepted);
     let markdown = renderMarkdown(adjustedMaster, tailored);
 
+    if (signal.aborted) throw new CancelledError();
     await updateResumeStage(id, "Finalizing formatting");
     let pdf: Buffer | null = null;
     try {
-      const fitted = await fitToOnePage(markdown, { skipWidowFix: true });
+      const fitted = await fitToOnePage(markdown, { skipWidowFix: true, signal });
       markdown = fitted.markdown;
       pdf = fitted.pdf;
     } catch (err) {
+      // A cancel must abort the run, not silently degrade to un-fitted output.
+      if (isCancelledError(err) || signal.aborted) throw err;
       console.error("[resume] fitToOnePage failed, continuing with un-fitted markdown:", err);
     }
 
@@ -177,6 +186,9 @@ async function runApplyPipeline(id: string, accepted: Suggestion[], originalSugg
       return applied ? { ...applied, accepted: true } : { ...orig, accepted: false };
     });
 
+    // Last checkpoint before the run becomes irreversible: past this write the
+    // row is 'ready' and a cancel would have nothing left to undo.
+    if (signal.aborted) throw new CancelledError();
     await completeTailoredResume(id, { markdown, suggestions: finalSuggestions });
 
     if (pdf) {
@@ -194,12 +206,97 @@ async function runApplyPipeline(id: string, accepted: Suggestion[], originalSugg
       }
     }
   } catch (err) {
+    // POST /api/resume/:id/cancel already put the row back to 'awaiting_review';
+    // writing 'failed' here would clobber it and lose the review checklist.
+    if (isCancelledError(err) || signal.aborted) {
+      console.log(`[resume] apply-suggestions pipeline cancelled for ${id}`);
+      return;
+    }
     console.error("[resume] apply-suggestions pipeline error:", err);
     const credentialHint =
       LLM_PROVIDER === "openai" ? "check OPENAI_API_KEY" : "check CLAUDE_CODE_OAUTH_TOKEN";
     await failTailoredResume(id, `Applying suggestions failed — ${credentialHint} and try again.`);
+  } finally {
+    clearRun(id);
   }
 }
+
+// POST /api/resume/:id/cancel — stops an in-flight generation.
+//
+// Kills the run (aborting the spawned `claude` subprocess, not just discarding
+// its output) and writes the resulting status here rather than leaving it to
+// the pipeline, so the editor flips immediately instead of waiting a poll tick.
+// Where the row lands depends on which pipeline was running, which
+// `suggestions` identifies: setSuggestions() is the only thing that populates
+// it, so a null means the first (suggestion) pass and a non-null means the
+// apply pass — the latter goes back to awaiting_review with the user's
+// checklist intact.
+router.post("/resume/:id/cancel", async (req, res) => {
+  const row = await getTailoredResume(req.params.id);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (row.status !== "pending") {
+    res.status(409).json({ error: `Resume is ${row.status}, not generating.` });
+    return;
+  }
+
+  abortRun(req.params.id);
+
+  const wasApplying = row.suggestions != null;
+  try {
+    const updated = wasApplying
+      ? await revertToAwaitingReview(req.params.id)
+      : await cancelResumeGeneration(req.params.id);
+
+    if (!updated) {
+      // The run finished in the gap between the read above and this write — its
+      // real result stands rather than being overwritten with a cancel.
+      const fresh = await getTailoredResume(req.params.id);
+      res.status(409).json({ error: `Generation already finished (${fresh?.status ?? "gone"}).` });
+      return;
+    }
+  } catch (err) {
+    // The run is already aborted at this point, so a failed status write leaves
+    // the row stuck at 'pending'. Report it instead of letting the rejection go
+    // unhandled and take the whole API process down.
+    console.error("[resume] cancel status write failed:", err);
+    res.status(500).json({ error: `Cancelled the run but failed to update its status: ${errorMessage(err)}` });
+    return;
+  }
+
+  res.json({ id: req.params.id, status: wasApplying ? "awaiting_review" : "cancelled" });
+});
+
+// POST /api/resume/:id/retry — re-runs the suggestion pass on a cancelled or
+// failed row, reusing the jd_text already stored on it so the JD never has to
+// be re-fetched or re-pasted.
+router.post("/resume/:id/retry", async (req, res) => {
+  const row = await getTailoredResume(req.params.id);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (row.status !== "cancelled" && row.status !== "failed") {
+    res.status(409).json({ error: `Resume is ${row.status} — nothing to retry.` });
+    return;
+  }
+  if (!row.jd_text) {
+    res.status(409).json({ error: "This resume has no stored job description — start a new one from /tailor." });
+    return;
+  }
+
+  let restarted: boolean;
+  try {
+    restarted = await restartSuggestions(req.params.id);
+  } catch (err) {
+    console.error("[resume] retry status write failed:", err);
+    res.status(500).json({ error: `Could not restart generation: ${errorMessage(err)}` });
+    return;
+  }
+  if (!restarted) { res.status(409).json({ error: "Resume is no longer retryable." }); return; }
+
+  res.status(202).json({ id: req.params.id, status: "pending" });
+
+  runSuggestPipeline(req.params.id, row.jd_text).catch((err) => {
+    console.error("[resume] retry pipeline crashed:", err);
+  });
+});
 
 // DELETE /api/resume/:id
 router.delete("/resume/:id", async (req, res) => {

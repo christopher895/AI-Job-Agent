@@ -127,6 +127,8 @@ export default function ResumeEditor({
     appliedAt: new Date().toISOString().split("T")[0],
   });
   const [applyStatus, setApplyStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [cancelState, setCancelState] = useState<"idle" | "working" | "error">("idle");
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(initialView);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -299,6 +301,36 @@ export default function ResumeEditor({
     return () => clearInterval(tick);
   }, [meta.status]);
 
+  // The cancel endpoint writes the resulting status itself, so the screen can
+  // switch on its response instead of waiting for the next 4s poll tick.
+  async function handleCancelGeneration() {
+    setCancelState("working");
+    setCancelError(null);
+    try {
+      const { status } = await api.cancelResume(resume.id);
+      setMeta((m) => ({ ...m, status, stage: null, stage_started_at: null, error: null }));
+      setCancelState("idle");
+    } catch (err) {
+      // Usually a 409: the run finished between render and click. The poll
+      // effect picks up the real terminal state a moment later either way.
+      setCancelState("error");
+      setCancelError(err instanceof Error ? err.message : "Could not cancel — it may have just finished.");
+    }
+  }
+
+  async function handleRetry() {
+    setCancelState("working");
+    setCancelError(null);
+    try {
+      await api.retryResume(resume.id);
+      setMeta((m) => ({ ...m, status: "pending", stage: null, stage_started_at: null, error: null }));
+      setCancelState("idle");
+    } catch (err) {
+      setCancelState("error");
+      setCancelError(err instanceof Error ? err.message : "Could not restart generation.");
+    }
+  }
+
   async function handleDownload() {
     try {
       const { blob, filename } = await api.getPdfBlobWithFilename(resume.id);
@@ -426,6 +458,57 @@ export default function ResumeEditor({
                 </div>
               </>
             )}
+
+            {/* Outside the spinner/stepper branches above so it's reachable at
+                every point of the run, including before the first stage lands. */}
+            <button
+              onClick={handleCancelGeneration}
+              disabled={cancelState === "working"}
+              className="mt-8 text-xs text-paper-muted hover:text-red-700 underline underline-offset-2 disabled:opacity-50 disabled:no-underline transition-colors"
+            >
+              {cancelState === "working" ? "Cancelling…" : "Cancel generation"}
+            </button>
+            {cancelError && <p className="text-[11px] text-red-600 mt-2">{cancelError}</p>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (meta.status === "cancelled") {
+    return (
+      <div className="flex flex-col h-full bg-paper">
+        <div className="border-b border-paper-border px-6 py-3 flex-shrink-0">
+          <Link href="/" className="text-sm text-paper-muted hover:text-paper-ink flex items-center gap-1 w-fit transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+            Dashboard
+          </Link>
+        </div>
+        <div className="flex-1 flex items-center justify-center text-center px-6">
+          <div className="max-w-md">
+            <p className="text-sm font-medium text-paper-ink">Generation cancelled</p>
+            <p className="text-xs text-paper-muted mt-2">
+              Nothing was generated{title ? ` for ${title}` : ""}. The job description is still saved,
+              so you can pick this back up without pasting it again.
+            </p>
+            <div className="flex items-center justify-center gap-2 mt-4">
+              <button
+                onClick={handleRetry}
+                disabled={cancelState === "working"}
+                className="text-sm px-4 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+              >
+                {cancelState === "working" ? "Starting…" : "Regenerate"}
+              </button>
+              <Link
+                href="/"
+                className="text-sm px-4 py-2 border border-paper-border hover:bg-black/5 text-paper-ink rounded-lg transition-colors"
+              >
+                Back to Dashboard
+              </Link>
+            </div>
+            {cancelError && <p className="text-[11px] text-red-600 mt-3">{cancelError}</p>}
           </div>
         </div>
       </div>

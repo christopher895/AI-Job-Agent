@@ -21,6 +21,7 @@ Everything below is implemented and running in production, not aspirational — 
 - **Web app** — `/`, `/tailor`, `/resume/[id]`, `/resume/master`, `/applied`, `/preferences` all built (see table below)
 - **Cron scheduler** — scraper runs every 15 min, in-process (no queue layer), guarded against overlapping ticks
 - **Async tailoring** — `POST /api/tailor` returns immediately (202) with a `pending` row; the background job runs `suggestKeywords(jd, master)` and lands the row at `awaiting_review` with proposed suggestions attached (not `ready`). After Christopher reviews and approves suggestions in the checklist, `POST /api/resume/:id/apply-suggestions` runs the rest of the pipeline (apply, render, fit-to-page, PDF) in the background and takes the row to `ready`. The editor polls `GET /api/resumes/:id` until status leaves `pending`
+- **Cancellable generation** — the pending screen has a "Cancel generation" button. `POST /api/resume/:id/cancel` aborts the in-flight run for real: an `AbortSignal` from `ai/cancellation.ts` is threaded through `completeJSON` down to the spawned `claude` subprocess, which is SIGTERM'd rather than left running with its output discarded. Where the row lands depends on which pipeline was running — the first (suggestion) pass goes to `cancelled`, the apply pass reverts to `awaiting_review` so the review checklist survives. A `cancelled` row keeps its `jd_text`, so `POST /api/resume/:id/retry` re-runs the suggestion pass in place without re-fetching the JD
 - **Gmail status ingestion** — opt-in cron tick (`GMAIL_INGEST_ENABLED=true`) reads Christopher's Gmail via a dedicated OAuth2 client (`GMAIL_OAUTH_*`, `gmail.readonly` scope — separate from the Sheets service account, which can't read consumer Gmail), classifies recruiter emails with the LLM, deterministically matches them to an existing `applied_jobs` row, and advances that row's status forward-only, logging every event and notifying on the statuses that matter. See `packages/agent/src/ingest/` and the pipeline below
 
 ## Core Flows
@@ -90,7 +91,8 @@ agent/src/
 │   ├── render-pdf.ts        # Markdown/MasterResume → LaTeX → PDF via tectonic
 │   ├── master-resume.ts     # Hardcoded seed facts — obsolete after the first master-resume import; the DB row is the real source of truth thereafter
 │   ├── types.ts             # Zod schemas for MasterResume, TailoredResume, Suggestion
-│   ├── llm.ts               # completeJSON() — dispatches to Claude CLI or OpenAI per LLM_PROVIDER
+│   ├── llm.ts               # completeJSON() — dispatches to Claude CLI or OpenAI per LLM_PROVIDER; accepts an AbortSignal
+│   ├── cancellation.ts      # In-process registry of in-flight runs + CancelledError — backs POST /api/resume/:id/cancel
 │   ├── claude-cli.ts        # Headless `claude -p` backend (default provider)
 │   └── knowledge/
 │       └── best-practices.ts
@@ -208,7 +210,7 @@ tailored_resumes (
   pdf           bytea,          -- rendered PDF blob
   pdf_error     text,           -- error from the most recent PDF render attempt, if any
   critic_score  int,            -- vestigial: scored by the removed critique loop; always null on new rows
-  status        text,           -- 'pending' | 'awaiting_review' | 'ready' | 'failed' — tailoring runs as a background job
+  status        text,           -- 'pending' | 'awaiting_review' | 'ready' | 'failed' | 'cancelled' — tailoring runs as a background job
   error         text,           -- error message if status = 'failed'
   stage         text,           -- current pipeline step while status = 'pending' (e.g. "Analyzing job description"); null otherwise
   stage_started_at timestamptz, -- when the current `stage` began; null whenever `stage` is null. Drives the pending-screen's elapsed-vs-typical progress estimate
@@ -269,6 +271,20 @@ POST /api/tailor (jd text or job URL)
             → update row: markdown, suggestions (full accepted+rejected set), status='ready' (or 'failed')
               → [background] render PDF via Tectonic/czresume.cls → store in tailored_resumes.pdf (or pdf_error)
         → frontend polls GET /api/resumes/:id again until status leaves 'pending'
+```
+
+Either 'pending' phase can be cancelled from the editor:
+```
+POST /api/resume/:id/cancel   (409 unless status='pending')
+  → abortRun(id) — fires the AbortSignal registered by the running pipeline,
+    killing the spawned `claude` subprocess (SIGTERM → SIGKILL) mid-call
+    → the route writes the new status itself so the UI flips without a poll tick:
+        suggestions IS NULL  (first pass was running)  → status='cancelled'
+        suggestions NOT NULL (apply pass was running)  → status='awaiting_review'
+      → the pipeline's catch sees CancelledError and returns WITHOUT writing
+        'failed', which would otherwise clobber the status set above
+  → from 'cancelled': POST /api/resume/:id/retry re-runs the suggestion pass on
+    the same row using its stored jd_text (no re-fetch, no duplicate row)
 ```
 
 Async because even a single LLM call can exceed Railway's ~300s edge-proxy timeout, which would otherwise kill the request and surface as a generic "Failed to fetch" in the browser.

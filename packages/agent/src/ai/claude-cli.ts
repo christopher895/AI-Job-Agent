@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import { z } from "zod";
 import { zodToJsonSchema as zodToJsonSchemaImpl } from "zod-to-json-schema";
+import { CancelledError } from "./cancellation";
 
 /**
  * Headless `claude -p` backend for completeJSON(), authenticated via
@@ -78,9 +79,20 @@ const CLAUDE_BIN = process.env.CLAUDE_CLI_PATH || "claude";
 const DEFAULT_TIMEOUT_MS = Number(process.env.CLAUDE_CLI_TIMEOUT_MS) || 240_000;
 
 /** Impure: spawns `claude`, writes `input` to stdin, resolves stdout or rejects. */
-function runClaudeCliProcess(args: string[], cwd: string, input: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string> {
+export function runClaudeCliProcess(
+  args: string[],
+  cwd: string,
+  input: string,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  signal?: AbortSignal,
+  bin = CLAUDE_BIN
+): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(CLAUDE_BIN, args, { cwd });
+    if (signal?.aborted) {
+      reject(new CancelledError());
+      return;
+    }
+    const child = spawn(bin, args, { cwd });
     let stdout = "";
     let stderr = "";
     let settled = false;
@@ -88,10 +100,26 @@ function runClaudeCliProcess(args: string[], cwd: string, input: string, timeout
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
+      cleanupAbort();
       child.kill("SIGTERM");
       setTimeout(() => child.kill("SIGKILL"), 5_000).unref();
       reject(new Error(`claude CLI timed out after ${timeoutMs}ms and was killed`));
     }, timeoutMs);
+
+    // A user-triggered cancel kills the model call for real rather than
+    // letting it run to completion with its output thrown away.
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.kill("SIGTERM");
+      setTimeout(() => child.kill("SIGKILL"), 5_000).unref();
+      reject(new CancelledError("claude CLI was cancelled and killed"));
+    };
+    signal?.addEventListener("abort", onAbort);
+    function cleanupAbort() {
+      signal?.removeEventListener("abort", onAbort);
+    }
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -110,12 +138,14 @@ function runClaudeCliProcess(args: string[], cwd: string, input: string, timeout
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      cleanupAbort();
       reject(err);
     });
     child.on("close", (code) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      cleanupAbort();
       if (code !== 0) {
         reject(new Error(`claude CLI exited with code ${code}: ${(stderr || stdout).slice(0, 1000)}`));
         return;
@@ -136,12 +166,12 @@ function runClaudeCliProcess(args: string[], cwd: string, input: string, timeout
  */
 export async function callClaudeCli(
   schema: z.ZodTypeAny,
-  opts: { system: string; user: string; model?: string }
+  opts: { system: string; user: string; model?: string; signal?: AbortSignal }
 ): Promise<unknown> {
   const args = buildClaudeCliArgs(schema, { system: opts.system, model: opts.model });
   const scratchDir = await fs.mkdtemp(path.join(os.tmpdir(), "claude-cli-"));
   try {
-    const stdout = await runClaudeCliProcess(args, scratchDir, opts.user);
+    const stdout = await runClaudeCliProcess(args, scratchDir, opts.user, DEFAULT_TIMEOUT_MS, opts.signal);
     return parseClaudeCliOutput(stdout);
   } finally {
     await fs.rm(scratchDir, { recursive: true, force: true }).catch(() => {});
