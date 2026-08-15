@@ -75,7 +75,7 @@ agent/src/
 │   ├── diff.ts           # Snapshot diffing (hash sets)
 │   ├── filters.ts        # Location + keyword scoring
 │   ├── companies.ts      # Tracked company list
-│   └── adapters/         # greenhouse.ts, ashby.ts, lever.ts, amazon.ts
+│   └── adapters/         # greenhouse.ts, ashby.ts, lever.ts, amazon.ts, goldman.ts
 ├── ai/
 │   ├── chain.ts          # generate → critique → revise loop; now only backs the dormant general-resume path
 │   ├── tailor.ts         # Single-pass tailoring (LLM call)

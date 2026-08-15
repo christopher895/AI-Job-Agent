@@ -1,4 +1,4 @@
-export type Platform = "greenhouse" | "ashby" | "lever" | "workday" | "google" | "amazon" | "meta" | "apple";
+export type Platform = "greenhouse" | "ashby" | "lever" | "workday" | "google" | "amazon" | "meta" | "apple" | "goldman";
 
 export interface Company {
   name: string;
@@ -57,6 +57,33 @@ export const COMPANIES: Company[] = [
   { name: "Asana",           platform: "greenhouse", slug: "asana" },
   { name: "Mercury",         platform: "greenhouse", slug: "mercury" },
 
+  // ── Greenhouse — quant trading & finance ────────────────────────────────────
+  { name: "Jane Street",     platform: "greenhouse", slug: "janestreet" },
+  { name: "Jump Trading",    platform: "greenhouse", slug: "jumptrading" },
+  { name: "Optiver",         platform: "greenhouse", slug: "optiverus" },
+  { name: "IMC Trading",     platform: "greenhouse", slug: "imc" },
+  { name: "DRW",             platform: "greenhouse", slug: "drweng" },
+  { name: "Akuna Capital",   platform: "greenhouse", slug: "akunacapital" },
+  { name: "Old Mission",     platform: "greenhouse", slug: "oldmissioncapital" },
+  { name: "Five Rings",      platform: "greenhouse", slug: "fiveringsllc" },
+  { name: "Point72",         platform: "greenhouse", slug: "point72" },
+  { name: "Squarepoint",     platform: "greenhouse", slug: "squarepointcapital" },
+  { name: "Tower Research",  platform: "greenhouse", slug: "towerresearchcapital" },
+  { name: "Virtu Financial", platform: "greenhouse", slug: "virtu" },
+  { name: "Flow Traders",    platform: "greenhouse", slug: "flowtraders" },
+  { name: "AQR",             platform: "greenhouse", slug: "aqr" },
+
+  // ── Greenhouse — fintech ────────────────────────────────────────────────────
+  { name: "SoFi",            platform: "greenhouse", slug: "sofi" },
+  { name: "Betterment",      platform: "greenhouse", slug: "betterment" },
+  { name: "Marqeta",         platform: "greenhouse", slug: "marqeta" },
+  { name: "Carta",           platform: "greenhouse", slug: "carta" },
+  { name: "BILL",            platform: "greenhouse", slug: "billcom" },
+  { name: "Ripple",          platform: "greenhouse", slug: "ripple" },
+  { name: "Fireblocks",      platform: "greenhouse", slug: "fireblocks" },
+  { name: "Alloy",           platform: "greenhouse", slug: "alloy" },
+  { name: "Lithic",          platform: "greenhouse", slug: "lithic" },
+
   // ── Ashby ────────────────────────────────────────────────────────────────────
   { name: "OpenAI",          platform: "ashby", slug: "openai" },
   { name: "Notion",          platform: "ashby", slug: "notion" },
@@ -91,13 +118,27 @@ export const COMPANIES: Company[] = [
   { name: "Decagon",         platform: "ashby", slug: "decagon" },
   { name: "Cognition",       platform: "ashby", slug: "cognition" },            // makers of Devin
 
+  // ── Ashby — fintech ──────────────────────────────────────────────────────────
+  { name: "Modern Treasury", platform: "ashby", slug: "moderntreasury" },
+  { name: "Column",          platform: "ashby", slug: "column" },
+  { name: "Sardine",         platform: "ashby", slug: "sardine" },
+  { name: "Middesk",         platform: "ashby", slug: "middesk" },
+  { name: "SentiLink",       platform: "ashby", slug: "sentilink" },
+  { name: "Nubank",          platform: "ashby", slug: "nubank" },
+
   // ── Lever ────────────────────────────────────────────────────────────────────
-  { name: "Atlassian",       platform: "lever", slug: "atlassian" },
+  // Atlassian dropped 2026-08-15: it self-hosts its board now and 404s on
+  // Lever, Greenhouse and Ashby alike, so the entry only logged a warning.
   { name: "Mistral",         platform: "lever", slug: "mistral" },
   { name: "Persona",         platform: "lever", slug: "withpersona" },
+  { name: "Belvedere Trading", platform: "lever", slug: "belvederetrading" },
+  { name: "Wealthfront",     platform: "lever", slug: "wealthfront" },
+  { name: "Anchorage Digital", platform: "lever", slug: "anchorage" },
 
   // ── Custom APIs ───────────────────────────────────────────────────────────────
   { name: "Amazon",          platform: "amazon", slug: "amazon" },
+  // Oracle Fusion recruiting pod behind higher.gs.com — see adapters/goldman.ts
+  { name: "Goldman Sachs",   platform: "goldman", slug: "goldmansachs" },
 
   // ── Workday — adapter not yet built (Playwright required) ────────────────────
   // { name: "Netflix",      platform: "workday", slug: "Netflix" },

@@ -7,6 +7,7 @@ import { scrapeGreenhouse } from "./adapters/greenhouse";
 import { scrapeAshby } from "./adapters/ashby";
 import { scrapeLever } from "./adapters/lever";
 import { scrapeAmazon } from "./adapters/amazon";
+import { scrapeGoldman } from "./adapters/goldman";
 import { matchesLocation, scoreJob, applyPreferences } from "./filters";
 import { getPreferences } from "../db/queries";
 
@@ -16,6 +17,7 @@ async function scrapeCompany(company: Company): Promise<JobListing[]> {
     case "ashby":      return scrapeAshby(company.name, company.slug);
     case "lever":      return scrapeLever(company.name, company.slug);
     case "amazon":     return scrapeAmazon();
+    case "goldman":    return scrapeGoldman();
     default:
       console.warn(`[scraper] No adapter for platform "${company.platform}" (${company.name})`);
       return [];
@@ -28,6 +30,7 @@ function getCareerUrl(company: Company): string {
     case "ashby":      return `https://jobs.ashbyhq.com/${company.slug}`;
     case "lever":      return `https://jobs.lever.co/${company.slug}`;
     case "amazon":     return "https://www.amazon.jobs/";
+    case "goldman":    return "https://higher.gs.com/roles";
     default:           return `https://${company.platform}/${company.slug}`;
   }
 }
