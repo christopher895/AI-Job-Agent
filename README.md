@@ -242,6 +242,9 @@ TECTONIC_PATH=/opt/homebrew/bin/tectonic
 WEB_URL=http://localhost:3000   # used for email links
 APP_URL=http://localhost:3000   # fallback web app URL (email links)
 
+JOB_ALERTS_ENABLED=true         # "false" mutes job alert emails — set it on staging/preview/local so
+                                # only one environment mails your inbox (each links its own WEB_URL)
+
 AGENT_API_URL=http://localhost:3001/api   # agent API URL — server-only, proxied by the web app's Next.js server
 AUTH_SECRET=...                            # session cookie signing secret (openssl rand -base64 33)
 AUTH_TRUST_HOST=true                       # required behind Railway's reverse proxy

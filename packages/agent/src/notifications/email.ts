@@ -51,8 +51,27 @@ function buildEmailHtml(jobs: JobListing[], source: string): string {
   `;
 }
 
+/**
+ * Every agent instance runs the same unconditional 15-min scrape cron, so a
+ * second environment (staging, a preview deploy, a long-lived local `tsx watch`)
+ * mails the *same* inbox as production. The duplicate copy is built from that
+ * environment's own WEB_URL, so its "Tailor resume" link points at a web app
+ * that is stale, down, or localhost — which reads as "the email link is wrong".
+ *
+ * Default on, so production needs no new variable; set JOB_ALERTS_ENABLED=false
+ * on every environment that is not the one whose inbox you actually read.
+ */
+export function jobAlertsEnabled(): boolean {
+  return process.env.JOB_ALERTS_ENABLED !== "false";
+}
+
 export async function sendJobEmail(jobs: JobListing[], source: string) {
   if (jobs.length === 0) return;
+
+  if (!jobAlertsEnabled()) {
+    console.log(`[email] JOB_ALERTS_ENABLED=false — skipping alert for ${jobs.length} job(s) from ${source}`);
+    return;
+  }
 
   const toEmail = process.env.YOUR_EMAIL;
   if (!toEmail) throw new Error("YOUR_EMAIL is not set");
