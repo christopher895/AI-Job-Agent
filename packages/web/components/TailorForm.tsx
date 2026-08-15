@@ -24,6 +24,8 @@ export default function TailorForm({
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  const isEmpty = !jobUrl && !jdText && !title && !company && !location;
+
   async function handleFetchJd() {
     const trimmed = jobUrl.trim();
     if (!trimmed) return;
@@ -67,6 +69,17 @@ export default function TailorForm({
     }
   }
 
+  function handleClear() {
+    setJobUrl("");
+    setJdText("");
+    setTitle("");
+    setCompany("");
+    setLocation("");
+    setFetchStatus("idle");
+    setLogStatus("idle");
+    setError(null);
+  }
+
   async function handleGenerate() {
     const jd = jdText.trim();
     const url = jobUrl.trim();
@@ -96,11 +109,21 @@ export default function TailorForm({
 
   return (
     <div className="px-8 py-8 max-w-2xl mx-auto">
-      <div className="mb-8">
-        <h1 className="font-serif text-3xl text-foreground">Tailor a New Resume</h1>
-        <p className="text-sm text-gray-500 mt-1.5">
-          Paste a job link or description and we&apos;ll tailor your resume.
-        </p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-3xl text-foreground">Tailor a New Resume</h1>
+          <p className="text-sm text-gray-500 mt-1.5">
+            Paste a job link or description and we&apos;ll tailor your resume.
+          </p>
+        </div>
+        <button
+          onClick={handleClear}
+          disabled={isEmpty || generating}
+          title="Clear every field on this form"
+          className="flex-shrink-0 mt-1 px-3 py-1.5 border border-paper-border rounded-lg text-sm font-medium text-paper-ink hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors bg-white"
+        >
+          Clear
+        </button>
       </div>
 
       <div className="bg-paper border border-paper-border rounded-xl p-6 flex flex-col gap-5">
