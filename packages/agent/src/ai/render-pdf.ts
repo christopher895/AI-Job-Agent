@@ -17,25 +17,56 @@ function allowHtmlFallback(): boolean {
 
 // ─── LaTeX escaping ──────────────────────────────────────────────────────────
 
+// LaTeX metacharacters, substituted in ONE pass. Chaining per-character
+// .replace() calls here would be wrong: the `\` rule emits "\textbackslash{}",
+// whose braces a later `{`/`}` rule would then escape again, turning a literal
+// backslash into the garbage "\textbackslash\{\}".
+const TEX_META: Record<string, string> = {
+  "\\": "\\textbackslash{}",
+  "&": "\\&",
+  "%": "\\%",
+  $: "\\$",
+  "#": "\\#",
+  "{": "\\{",
+  "}": "\\}",
+  "~": "\\textasciitilde{}",
+  "^": "\\textasciicircum{}",
+  _: "\\_",
+};
+
 export function tex(s: string): string {
   return String(s ?? "")
-    .replace(/\\/g, "\\textbackslash{}")
-    .replace(/&/g, "\\&")
-    .replace(/%/g, "\\%")
-    .replace(/\$/g, "\\$")
-    .replace(/#/g, "\\#")
-    .replace(/\{/g, "\\{")
-    .replace(/\}/g, "\\}")
-    .replace(/~/g, "\\textasciitilde{}")
-    .replace(/\^/g, "\\textasciicircum{}")
-    .replace(/_/g, "\\_")
+    .replace(/[\\&%$#{}~^_]/g, (c) => TEX_META[c])
     .replace(/–/g, "--")   // en-dash → LaTeX double dash
     .replace(/—/g, "---")  // em-dash → LaTeX triple dash
     // Raw "·" (U+00B7) has no reliable glyph under this template's legacy
     // 8-bit font stack (mathptmx + T1 fontenc, no fontspec/inputenc) and
     // renders as mojibake (e.g. "˚u"). \textperiodcentered is the LaTeX-safe
     // macro for the same glyph, safe under any font encoding.
-    .replace(/·/g, "\\textperiodcentered{}");
+    .replace(/·/g, "\\textperiodcentered{}")
+    // The remaining non-Latin-1 characters an LLM routinely emits into a bullet
+    // have no glyph in this template's 8-bit fonts. Left raw they don't fail the
+    // build — they vanish from the PDF with only a "Missing character" warning,
+    // so "Kafka → Spark" silently ships as "Kafka  Spark". Each macro below is
+    // verified to render AND to survive `pdftotext` extraction as the original
+    // character, which is what ATS parsers read.
+    //
+    // NOTE: these run *after* the metacharacter pass above on purpose — the
+    // `$` and `\` they introduce must not themselves be escaped.
+    .replace(/→/g, "$\\rightarrow$")
+    .replace(/←/g, "$\\leftarrow$")
+    .replace(/↔/g, "$\\leftrightarrow$")
+    .replace(/⇒/g, "$\\Rightarrow$")
+    .replace(/−/g, "$-$")          // U+2212 minus, distinct from ASCII hyphen
+    .replace(/≤/g, "$\\leq$")
+    .replace(/≥/g, "$\\geq$")
+    .replace(/…/g, "\\ldots{}")
+    .replace(/•/g, "\\textbullet{}")
+    .replace(/™/g, "\\texttrademark{}")
+    .replace(/“/g, "``")
+    .replace(/”/g, "''")
+    .replace(/‘/g, "`")
+    .replace(/’/g, "'");           // T1 renders ASCII ' as a curly right quote
 }
 
 function texUrl(s: string): string {

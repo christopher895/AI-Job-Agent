@@ -1,0 +1,55 @@
+% Tectonic font-cache warm-up document — compiled at Docker build time only.
+%
+% Tectonic fetches TeX Live resources (.tfm/.vf/.pfb) lazily over the network
+% into $TECTONIC_CACHE_DIR on first use. On a fresh Railway container that cache
+% is empty, so the *first* resume render of a container's life has to download
+% fonts mid-request. When the upstream bundle CDN rate-limits (HTTP 429), the
+% render dies with:
+%
+%   warning: failure requesting "zptmcm7y.vf" ... 429 Too Many Requests
+%   error: Cannot proceed without .vf or "physical" font for PDF output
+%
+% Compiling this file during the image build pre-populates the cache so no
+% render ever needs the network at runtime.
+%
+% It must exercise every font czresume.cls + render-pdf.ts can reach:
+%   - Times text faces: roman, bold, italic (\textbf/\em/\bf), uppercase headings
+%   - the mathptmx math families, pulled in by the \addressSep ($-$) in the class
+%     and by every math macro tex() emits (zptmcm7y.vf is one of these)
+%   - \textbullet / \texttrademark / \textperiodcentered / \ldots
+%   - hyperref's \href
+%
+% Keep this in sync with the character replacements in render-pdf.ts's tex().
+\documentclass{czresume}
+
+\name{Cache Warmup}
+\address{warmup@example.com \\ github.com/example \\ linkedin.com/in/example}
+
+\begin{document}
+
+\begin{rSection}{Education}
+{\bf Example University,} {\em B.S. Computer Science} \hfill {Somewhere, ST}\\
+\textbf{GPA:} 4.0 \hfill {\em May 2026}
+\end{rSection}
+
+\begin{rSection}{Experience}
+\textbf{Example Co} \hfill \textbf{Somewhere, ST}\\
+\textbf{Software Engineer} \hfill {\em Jan 2025 -- Present}
+\begin{itemize}
+  \item Math macros tex() can emit: $\rightarrow$ $\leftarrow$ $\leftrightarrow$
+        $\Rightarrow$ $-$ $\leq$ $\geq$
+  \item Text macros tex() can emit: \textbullet{} \texttrademark{}
+        \textperiodcentered{} \ldots{} \textbackslash{} \textasciitilde{}
+        \textasciicircum{} \& \% \$ \# \{ \} \_ -- ---
+  \item Quotes and dashes: ``double'' `single' don't
+  \item Link shape used by project entries: \href{https://example.com}{example.com}
+\end{itemize}
+\end{rSection}
+
+\begin{rSection}{Skills}
+\begin{itemize}
+  \item \textbf{Languages:} TypeScript, Python, Go
+\end{itemize}
+\end{rSection}
+
+\end{document}

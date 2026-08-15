@@ -18,6 +18,25 @@ RUN curl -fsSL \
     | tar xzf - -C /usr/local/bin \
   && chmod +x /usr/local/bin/tectonic
 
+# ── Tectonic font cache (baked into the image) ───────────────────────────────
+# Tectonic downloads TeX Live resources lazily on first use. Without this step
+# the first render in each fresh container fetches fonts mid-request, and a 429
+# from the bundle CDN kills it outright ("Cannot proceed without .vf ... for PDF
+# output"). Compiling the warm-up document here populates the cache at build
+# time so runtime renders never touch the network.
+#
+# TECTONIC_CACHE_DIR is set before the RUN so the build and the running
+# container agree on one path regardless of $HOME.
+#
+# Copied on its own (ahead of the app source) so this ~45MB layer is only
+# rebuilt when the template itself changes, not on every code change.
+ENV TECTONIC_CACHE_DIR=/opt/tectonic-cache
+COPY Resume_Template/czresume.cls Resume_Template/cache-warmup.tex /tmp/tectonic-warmup/
+RUN cd /tmp/tectonic-warmup \
+  && tectonic cache-warmup.tex \
+  && test -f cache-warmup.pdf \
+  && rm -rf /tmp/tectonic-warmup
+
 WORKDIR /app
 
 # ── npm dependencies (layer-cached) ─────────────────────────────────────────
