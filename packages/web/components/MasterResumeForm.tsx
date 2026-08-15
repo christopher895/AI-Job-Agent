@@ -123,6 +123,12 @@ function BulletList<B extends { id: string; text: string }>({
  * LLM import path as the Import panel, not a bespoke deterministic parser.
  */
 function masterResumeToText(mr: MasterResume): string {
+  // "Start - End", or whichever end exists — never a dangling " - " for an
+  // entry with no dates at all (projects, typically).
+  const dates = (start: string, end: string) =>
+    [start?.trim(), end?.trim()].filter(Boolean).join(" - ");
+  // Header segments joined with " · ", empties dropped.
+  const seg = (...parts: string[]) => parts.filter((p) => p && p.trim()).join(" · ");
   const b = mr.basics;
   const lines: string[] = [];
   lines.push(b.name);
@@ -142,7 +148,7 @@ function masterResumeToText(mr: MasterResume): string {
   if (mr.experience.length) {
     lines.push("", "EXPERIENCE");
     for (const exp of mr.experience) {
-      lines.push("", `${exp.company} — ${exp.title} · ${exp.location} · ${exp.start} - ${exp.end}`);
+      lines.push("", `${exp.company} — ${seg(exp.title, exp.location, dates(exp.start, exp.end))}`);
       for (const bullet of exp.bullets) lines.push(`- ${bullet.text}`);
     }
   }
@@ -150,7 +156,7 @@ function masterResumeToText(mr: MasterResume): string {
   if (mr.projects.length) {
     lines.push("", "PROJECTS");
     for (const p of mr.projects) {
-      lines.push("", `${p.name} · ${p.tech.join(", ")} · ${p.start} - ${p.end}`);
+      lines.push("", `${p.name} · ${seg(p.tech.join(", "), dates(p.start, p.end))}`);
       if (p.link) lines.push(p.link);
       for (const bullet of p.bullets) lines.push(`- ${bullet.text}`);
     }
@@ -159,7 +165,7 @@ function masterResumeToText(mr: MasterResume): string {
   if (mr.extracurriculars.length) {
     lines.push("", "EXTRACURRICULARS");
     for (const ex of mr.extracurriculars) {
-      lines.push("", `${ex.company} — ${ex.title} · ${ex.location} · ${ex.start} - ${ex.end}`);
+      lines.push("", `${ex.company} — ${seg(ex.title, ex.location, dates(ex.start, ex.end))}`);
       for (const bullet of ex.bullets) lines.push(`- ${bullet.text}`);
     }
   }
