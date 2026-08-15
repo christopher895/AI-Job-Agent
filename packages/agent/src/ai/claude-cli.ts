@@ -69,6 +69,27 @@ export function parseClaudeCliOutput(stdout: string): unknown {
 }
 
 const CLAUDE_BIN = process.env.CLAUDE_CLI_PATH || "claude";
+
+/**
+ * Default model for the `claude -p` path.
+ *
+ * "opus" is a CLI *alias*, not a pinned version — `claude --model` resolves it
+ * to the latest Opus at call time, so tailoring quality follows model releases
+ * instead of drifting with whatever the CLI's own default happens to be that
+ * week. Pinning a dated id would freeze us on an aging model; passing nothing
+ * leaves the choice to the CLI. The alias is the only option that does neither.
+ */
+export const DEFAULT_CLAUDE_MODEL = "opus";
+
+/**
+ * Pure: resolves which model to pass to `--model`. CLAUDE_MODEL wins when set
+ * to something non-blank — note `.env.example` ships the key with an empty
+ * value, and an empty string must fall through to the default rather than
+ * become `--model ""`.
+ */
+export function resolveClaudeModel(explicit?: string, envValue = process.env.CLAUDE_MODEL): string {
+  return explicit?.trim() || envValue?.trim() || DEFAULT_CLAUDE_MODEL;
+}
 // A hung/stalled claude CLI call (e.g. waiting on a prompt that can never be
 // answered headlessly) must not block a request forever with no feedback —
 // bound it well above normal latency and fail loudly instead. Measured: a
@@ -168,7 +189,7 @@ export async function callClaudeCli(
   schema: z.ZodTypeAny,
   opts: { system: string; user: string; model?: string; signal?: AbortSignal }
 ): Promise<unknown> {
-  const args = buildClaudeCliArgs(schema, { system: opts.system, model: opts.model });
+  const args = buildClaudeCliArgs(schema, { system: opts.system, model: resolveClaudeModel(opts.model) });
   const scratchDir = await fs.mkdtemp(path.join(os.tmpdir(), "claude-cli-"));
   try {
     const stdout = await runClaudeCliProcess(args, scratchDir, opts.user, DEFAULT_TIMEOUT_MS, opts.signal);

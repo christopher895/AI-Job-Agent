@@ -50,7 +50,9 @@ async function callOpenAIOnce(
   return res.choices[0]?.message?.content ?? "";
 }
 
-const ANTHROPIC_MODEL = "claude-sonnet-4-5-20250929";
+// Bring-your-own-key path only (the playground). The raw API takes model ids,
+// not the CLI's tier aliases, so this one is pinned and needs bumping by hand.
+const ANTHROPIC_MODEL = "claude-opus-5";
 
 async function callAnthropicWithKey(
   system: string,
@@ -123,7 +125,9 @@ export async function completeJSON<T>(
         ? JSON.parse(await callAnthropicWithKey(system, userContent, anthropicApiKey, temperature))
         : LLM_PROVIDER === "openai"
           ? JSON.parse(await callOpenAIOnce(system, userContent, model ?? DEFAULT_MODEL, temperature, signal))
-          : await callClaudeCli(schema, { system, user: userContent, model: model ?? process.env.CLAUDE_MODEL, signal });
+          // Model resolution (explicit → CLAUDE_MODEL → "opus" alias) lives in
+          // claude-cli.ts so every caller of that path gets the same default.
+          : await callClaudeCli(schema, { system, user: userContent, model, signal });
       const provider = anthropicApiKey ? "anthropic-key" : LLM_PROVIDER;
       console.log(`[llm] provider=${provider} attempt=${attempt + 1} ok in ${Date.now() - startedAt}ms`);
       return schema.parse(parsed);
