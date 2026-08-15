@@ -15,7 +15,7 @@ export type TailoredResumeRow = {
   /** Error from the most recent PDF render attempt; null if the last attempt succeeded. */
   pdf_error: string | null;
   /** 'pending' while the generate->critique->revise pipeline is still running in the background. */
-  status: "pending" | "awaiting_review" | "ready" | "failed";
+  status: "pending" | "awaiting_review" | "ready" | "failed" | "cancelled";
   /** Error from the tailoring pipeline itself, set when status = 'failed'. */
   error: string | null;
   /** Current pipeline step while status = 'pending' (e.g. "Drafting resume (pass 1)"); null otherwise. */
@@ -231,6 +231,48 @@ export async function setSuggestions(id: string, suggestions: Suggestion[]): Pro
     `UPDATE tailored_resumes SET suggestions = $1, status = 'awaiting_review', stage = NULL, stage_started_at = NULL, updated_at = NOW() WHERE id = $2`,
     [JSON.stringify(suggestions), id]
   );
+}
+
+/**
+ * Cancels a run that had not produced suggestions yet (the POST /api/tailor
+ * pass). The row is kept — it still holds the fetched jd_text, so it can be
+ * retried in place instead of forcing the JD to be pasted again.
+ * Guarded on status = 'pending' so a run that finished between the user's click
+ * and this write is left alone.
+ */
+export async function cancelResumeGeneration(id: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE tailored_resumes
+        SET status = 'cancelled', error = NULL, stage = NULL, stage_started_at = NULL, updated_at = NOW()
+      WHERE id = $1 AND status = 'pending'`,
+    [id]
+  );
+  return rowCount === 1;
+}
+
+/**
+ * Cancels an apply-suggestions run by putting the row back where it came from,
+ * so the review checklist the user already worked through is still there.
+ */
+export async function revertToAwaitingReview(id: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE tailored_resumes
+        SET status = 'awaiting_review', error = NULL, stage = NULL, stage_started_at = NULL, updated_at = NOW()
+      WHERE id = $1 AND status = 'pending'`,
+    [id]
+  );
+  return rowCount === 1;
+}
+
+/** Puts a cancelled row back into 'pending' for a retry of the suggestion pass. */
+export async function restartSuggestions(id: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE tailored_resumes
+        SET status = 'pending', error = NULL, stage = NULL, stage_started_at = NULL, updated_at = NOW()
+      WHERE id = $1 AND status IN ('cancelled', 'failed')`,
+    [id]
+  );
+  return rowCount === 1;
 }
 
 /** Moves an awaiting_review row back into 'pending' right as POST /apply-suggestions starts its background work — reuses the same pending/polling UI the rest of the app already has. */

@@ -33,7 +33,7 @@ export type ResumeListItem = {
   /** Error from the most recent PDF render attempt; null if the last attempt succeeded. */
   pdf_error: string | null;
   /** 'pending' while the generate->critique->revise pipeline is still running in the background. */
-  status: "pending" | "awaiting_review" | "ready" | "failed";
+  status: "pending" | "awaiting_review" | "ready" | "failed" | "cancelled";
   /** Error from the tailoring pipeline itself, set when status = 'failed'. */
   error: string | null;
   stage: string | null;
@@ -260,6 +260,13 @@ export const api = {
     request<{ id: string; status: "pending" }>("POST", "/tailor", body),
   applySuggestions: (id: string, accepted: Suggestion[]) =>
     request<{ id: string; status: "pending" }>("POST", `/resume/${id}/apply-suggestions`, { accepted }),
+  /** Stops an in-flight generation. Resolves with where the row landed: back to
+   *  the review checklist if the apply pass was running, 'cancelled' otherwise. */
+  cancelResume: (id: string) =>
+    request<{ id: string; status: "cancelled" | "awaiting_review" }>("POST", `/resume/${id}/cancel`),
+  /** Re-runs the suggestion pass on a cancelled/failed row using its stored JD. */
+  retryResume: (id: string) =>
+    request<{ id: string; status: "pending" }>("POST", `/resume/${id}/retry`),
   getMasterResume: () => request<MasterResume>("GET", "/master-resume"),
   putMasterResume: (data: MasterResume) =>
     request<{ updated: boolean }>("PUT", "/master-resume", data),

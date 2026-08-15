@@ -66,7 +66,12 @@ function tailorableSlice(master: MasterResume) {
   };
 }
 
-export async function suggestKeywords(jd: string, master: MasterResume, apiKey?: string): Promise<RawSuggestion[]> {
+export async function suggestKeywords(
+  jd: string,
+  master: MasterResume,
+  apiKey?: string,
+  signal?: AbortSignal
+): Promise<RawSuggestion[]> {
   const result = await completeJSON(ResponseSchema, {
     system: SYSTEM_PROMPT,
     user: [
@@ -77,6 +82,7 @@ export async function suggestKeywords(jd: string, master: MasterResume, apiKey?:
     ].join("\n\n"),
     temperature: 0.3,
     anthropicApiKey: apiKey,
+    signal,
   });
   return result.suggestions;
 }

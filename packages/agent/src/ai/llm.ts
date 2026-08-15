@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import { callClaudeCli } from "./claude-cli";
+import { CancelledError, isCancelledError } from "./cancellation";
 
 /**
  * Shared LLM helper. Returns JSON validated against a Zod schema, with a
@@ -27,16 +28,25 @@ function client(): OpenAI {
 
 export const DEFAULT_MODEL = process.env.OPENAI_MODEL ?? "gpt-4o";
 
-async function callOpenAIOnce(system: string, user: string, model: string, temperature: number): Promise<string> {
-  const res = await client().chat.completions.create({
-    model,
-    temperature,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
-  });
+async function callOpenAIOnce(
+  system: string,
+  user: string,
+  model: string,
+  temperature: number,
+  signal?: AbortSignal
+): Promise<string> {
+  const res = await client().chat.completions.create(
+    {
+      model,
+      temperature,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    },
+    { signal }
+  );
   return res.choices[0]?.message?.content ?? "";
 }
 
@@ -90,12 +100,18 @@ export async function completeJSON<T>(
      *  server's own LLM_PROVIDER dispatch — used only by the public playground,
      *  where the visitor brings their own key. Omit for every other call site. */
     anthropicApiKey?: string;
+    /** Aborts the in-flight provider call AND the retry loop — see ai/cancellation.ts. */
+    signal?: AbortSignal;
   }
 ): Promise<T> {
-  const { system, user, model, temperature = 0.4, maxRetries = 2, anthropicApiKey } = opts;
+  const { system, user, model, temperature = 0.4, maxRetries = 2, anthropicApiKey, signal } = opts;
   let lastError = "";
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Checked per attempt, not just once up front: without this a cancel that
+    // lands mid-call would kill attempt 1 and then immediately start attempt 2.
+    if (signal?.aborted) throw new CancelledError();
+
     const userContent =
       attempt === 0
         ? user
@@ -106,12 +122,14 @@ export async function completeJSON<T>(
       const parsed = anthropicApiKey
         ? JSON.parse(await callAnthropicWithKey(system, userContent, anthropicApiKey, temperature))
         : LLM_PROVIDER === "openai"
-          ? JSON.parse(await callOpenAIOnce(system, userContent, model ?? DEFAULT_MODEL, temperature))
-          : await callClaudeCli(schema, { system, user: userContent, model: model ?? process.env.CLAUDE_MODEL });
+          ? JSON.parse(await callOpenAIOnce(system, userContent, model ?? DEFAULT_MODEL, temperature, signal))
+          : await callClaudeCli(schema, { system, user: userContent, model: model ?? process.env.CLAUDE_MODEL, signal });
       const provider = anthropicApiKey ? "anthropic-key" : LLM_PROVIDER;
       console.log(`[llm] provider=${provider} attempt=${attempt + 1} ok in ${Date.now() - startedAt}ms`);
       return schema.parse(parsed);
     } catch (err) {
+      // A cancel is not a validation failure — never feed it back for a retry.
+      if (isCancelledError(err) || signal?.aborted) throw new CancelledError();
       const provider = anthropicApiKey ? "anthropic-key" : LLM_PROVIDER;
       console.log(`[llm] provider=${provider} attempt=${attempt + 1} FAILED in ${Date.now() - startedAt}ms`);
       lastError = err instanceof Error ? err.message : String(err);

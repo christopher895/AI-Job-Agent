@@ -78,7 +78,12 @@ function findWidowBullets(markdown: string): string[] {
 
 const TrimSchema = z.object({ markdown: z.string() });
 
-async function trimToOnePage(markdown: string, overflowLines: number, apiKey?: string): Promise<string> {
+async function trimToOnePage(
+  markdown: string,
+  overflowLines: number,
+  apiKey?: string,
+  signal?: AbortSignal
+): Promise<string> {
   const result = await completeJSON(TrimSchema, {
     system: `You are editing a résumé that overflows onto a second page by approximately ${overflowLines} printed lines.
 
@@ -93,6 +98,7 @@ Return the complete résumé markdown as JSON: { "markdown": "..." }`,
     user: markdown,
     temperature: 0.15,
     anthropicApiKey: apiKey,
+    signal,
   });
   return result.markdown;
 }
@@ -101,7 +107,7 @@ const WidowFixSchema = z.object({
   fixes: z.array(z.object({ original: z.string(), revised: z.string() })),
 });
 
-async function fixWidowBullets(markdown: string, widowBullets: string[]): Promise<string> {
+async function fixWidowBullets(markdown: string, widowBullets: string[], signal?: AbortSignal): Promise<string> {
   const result = await completeJSON(WidowFixSchema, {
     system: `You are fixing typography in a résumé. Each bullet below ends with a single word on its last printed line, which looks unprofessional.
 
@@ -110,6 +116,7 @@ For each bullet, shorten it by 1–3 words so the trailing word merges back onto
 Return JSON: { "fixes": [{ "original": "...", "revised": "..." }] }`,
     user: widowBullets.map((b) => `- "${b}"`).join("\n"),
     temperature: 0.15,
+    signal,
   });
 
   let out = markdown;
@@ -145,7 +152,7 @@ Return JSON: { "fixes": [{ "original": "...", "revised": "..." }] }`,
  */
 export async function fitToOnePage(
   markdown: string,
-  opts: { skipWidowFix?: boolean; apiKey?: string } = {},
+  opts: { skipWidowFix?: boolean; apiKey?: string; signal?: AbortSignal } = {},
 ): Promise<{ markdown: string; pdf: Buffer }> {
   let current = markdown;
   let pdf = await renderPdf(current);
@@ -154,7 +161,7 @@ export async function fitToOnePage(
   let pages = await countPdfPages(pdf);
   for (let attempt = 0; attempt < 2 && pages > 1; attempt++) {
     const overflowLines = Math.ceil((pages - 1) * 50);
-    current = await trimToOnePage(current, overflowLines, opts.apiKey);
+    current = await trimToOnePage(current, overflowLines, opts.apiKey, opts.signal);
     pdf = await renderPdf(current);
     pages = await countPdfPages(pdf);
   }
@@ -168,7 +175,7 @@ export async function fitToOnePage(
   // here would silently undo that guarantee.
   const widows = opts.skipWidowFix ? [] : findWidowBullets(current);
   if (widows.length > 0) {
-    current = await fixWidowBullets(current, widows);
+    current = await fixWidowBullets(current, widows, opts.signal);
     pdf = await renderPdf(current);
   }
 

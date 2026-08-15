@@ -97,6 +97,11 @@ export default function ResumeCard({
                 Failed
               </span>
             )}
+            {resume.status === "cancelled" && (
+              <span className="text-paper-muted bg-black/5 border border-paper-border rounded px-1.5 py-0.5 text-[10px] font-medium">
+                Cancelled
+              </span>
+            )}
           </p>
         </div>
         <div className="relative flex-shrink-0" ref={menuRef}>
