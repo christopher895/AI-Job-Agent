@@ -11,7 +11,7 @@ const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 function buildEmailHtml(jobs: JobListing[], source: string): string {
-  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  const appUrl = process.env.WEB_URL ?? process.env.APP_URL ?? "http://localhost:3000";
 
   const rows = jobs
     .map((j) => {
