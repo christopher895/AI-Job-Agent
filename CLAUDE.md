@@ -47,6 +47,10 @@ When a job URL is submitted, the backend fetches the page with Playwright (JS-he
 ### PDF generation
 Every tailored or edited resume, and the master resume preview, is rendered to PDF via Tectonic (LaTeX) using `Resume_Template/czresume.cls`, and stored in the database alongside the resume record. Downloadable from the editor and the dashboard. Attached when "Email to me" is clicked.
 
+Tectonic downloads TeX Live fonts lazily on first use, so the Docker image pre-warms its cache at build time: `Resume_Template/cache-warmup.tex` is compiled into `TECTONIC_CACHE_DIR=/opt/tectonic-cache`, baking every font the renderer can reach into the image. Without this, the first render in each fresh container fetches fonts mid-request and dies outright when the upstream bundle CDN rate-limits (HTTP 429) — `error: Cannot proceed without .vf or "physical" font for PDF output`. **Keep `cache-warmup.tex` in sync with the character replacements in `render-pdf.ts`'s `tex()`** — any new macro it can emit must also appear in the warm-up doc, or that macro's font won't be cached.
+
+Non-Latin-1 characters an LLM emits into a bullet (`→ ← ↔ ⇒ − ≤ ≥ … • ™ " " ' '`) have no glyph in this template's 8-bit font stack. `tex()` maps each to a LaTeX macro; left raw they don't fail the render, they *silently vanish* from the PDF with only a "Missing character" warning. `test:tex-escape` guards this.
+
 ### Google Sheets sync
 When Christopher marks a job as "applied" (from `/applied` or the resume editor), a row is written/updated in his Google Sheet:
 - Date applied, company, location, job URL, status, link to tailored resume
@@ -322,6 +326,9 @@ GOOGLE_SHEETS_SPREADSHEET_ID
 GOOGLE_SERVICE_ACCOUNT_JSON   # stringified service account credentials
 
 TECTONIC_PATH                 # path to the tectonic binary (PDF generation)
+TECTONIC_CACHE_DIR            # tectonic's font cache; set to /opt/tectonic-cache by the Dockerfile
+                              # and pre-populated at build time. Leave unset locally (defaults to
+                              # the OS cache dir) — only the container needs a fixed, warmed path.
 
 GMAIL_OAUTH_CLIENT_ID          # Gmail ingestion — dedicated OAuth2 client (gmail.readonly scope), separate from Sheets
 GMAIL_OAUTH_CLIENT_SECRET
