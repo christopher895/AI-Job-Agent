@@ -327,6 +327,10 @@ OPENAI_MODEL                  # defaults to gpt-4o
 
 RESEND_API_KEY
 YOUR_EMAIL
+JOB_ALERTS_ENABLED            # "false" mutes job alert emails; unset/anything else = on. Set to "false" on
+                              # staging, preview deploys, and long-lived local runs — every agent instance
+                              # runs its own 15-min scrape cron, so otherwise each one mails the same inbox
+                              # with a "Tailor resume" link built from ITS OWN WEB_URL
 WEB_URL                       # web app URL — "Tailor resume" email links
 APP_URL
 AGENT_API_URL                  # agent API URL the web app's server proxies to — private, server-only, not exposed to the browser
