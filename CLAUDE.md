@@ -13,7 +13,7 @@ Everything below is implemented and running in production, not aspirational — 
 - **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon, Goldman adapters (115+ companies); snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
 - **Alert emails** — Resend email listing new jobs (title, company, link) with a "Tailor resume" link per job → `/tailor?jobUrl=...&title=...&company=...`
 - **AI tailoring pipeline** — `suggestKeywords(jd, master)` in `packages/agent/src/ai/suggest-keywords.ts`: a single pass proposes keyword-insertion suggestions (bullet rewrites and skill additions) against the fixed, one-page master resume, which is never reordered or cut. Christopher reviews, edits, and checks off suggestions in a checklist; `POST /api/resume/:id/apply-suggestions` applies only the accepted ones and renders the final one-page Markdown. (The old 3-pass generate→critique→revise loop and the JD-less "general resume" feature it backed have been removed — the suggestion-based flow is the only tailoring path.)
-- **LLM provider** — Claude by default, via the headless `claude -p` CLI (`packages/agent/src/ai/claude-cli.ts`), authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing). OpenAI/GPT-4o is a manual fallback (`LLM_PROVIDER=openai`)
+- **LLM provider** — Claude by default, via the headless `claude -p` CLI (`packages/agent/src/ai/claude-cli.ts`), authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing). Runs on `--model opus` — a tier alias, so it follows new Opus releases rather than pinning a version; override with `CLAUDE_MODEL`. OpenAI/GPT-4o is a manual fallback (`LLM_PROVIDER=openai`)
 - **Master resume** — source facts live in `packages/agent/src/ai/master-resume.ts`, seeded once into the `master_resume` DB table; `/resume/master` reads and writes the DB copy directly (see Deployment below — always edit on production, not locally)
 - **Master resume import** — `/resume/master` can parse pasted text or an uploaded PDF into a `MasterResume` via `importMasterResume()` (LLM-parsed, ids deduplicated deterministically after the fact); the result loads into the existing form as unsaved state for review before saving, never written to the DB directly
 - **One-page overflow warning** — `/resume/master` shows a warning banner when the rendered preview PDF exceeds one page, since the master resume is meant to stay a fixed one-page source of truth for suggestion-based tailoring
@@ -321,7 +321,10 @@ DATABASE_URL
 
 LLM_PROVIDER                  # "claude" (default) or "openai"
 CLAUDE_CODE_OAUTH_TOKEN       # required when LLM_PROVIDER=claude — minted via `claude setup-token`
-CLAUDE_MODEL                  # optional — pins a model for the claude path
+CLAUDE_MODEL                  # optional — overrides the model for the claude path.
+                              # Unset defaults to "opus", a CLI alias that resolves to the
+                              # latest Opus at call time (so it tracks new releases). Set to
+                              # another alias or a full id ("claude-opus-5") to pin a version.
 OPENAI_API_KEY                # required when LLM_PROVIDER=openai, or as a manual fallback
 OPENAI_MODEL                  # defaults to gpt-4o
 

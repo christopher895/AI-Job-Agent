@@ -225,7 +225,7 @@ DATABASE_URL=postgresql://jobagent:jobagent@localhost:5432/job_agent
 
 LLM_PROVIDER=claude   # "claude" (default) or "openai"
 CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-...   # required when LLM_PROVIDER=claude — minted via `claude setup-token`
-CLAUDE_MODEL=                              # optional — pins a model for the claude path
+CLAUDE_MODEL=                              # optional — overrides the model for the claude path; blank = "opus" (alias for the latest Opus)
 OPENAI_API_KEY=sk-...                      # required when LLM_PROVIDER=openai, or as a manual fallback
 OPENAI_MODEL=gpt-4o
 

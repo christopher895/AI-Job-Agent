@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { buildClaudeCliArgs, parseClaudeCliOutput, callClaudeCli } from "./claude-cli";
+import { buildClaudeCliArgs, parseClaudeCliOutput, callClaudeCli, resolveClaudeModel } from "./claude-cli";
 
 let allPass = true;
 function check(label: string, ok: boolean, detail?: string) {
@@ -32,6 +32,16 @@ function check(label: string, ok: boolean, detail?: string) {
     "args-model-flag-when-set",
     args.includes("--model") && args[args.indexOf("--model") + 1] === "claude-sonnet-5"
   );
+}
+
+// --- resolveClaudeModel ---
+{
+  check("model-defaults-to-opus-alias", resolveClaudeModel(undefined, undefined) === "opus");
+  // .env.example ships `CLAUDE_MODEL=` — an empty value must not become `--model ""`.
+  check("model-empty-env-falls-back", resolveClaudeModel(undefined, "") === "opus");
+  check("model-blank-env-falls-back", resolveClaudeModel(undefined, "   ") === "opus");
+  check("model-env-wins-over-default", resolveClaudeModel(undefined, "claude-sonnet-5") === "claude-sonnet-5");
+  check("model-explicit-wins-over-env", resolveClaudeModel("claude-haiku-4-5", "opus") === "claude-haiku-4-5");
 }
 
 // --- parseClaudeCliOutput ---
