@@ -16,10 +16,7 @@ import {
   cancelResumeGeneration,
   revertToAwaitingReview,
   restartSuggestions,
-  answersRunId,
   beginGeneratingAnswers,
-  completeApplicationAnswers,
-  failApplicationAnswers,
   updateApplicationAnswerItems,
 } from "../../db/queries";
 import { registerRun, clearRun, abortRun, isCancelledError, CancelledError } from "../../ai/cancellation";
@@ -28,7 +25,8 @@ import { renderPdf } from "../../ai/render-pdf";
 import { renderMarkdown } from "../../ai/format";
 import { fitToOnePage } from "../../ai/fit-page";
 import { applySuggestions, labelGroundedness } from "../../ai/apply-suggestions";
-import { generateAnswers, MAX_PASTE_CHARS } from "../../ai/generate-answers";
+import { MAX_PASTE_CHARS } from "../../ai/generate-answers";
+import { runAnswersPipeline } from "../../ai/answers-pipeline";
 import { ApplicationAnswerSchema, Suggestion, SuggestionSchema } from "../../ai/types";
 import { LLM_PROVIDER } from "../../ai/llm";
 import { buildResumeFilename } from "../../utils/filename";
@@ -338,46 +336,6 @@ router.post("/resume/:id/generate-answers", async (req, res) => {
     console.error("[resume] generate-answers pipeline crashed:", err);
   });
 });
-
-async function runAnswersPipeline(
-  id: string,
-  pasted: string,
-  row: { jd_text: string | null; company: string | null; job_title: string | null }
-) {
-  const runId = answersRunId(id);
-  const signal = registerRun(runId);
-  try {
-    const master = await getMasterResume();
-    const items = await generateAnswers({
-      pasted,
-      jd: row.jd_text ?? "",
-      company: row.company,
-      jobTitle: row.job_title,
-      master,
-      signal,
-    });
-    if (signal.aborted) throw new CancelledError();
-    await completeApplicationAnswers(id, {
-      status: "ready",
-      prompt: pasted,
-      items,
-      error: null,
-      generated_at: new Date().toISOString(),
-    });
-  } catch (err) {
-    if (isCancelledError(err) || signal.aborted) {
-      console.log(`[resume] generate-answers cancelled for ${id}`);
-      await failApplicationAnswers(id, "Generation was cancelled.");
-      return;
-    }
-    console.error("[resume] generate-answers pipeline error:", err);
-    const credentialHint =
-      LLM_PROVIDER === "openai" ? "check OPENAI_API_KEY" : "check CLAUDE_CODE_OAUTH_TOKEN";
-    await failApplicationAnswers(id, `Drafting answers failed — ${credentialHint} and try again.`);
-  } finally {
-    clearRun(runId);
-  }
-}
 
 // PATCH /api/resume/:id/application-answers — persist hand-edits to drafts.
 router.patch("/resume/:id/application-answers", async (req, res) => {

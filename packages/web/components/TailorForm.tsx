@@ -1,7 +1,9 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api } from "../lib/api";
+import { api, ApplicationAnswersState } from "../lib/api";
+import ApplicationAnswers from "./ApplicationAnswers";
 
 export default function TailorForm({
   initialJobUrl = "",
@@ -18,13 +20,17 @@ export default function TailorForm({
   const [company, setCompany] = useState(initialCompany);
   const [location, setLocation] = useState("");
   const [fetchStatus, setFetchStatus] = useState<"idle" | "fetching" | "done" | "failed">("idle");
+  const [questions, setQuestions] = useState("");
+  const [answersResumeId, setAnswersResumeId] = useState<string | null>(null);
+  const [answersState, setAnswersState] = useState<ApplicationAnswersState | null>(null);
+  const [draftingAnswers, setDraftingAnswers] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [logging, setLogging] = useState(false);
   const [logStatus, setLogStatus] = useState<"idle" | "done" | "duplicate">("idle");
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const isEmpty = !jobUrl && !jdText && !title && !company && !location;
+  const isEmpty = !jobUrl && !jdText && !title && !company && !location && !questions;
 
   async function handleFetchJd() {
     const trimmed = jobUrl.trim();
@@ -79,9 +85,51 @@ export default function TailorForm({
     setTitle("");
     setCompany("");
     setLocation("");
+    setQuestions("");
+    setAnswersResumeId(null);
+    setAnswersState(null);
+    setDraftingAnswers(false);
     setFetchStatus("idle");
     setLogStatus("idle");
     setError(null);
+  }
+
+  async function handleGenerateAnswers() {
+    const jd = jdText.trim();
+    const url = jobUrl.trim();
+    const text = questions.trim();
+    if (!text) {
+      setError("Paste the application questions below.");
+      return;
+    }
+    if (!jd && !url) {
+      setError("Paste a job description (or fetch one from a URL) so the answers can use it.");
+      return;
+    }
+    setDraftingAnswers(true);
+    setError(null);
+    try {
+      const result = await api.startAnswers({
+        text,
+        jdText: jd || undefined,
+        jobUrl: url || undefined,
+        jobTitle: title.trim() || undefined,
+        company: company.trim() || undefined,
+        location: location.trim() || undefined,
+      });
+      setAnswersResumeId(result.id);
+      setAnswersState({
+        status: "generating",
+        prompt: text,
+        items: [],
+        error: null,
+        generated_at: null,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start answer drafts.");
+    } finally {
+      setDraftingAnswers(false);
+    }
   }
 
   async function handleGenerate() {
@@ -117,12 +165,12 @@ export default function TailorForm({
         <div>
           <h1 className="font-serif text-3xl text-foreground">Tailor a New Resume</h1>
           <p className="text-sm text-gray-500 mt-1.5">
-            Paste a job link or description and we&apos;ll tailor your resume.
+            Paste a job link or description to tailor your resume, or just draft application answers.
           </p>
         </div>
         <button
           onClick={handleClear}
-          disabled={isEmpty || generating}
+          disabled={isEmpty || generating || draftingAnswers}
           title="Clear every field on this form"
           className="flex-shrink-0 mt-1 px-3 py-1.5 border border-paper-border rounded-lg text-sm font-medium text-paper-ink hover:bg-black/5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors bg-white"
         >
@@ -224,13 +272,48 @@ export default function TailorForm({
           />
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-paper-ink mb-1.5">Application questions</label>
+          <p className="text-xs text-paper-muted mb-1.5">
+            Optional. Paste the form questions if you want drafts without tailoring a resume. Uses the
+            job description above and your master resume.
+          </p>
+          <textarea
+            value={questions}
+            onChange={(e) => setQuestions(e.target.value)}
+            placeholder={"Tell us about a project you built on your own initiative…\n\nWhy are you interested in this role?"}
+            rows={6}
+            className="w-full border border-paper-border rounded-lg px-3 py-2.5 text-sm text-paper-ink placeholder:text-paper-muted focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white resize-y"
+          />
+        </div>
+
+        {answersResumeId && (
+          <div className="flex flex-col gap-2">
+            <Link
+              href={`/resume/${answersResumeId}`}
+              className="text-xs text-violet-700 hover:text-violet-900 underline underline-offset-2 w-fit"
+            >
+              Open these drafts on the resume page
+            </Link>
+            <ApplicationAnswers
+              key={answersResumeId}
+              resumeId={answersResumeId}
+              initial={answersState}
+              hasJd={Boolean(jdText.trim() || jobUrl.trim())}
+              company={company}
+              variant="card"
+              hideComposer
+            />
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-100 border border-red-300 text-red-800 rounded-lg px-3 py-2.5 text-sm">
             {error}
           </div>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           {/* Add to Log — logs the application to Google Sheets without generating a resume */}
           <button
             onClick={handleAddToLog}
@@ -241,10 +324,19 @@ export default function TailorForm({
             {logging ? "Adding…" : logStatus === "done" ? "Added to log ✓" : logStatus === "duplicate" ? "Already in log" : "Add to Log"}
           </button>
 
+          <button
+            onClick={handleGenerateAnswers}
+            disabled={draftingAnswers || generating || !questions.trim()}
+            title="Draft answers from the job description without tailoring a resume"
+            className="flex-1 border border-violet-300 hover:bg-violet-50 text-violet-800 font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white"
+          >
+            {draftingAnswers ? "Starting…" : answersResumeId ? "Regenerate answers" : "Generate answers"}
+          </button>
+
           {/* Generate button */}
           <button
             onClick={handleGenerate}
-            disabled={generating}
+            disabled={generating || draftingAnswers}
             className="flex-[2] bg-violet-600 hover:bg-violet-700 text-white font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {generating ? (
