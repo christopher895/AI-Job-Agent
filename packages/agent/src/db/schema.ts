@@ -190,6 +190,12 @@ export async function initSchema() {
   await pool.query(`
     ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS suggestions JSONB;
   `);
+  // Drafts for pasted application-form questions, generated against this row's
+  // JD + the master résumé. Independent of `status` so a generate-answers run
+  // never flips the resume into 'pending' or collides with tailoring.
+  await pool.query(`
+    ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS application_answers JSONB;
+  `);
   // 'cancelled' is set by POST /api/resume/:id/cancel when the user stops a run
   // that had not produced suggestions yet. The row is kept (not deleted) so its
   // jd_text can drive an in-place retry.

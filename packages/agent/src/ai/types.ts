@@ -153,3 +153,38 @@ export const SuggestionSchema = RawSuggestionSchema.extend({
   accepted: z.boolean().nullable().default(null),
 });
 export type Suggestion = z.infer<typeof SuggestionSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Application-question drafts — generated on a tailored resume from  */
+/* pasted form questions + the stored JD + the master résumé.         */
+/* ------------------------------------------------------------------ */
+
+export const ApplicationAnswerSchema = z.object({
+  id: z.string(),
+  question: z.string(),
+  answer: z.string(),
+});
+export type ApplicationAnswer = z.infer<typeof ApplicationAnswerSchema>;
+
+export const ApplicationAnswersStateSchema = z.object({
+  status: z.enum(["generating", "ready", "failed"]),
+  prompt: z.string(),
+  items: z.array(ApplicationAnswerSchema),
+  error: z.string().nullable().default(null),
+  generated_at: z.string().nullable().default(null),
+});
+export type ApplicationAnswersState = z.infer<typeof ApplicationAnswersStateSchema>;
+
+/** LLM output — ids are assigned after the call, never by the model. */
+export const RawApplicationAnswersSchema = z.object({
+  answers: z
+    .array(
+      z.object({
+        question: z.string().min(1),
+        answer: z.string().min(1),
+      })
+    )
+    .min(1)
+    .max(8),
+});
+export type RawApplicationAnswers = z.infer<typeof RawApplicationAnswersSchema>;

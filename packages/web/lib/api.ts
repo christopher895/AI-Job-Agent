@@ -44,9 +44,24 @@ export type ResumeListItem = {
   updated_at: string;
 };
 
+export type ApplicationAnswer = {
+  id: string;
+  question: string;
+  answer: string;
+};
+
+export type ApplicationAnswersState = {
+  status: "generating" | "ready" | "failed";
+  prompt: string;
+  items: ApplicationAnswer[];
+  error: string | null;
+  generated_at: string | null;
+};
+
 export type Resume = ResumeListItem & {
   jd_text: string | null;
   markdown: string;
+  application_answers: ApplicationAnswersState | null;
 };
 
 export type AppliedJob = {
@@ -267,6 +282,10 @@ export const api = {
   /** Re-runs the suggestion pass on a cancelled/failed row using its stored JD. */
   retryResume: (id: string) =>
     request<{ id: string; status: "pending" }>("POST", `/resume/${id}/retry`),
+  generateAnswers: (id: string, text: string) =>
+    request<{ id: string; status: "generating" }>("POST", `/resume/${id}/generate-answers`, { text }),
+  patchApplicationAnswers: (id: string, items: ApplicationAnswer[]) =>
+    request<ApplicationAnswersState>("PATCH", `/resume/${id}/application-answers`, { items }),
   getMasterResume: () => request<MasterResume>("GET", "/master-resume"),
   putMasterResume: (data: MasterResume) =>
     request<{ updated: boolean }>("PUT", "/master-resume", data),

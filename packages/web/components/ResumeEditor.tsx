@@ -5,6 +5,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, Resume } from "../lib/api";
 import { STAGE_SEGMENTS, segmentIndex, estimateStageProgress } from "../lib/resumeStage";
 import SuggestionChecklist from "./SuggestionChecklist";
+import ApplicationAnswers from "./ApplicationAnswers";
 
 type ApplyForm = { status: string; appliedAt: string };
 type ViewMode = "edit" | "split" | "preview";
@@ -127,6 +128,7 @@ export default function ResumeEditor({
     appliedAt: new Date().toISOString().split("T")[0],
   });
   const [applyStatus, setApplyStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
+  const [applyError, setApplyError] = useState<string | null>(null);
   const [cancelState, setCancelState] = useState<"idle" | "working" | "error">("idle");
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(initialView);
@@ -359,6 +361,7 @@ export default function ResumeEditor({
 
   async function handleApply() {
     setApplyStatus("saving");
+    setApplyError(null);
     try {
       await api.postApplied({
         company: company,
@@ -371,8 +374,9 @@ export default function ResumeEditor({
       });
       setApplyStatus("done");
       setShowApplyForm(false);
-    } catch {
+    } catch (e) {
       setApplyStatus("error");
+      setApplyError(e instanceof Error ? e.message : "Couldn't add to the log.");
     }
   }
 
@@ -762,7 +766,7 @@ export default function ResumeEditor({
             </div>
             <button
               onClick={handleApply}
-              disabled={applyStatus === "saving"}
+              disabled={applyStatus === "saving" || applyStatus === "done"}
               className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 transition-colors"
             >
               {applyStatus === "saving" ? "Saving…" : applyStatus === "error" ? "Failed" : "Confirm"}
@@ -774,8 +778,16 @@ export default function ResumeEditor({
               Cancel
             </button>
           </div>
+          {applyError && <p className="text-xs text-red-700">{applyError}</p>}
         </div>
       )}
+
+      <ApplicationAnswers
+        resumeId={resume.id}
+        initial={resume.application_answers}
+        hasJd={Boolean(resume.jd_text?.trim())}
+        company={company}
+      />
 
       {/* Formatting toolbar (hidden in pure preview mode) */}
       {showEdit && (

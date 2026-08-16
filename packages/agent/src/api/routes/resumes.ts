@@ -16,6 +16,11 @@ import {
   cancelResumeGeneration,
   revertToAwaitingReview,
   restartSuggestions,
+  answersRunId,
+  beginGeneratingAnswers,
+  completeApplicationAnswers,
+  failApplicationAnswers,
+  updateApplicationAnswerItems,
 } from "../../db/queries";
 import { registerRun, clearRun, abortRun, isCancelledError, CancelledError } from "../../ai/cancellation";
 import { runSuggestPipeline } from "./tailor";
@@ -23,7 +28,8 @@ import { renderPdf } from "../../ai/render-pdf";
 import { renderMarkdown } from "../../ai/format";
 import { fitToOnePage } from "../../ai/fit-page";
 import { applySuggestions, labelGroundedness } from "../../ai/apply-suggestions";
-import { Suggestion, SuggestionSchema } from "../../ai/types";
+import { generateAnswers, MAX_PASTE_CHARS } from "../../ai/generate-answers";
+import { ApplicationAnswerSchema, Suggestion, SuggestionSchema } from "../../ai/types";
 import { LLM_PROVIDER } from "../../ai/llm";
 import { buildResumeFilename } from "../../utils/filename";
 import { z } from "zod";
@@ -296,6 +302,104 @@ router.post("/resume/:id/retry", async (req, res) => {
   runSuggestPipeline(req.params.id, row.jd_text).catch((err) => {
     console.error("[resume] retry pipeline crashed:", err);
   });
+});
+
+// POST /api/resume/:id/generate-answers — drafts answers to pasted application
+// questions using this row's JD + the master résumé. Async like /tailor so a
+// slow Claude call cannot die on Railway's edge-proxy timeout. Does NOT touch
+// resume `status` (a generating-answers run must not flip the editor into the
+// pending screen or collide with an in-flight tailor via registerRun(id)).
+router.post("/resume/:id/generate-answers", async (req, res) => {
+  const text = typeof req.body?.text === "string" ? req.body.text.trim() : "";
+  if (!text) {
+    res.status(400).json({ error: "text is required — paste the application questions." });
+    return;
+  }
+  if (text.length > MAX_PASTE_CHARS) {
+    res.status(400).json({ error: `Pasted text is too long (max ${MAX_PASTE_CHARS} characters).` });
+    return;
+  }
+
+  const row = await getTailoredResume(req.params.id);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (!row.jd_text?.trim()) {
+    res.status(409).json({ error: "This resume has no stored job description — generate it from /tailor first." });
+    return;
+  }
+  if (row.status === "pending") {
+    res.status(409).json({ error: "Resume is still generating — wait until it finishes, then draft answers." });
+    return;
+  }
+
+  await beginGeneratingAnswers(req.params.id, text);
+  res.status(202).json({ id: req.params.id, status: "generating" });
+
+  runAnswersPipeline(req.params.id, text, row).catch((err) => {
+    console.error("[resume] generate-answers pipeline crashed:", err);
+  });
+});
+
+async function runAnswersPipeline(
+  id: string,
+  pasted: string,
+  row: { jd_text: string | null; company: string | null; job_title: string | null }
+) {
+  const runId = answersRunId(id);
+  const signal = registerRun(runId);
+  try {
+    const master = await getMasterResume();
+    const items = await generateAnswers({
+      pasted,
+      jd: row.jd_text ?? "",
+      company: row.company,
+      jobTitle: row.job_title,
+      master,
+      signal,
+    });
+    if (signal.aborted) throw new CancelledError();
+    await completeApplicationAnswers(id, {
+      status: "ready",
+      prompt: pasted,
+      items,
+      error: null,
+      generated_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    if (isCancelledError(err) || signal.aborted) {
+      console.log(`[resume] generate-answers cancelled for ${id}`);
+      await failApplicationAnswers(id, "Generation was cancelled.");
+      return;
+    }
+    console.error("[resume] generate-answers pipeline error:", err);
+    const credentialHint =
+      LLM_PROVIDER === "openai" ? "check OPENAI_API_KEY" : "check CLAUDE_CODE_OAUTH_TOKEN";
+    await failApplicationAnswers(id, `Drafting answers failed — ${credentialHint} and try again.`);
+  } finally {
+    clearRun(runId);
+  }
+}
+
+// PATCH /api/resume/:id/application-answers — persist hand-edits to drafts.
+router.patch("/resume/:id/application-answers", async (req, res) => {
+  const parsed = z.array(ApplicationAnswerSchema).safeParse(req.body?.items);
+  if (!parsed.success) {
+    res.status(400).json({ error: "items must be an array of { id, question, answer }." });
+    return;
+  }
+
+  const row = await getTailoredResume(req.params.id);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (row.application_answers?.status === "generating") {
+    res.status(409).json({ error: "Answers are still generating — wait, then edit." });
+    return;
+  }
+
+  const updated = await updateApplicationAnswerItems(req.params.id, parsed.data);
+  if (!updated) {
+    res.status(409).json({ error: "No saved answers to edit yet — generate drafts first." });
+    return;
+  }
+  res.json(updated);
 });
 
 // DELETE /api/resume/:id
