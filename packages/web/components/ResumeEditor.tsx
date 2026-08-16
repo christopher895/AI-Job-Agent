@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, Resume } from "../lib/api";
 import { STAGE_SEGMENTS, segmentIndex, estimateStageProgress } from "../lib/resumeStage";
+import { appliedAtTimestamp } from "../lib/appliedAt";
 import SuggestionChecklist from "./SuggestionChecklist";
 import ApplicationAnswers from "./ApplicationAnswers";
 
@@ -369,7 +370,7 @@ export default function ResumeEditor({
         location: meta.location ?? undefined,
         jobUrl: meta.job_url ?? undefined,
         status: applyForm.status,
-        appliedAt: applyForm.appliedAt,
+        appliedAt: appliedAtTimestamp(applyForm.appliedAt),
         resumeId: resume.id,
       });
       setApplyStatus("done");

@@ -64,7 +64,7 @@ export default function TailorForm({
         jobTitle: title.trim(),
         location: location.trim() || undefined,
         jobUrl: jobUrl.trim() || undefined,
-        appliedAt: new Date().toISOString().split("T")[0],
+        appliedAt: new Date().toISOString(),
       });
       setLogStatus("done");
       setTimeout(() => setLogStatus("idle"), 3000);

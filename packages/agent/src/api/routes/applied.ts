@@ -5,6 +5,21 @@ import { appendRow, syncStatusToSheet } from "../../integrations/sheets";
 
 const router = Router();
 
+/**
+ * Parses the client's appliedAt into an instant.
+ *
+ * A bare "YYYY-MM-DD" (what an `<input type="date">` yields) parses as UTC midnight,
+ * which ties every application logged that day — leaving the log with no way to put the
+ * most recent one on top — and displays as the previous day west of UTC. Clients send a
+ * full ISO timestamp now; a bare date from anything older is pinned to midday instead,
+ * which lands on the intended calendar day in every timezone.
+ */
+function parseAppliedAt(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00Z` : value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
 // POST /api/applied
 router.post("/", async (req, res) => {
   const { company, jobTitle, location, jobUrl, status, appliedAt, resumeId } = req.body as {
@@ -42,7 +57,7 @@ router.post("/", async (req, res) => {
     location,
     jobUrl,
     status,
-    appliedAt: appliedAt ? new Date(appliedAt) : undefined,
+    appliedAt: parseAppliedAt(appliedAt),
     resumeId,
   });
 
