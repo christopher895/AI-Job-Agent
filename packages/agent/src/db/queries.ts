@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { pool } from "./pool";
-import { MasterResume, MasterResumeSchema, Suggestion } from "../ai/types";
+import { ApplicationAnswersState, MasterResume, MasterResumeSchema, Suggestion } from "../ai/types";
 import { Preferences, FILTERS } from "../config";
 
 export type TailoredResumeRow = {
@@ -23,11 +23,12 @@ export type TailoredResumeRow = {
   /** When the current `stage` began — used to estimate progress; null whenever `stage` is null. */
   stage_started_at: Date | null;
   suggestions: Suggestion[] | null;
+  application_answers: ApplicationAnswersState | null;
   created_at: Date;
   updated_at: Date;
 };
 
-export type ResumeListItem = Omit<TailoredResumeRow, "jd_text" | "markdown">;
+export type ResumeListItem = Omit<TailoredResumeRow, "jd_text" | "markdown" | "application_answers">;
 
 export type AppliedJobRow = {
   id: string;
@@ -135,7 +136,7 @@ export async function updatePreferences(data: Preferences): Promise<void> {
 // ── Tailored resumes ───────────────────────────────────────────────────────────
 
 const TAILORED_RESUME_COLUMNS =
-  "id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, status, error, stage, stage_started_at, suggestions, created_at, updated_at";
+  "id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, status, error, stage, stage_started_at, suggestions, application_answers, created_at, updated_at";
 
 /** Inserts a placeholder row immediately so POST /api/tailor can respond before the pipeline runs. */
 export async function createPendingResume(fields: {
@@ -278,6 +279,78 @@ export async function restartSuggestions(id: string): Promise<boolean> {
 /** Moves an awaiting_review row back into 'pending' right as POST /apply-suggestions starts its background work — reuses the same pending/polling UI the rest of the app already has. */
 export async function beginApplyingSuggestions(id: string): Promise<void> {
   await pool.query(`UPDATE tailored_resumes SET status = 'pending', stage = NULL, stage_started_at = NULL, updated_at = NOW() WHERE id = $1`, [id]);
+}
+
+/** Run key for the answers pipeline — must not collide with the tailoring run keyed by resume id. */
+export function answersRunId(resumeId: string): string {
+  return `answers:${resumeId}`;
+}
+
+/** Marks an answers run as in-flight without touching resume `status`. Keeps prior items so a failed regen doesn't wipe them. */
+export async function beginGeneratingAnswers(id: string, prompt: string): Promise<void> {
+  await pool.query(
+    `UPDATE tailored_resumes
+        SET application_answers = jsonb_build_object(
+              'status', 'generating',
+              'prompt', $2::text,
+              'items', COALESCE(application_answers->'items', '[]'::jsonb),
+              'error', null,
+              'generated_at', application_answers->>'generated_at'
+            ),
+            updated_at = NOW()
+      WHERE id = $1`,
+    [id, prompt]
+  );
+}
+
+export async function completeApplicationAnswers(
+  id: string,
+  state: ApplicationAnswersState
+): Promise<void> {
+  const { rowCount } = await pool.query(
+    `UPDATE tailored_resumes SET application_answers = $1, updated_at = NOW() WHERE id = $2`,
+    [JSON.stringify(state), id]
+  );
+  if (rowCount === 0) {
+    console.warn(`[queries] completeApplicationAnswers: row ${id} no longer exists`);
+  }
+}
+
+export async function failApplicationAnswers(id: string, message: string): Promise<void> {
+  await pool.query(
+    `UPDATE tailored_resumes
+        SET application_answers = jsonb_build_object(
+              'status', 'failed',
+              'prompt', COALESCE(application_answers->>'prompt', ''),
+              'items', COALESCE(application_answers->'items', '[]'::jsonb),
+              'error', $2::text,
+              'generated_at', application_answers->>'generated_at'
+            ),
+            updated_at = NOW()
+      WHERE id = $1`,
+    [id, message]
+  );
+}
+
+export async function updateApplicationAnswerItems(
+  id: string,
+  items: ApplicationAnswersState["items"]
+): Promise<ApplicationAnswersState | null> {
+  const { rows } = await pool.query(
+    `UPDATE tailored_resumes
+        SET application_answers = jsonb_set(
+              COALESCE(application_answers, '{}'::jsonb),
+              '{items}',
+              $2::jsonb
+            ),
+            updated_at = NOW()
+      WHERE id = $1
+        AND application_answers IS NOT NULL
+        AND application_answers->>'status' IS DISTINCT FROM 'generating'
+      RETURNING application_answers`,
+    [id, JSON.stringify(items)]
+  );
+  return (rows[0]?.application_answers as ApplicationAnswersState) ?? null;
 }
 
 export async function storePdf(id: string, pdf: Buffer): Promise<void> {

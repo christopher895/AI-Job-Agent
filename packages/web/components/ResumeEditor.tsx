@@ -5,6 +5,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, Resume } from "../lib/api";
 import { STAGE_SEGMENTS, segmentIndex, estimateStageProgress } from "../lib/resumeStage";
 import SuggestionChecklist from "./SuggestionChecklist";
+import ApplicationAnswers from "./ApplicationAnswers";
 
 type ApplyForm = { status: string; appliedAt: string };
 type ViewMode = "edit" | "split" | "preview";
@@ -776,6 +777,13 @@ export default function ResumeEditor({
           </div>
         </div>
       )}
+
+      <ApplicationAnswers
+        resumeId={resume.id}
+        initial={resume.application_answers}
+        hasJd={Boolean(resume.jd_text?.trim())}
+        company={company}
+      />
 
       {/* Formatting toolbar (hidden in pure preview mode) */}
       {showEdit && (
