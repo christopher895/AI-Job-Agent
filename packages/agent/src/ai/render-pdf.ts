@@ -325,15 +325,12 @@ function buildLatex(doc: ParsedDoc): string {
   lines.push(
     `\\documentclass[10pt]{czresume}`,
     `\\usepackage[left=0.4in,top=0.4in,right=0.4in,bottom=0.4in]{geometry}`,
-    // No hyphenation anywhere: a word that doesn't fit moves to the next line
-    // whole instead of breaking as "correc-tion". The infinite penalties kill
-    // both automatic breaks and breaks at existing hyphens ("full-stack"); the
-    // loosened tolerance plus emergencystretch let TeX absorb the resulting
-    // slack as interword space instead of pushing text past the right margin.
+    // No hyphenation: a word that doesn't fit moves to the next line whole.
+    // Ragged-right keeps natural interword spacing instead of stretching
+    // gaps to fill the line (the usual TeX fallback once hyphenation is off).
     `\\hyphenpenalty=10000`,
     `\\exhyphenpenalty=10000`,
-    `\\tolerance=9999`,
-    `\\emergencystretch=3em`,
+    `\\raggedright`,
     ``,
     `\\name{${tex(doc.name)}}`,
     `\\address{${addrParts.join(" \\\\ ")}}`,
