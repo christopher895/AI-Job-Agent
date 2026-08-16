@@ -157,6 +157,24 @@ export async function createPendingResume(fields: {
   return rows[0];
 }
 
+/** JD + answers only — no suggestion pipeline, so the editor never enters 'pending'. */
+export async function createReadyResume(fields: {
+  jobTitle?: string;
+  company?: string;
+  location?: string;
+  jobUrl?: string;
+  jdText?: string;
+}): Promise<TailoredResumeRow> {
+  const { rows } = await pool.query(
+    `INSERT INTO tailored_resumes (job_title, company, location, job_url, jd_text, markdown, status)
+     VALUES ($1, $2, $3, $4, $5, '', 'ready')
+     RETURNING ${TAILORED_RESUME_COLUMNS}`,
+    [fields.jobTitle ?? null, fields.company ?? null, fields.location ?? null, fields.jobUrl ?? null,
+     fields.jdText ?? null]
+  );
+  return rows[0];
+}
+
 /** Marks a pending resume as ready once the tailoring pipeline finishes successfully. */
 export async function completeTailoredResume(
   id: string,

@@ -7,13 +7,20 @@ export default function ApplicationAnswers({
   initial,
   hasJd,
   company,
+  variant = "bar",
+  hideComposer = false,
 }: {
   resumeId: string;
   initial: ApplicationAnswersState | null;
   hasJd: boolean;
   company: string;
+  variant?: "bar" | "card";
+  /** Parent already has the questions box (the /tailor form). */
+  hideComposer?: boolean;
 }) {
-  const [open, setOpen] = useState(() => Boolean(initial?.items.length || initial?.status === "failed"));
+  const [open, setOpen] = useState(() =>
+    Boolean(initial?.items.length || initial?.status === "failed" || initial?.status === "generating")
+  );
   const [prompt, setPrompt] = useState(initial?.prompt ?? "");
   const [state, setState] = useState<ApplicationAnswersState | null>(initial);
   const [error, setError] = useState<string | null>(null);
@@ -97,61 +104,72 @@ export default function ApplicationAnswers({
   }
 
   const label = company ? `Application answers for ${company}` : "Application answers";
+  const isCard = variant === "card";
 
   return (
-    <div className="border-b border-paper-border flex-shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full px-6 py-2.5 flex items-center justify-between text-left hover:bg-black/[0.02] transition-colors"
-      >
-        <span className="text-xs font-medium text-paper-ink">{label}</span>
-        <span className="text-[11px] text-paper-muted">
-          {generating
-            ? "Drafting…"
-            : state?.items.length
-              ? `${state.items.length} draft${state.items.length === 1 ? "" : "s"}`
-              : "Paste questions"}
-          <span className="ml-2">{open ? "▴" : "▾"}</span>
-        </span>
-      </button>
+    <div className={isCard ? "flex flex-col gap-3" : "border-b border-paper-border flex-shrink-0"}>
+      {!isCard && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="w-full px-6 py-2.5 flex items-center justify-between text-left hover:bg-black/[0.02] transition-colors"
+        >
+          <span className="text-xs font-medium text-paper-ink">{label}</span>
+          <span className="text-[11px] text-paper-muted">
+            {generating
+              ? "Drafting…"
+              : state?.items.length
+                ? `${state.items.length} draft${state.items.length === 1 ? "" : "s"}`
+                : "Paste questions"}
+            <span className="ml-2">{open ? "▴" : "▾"}</span>
+          </span>
+        </button>
+      )}
 
-      {open && (
-        <div className="px-6 pb-4 flex flex-col gap-3">
-          <p className="text-[11px] text-paper-muted">
-            Paste the questions from the application form. Drafts use this job&apos;s description and
-            your master resume. Edit anything that sounds off, then copy into the form.
-          </p>
+      {(open || isCard) && (
+        <div className={isCard ? "flex flex-col gap-3" : "px-6 pb-4 flex flex-col gap-3"}>
+          {!hideComposer && (
+            <>
+              <p className="text-[11px] text-paper-muted">
+                Paste the questions from the application form. Drafts use this job&apos;s description and
+                your master resume. Edit anything that sounds off, then copy into the form.
+              </p>
 
-          {!hasJd && (
-            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-              This resume has no stored job description, so answers would be generic. Generate it from
-              /tailor with a JD first.
-            </p>
+              {!hasJd && (
+                <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                  This resume has no stored job description, so answers would be generic. Generate it from
+                  /tailor with a JD first.
+                </p>
+              )}
+
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                disabled={generating}
+                rows={5}
+                placeholder={"Tell us about a project you built on your own initiative…\n\nWhy are you interested in this role?"}
+                className="w-full resize-y min-h-[6rem] text-sm leading-relaxed text-paper-ink bg-paper border border-paper-border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-300 disabled:opacity-60"
+              />
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={!hasJd || generating || !prompt.trim()}
+                  className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                >
+                  {generating ? "Drafting…" : state?.items.length ? "Regenerate drafts" : "Generate drafts"}
+                </button>
+                {generating && (
+                  <span className="text-[11px] text-paper-muted">Usually under a minute. This updates on its own.</span>
+                )}
+              </div>
+            </>
           )}
 
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            disabled={generating}
-            rows={5}
-            placeholder={"Tell us about a project you built on your own initiative…\n\nWhy are you interested in this role?"}
-            className="w-full resize-y min-h-[6rem] text-sm leading-relaxed text-paper-ink bg-paper border border-paper-border rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-violet-300 disabled:opacity-60"
-          />
-
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={!hasJd || generating || !prompt.trim()}
-              className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg transition-colors"
-            >
-              {generating ? "Drafting…" : state?.items.length ? "Regenerate drafts" : "Generate drafts"}
-            </button>
-            {generating && (
-              <span className="text-[11px] text-paper-muted">Usually under a minute. This updates on its own.</span>
-            )}
-          </div>
+          {hideComposer && generating && (
+            <p className="text-[11px] text-paper-muted">Drafting answers from this job description…</p>
+          )}
 
           {error && <p className="text-[11px] text-red-600">{error}</p>}
 

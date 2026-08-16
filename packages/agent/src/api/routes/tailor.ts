@@ -4,6 +4,8 @@ import { labelGroundedness } from "../../ai/apply-suggestions";
 import { getMasterResume } from "../../db/queries";
 import {
   createPendingResume,
+  createReadyResume,
+  beginGeneratingAnswers,
   failTailoredResume,
   updateResumeStage,
   setSuggestions,
@@ -12,6 +14,8 @@ import { fetchJd } from "../../scraper/fetch-jd";
 import { LLM_PROVIDER } from "../../ai/llm";
 import { registerRun, clearRun, isCancelledError } from "../../ai/cancellation";
 import { Suggestion } from "../../ai/types";
+import { MAX_PASTE_CHARS } from "../../ai/generate-answers";
+import { runAnswersPipeline } from "../../ai/answers-pipeline";
 
 const router = Router();
 
@@ -106,6 +110,76 @@ export async function runSuggestPipeline(id: string, jd: string) {
     clearRun(id);
   }
 }
+
+// POST /api/tailor/answers — draft application answers from a pasted JD without
+// running the resume-tailoring pipeline. Creates a ready row so the editor
+// never enters 'pending', then reuses the same answers pipeline as /resume/:id.
+router.post("/answers", async (req, res) => {
+  const { jdText, jobUrl, jobTitle, company, location, text } = req.body as {
+    jdText?: string;
+    jobUrl?: string;
+    jobTitle?: string;
+    company?: string;
+    location?: string;
+    text?: string;
+  };
+
+  const questions = typeof text === "string" ? text.trim() : "";
+  if (!questions) {
+    res.status(400).json({ error: "text is required — paste the application questions." });
+    return;
+  }
+  if (questions.length > MAX_PASTE_CHARS) {
+    res.status(400).json({ error: `Pasted text is too long (max ${MAX_PASTE_CHARS} characters).` });
+    return;
+  }
+
+  let jd = jdText?.trim() ?? "";
+  let resolvedTitle = jobTitle;
+  let resolvedCompany = company;
+  let resolvedLocation = location;
+
+  if (!jd && jobUrl) {
+    try {
+      const fetched = await fetchJd(jobUrl);
+      jd = fetched.text;
+      resolvedTitle = resolvedTitle || fetched.title;
+      resolvedCompany = resolvedCompany || fetched.company;
+      resolvedLocation = resolvedLocation || fetched.location;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Invalid URL";
+      res.status(400).json({ error: message });
+      return;
+    }
+  }
+
+  if (!jd) {
+    res.status(400).json({ error: "Paste a job description (or fetch one from a URL) before drafting answers." });
+    return;
+  }
+
+  let row;
+  try {
+    row = await createReadyResume({
+      jobTitle: resolvedTitle,
+      company: resolvedCompany,
+      location: resolvedLocation,
+      jobUrl,
+      jdText: jd,
+    });
+    await beginGeneratingAnswers(row.id, questions);
+  } catch (err) {
+    console.error("[tailor] answers db error:", err);
+    res.status(500).json({ error: "Failed to start answer drafts — database error." });
+    return;
+  }
+
+  res.status(202).json({ id: row.id, status: "generating" });
+
+  runAnswersPipeline(row.id, questions, row).catch((err) => {
+    console.error("[tailor] answers pipeline crashed:", err);
+  });
+});
 
 // POST /api/tailor/fetch-jd — just fetch the JD text without running the tailor pipeline
 router.post("/fetch-jd", async (req, res) => {

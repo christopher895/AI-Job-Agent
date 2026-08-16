@@ -284,6 +284,14 @@ export const api = {
     request<{ id: string; status: "pending" }>("POST", `/resume/${id}/retry`),
   generateAnswers: (id: string, text: string) =>
     request<{ id: string; status: "generating" }>("POST", `/resume/${id}/generate-answers`, { text }),
+  startAnswers: (body: {
+    text: string;
+    jdText?: string;
+    jobUrl?: string;
+    jobTitle?: string;
+    company?: string;
+    location?: string;
+  }) => request<{ id: string; status: "generating" }>("POST", "/tailor/answers", body),
   patchApplicationAnswers: (id: string, items: ApplicationAnswer[]) =>
     request<ApplicationAnswersState>("PATCH", `/resume/${id}/application-answers`, { items }),
   getMasterResume: () => request<MasterResume>("GET", "/master-resume"),
