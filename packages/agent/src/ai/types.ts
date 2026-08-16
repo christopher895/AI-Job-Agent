@@ -119,8 +119,10 @@ export type TailoredResume = z.infer<typeof TailoredResumeSchema>;
 
 /* ------------------------------------------------------------------ */
 /* Keyword-insertion suggestions — the per-job tailoring flow's only  */
-/* output. The master resume itself is never reordered or cut; these  */
-/* are small, individually-approved wording/skill additions.          */
+/* output. Experience/project bullets stay in master order; skill     */
+/* items within a category may be regrouped so related tools sit      */
+/* together. These are small, individually-approved wording/skill     */
+/* additions.                                                         */
 /* ------------------------------------------------------------------ */
 
 export const RawSuggestionSchema = z.object({
@@ -132,10 +134,11 @@ export const RawSuggestionSchema = z.object({
   targetId: z.string(),
   /** The JD term this suggestion surfaces. */
   keyword: z.string(),
-  /** bullet-rewrite only: the bullet's current text, verbatim. */
+  /** bullet-rewrite: the bullet's current text, verbatim.
+   *  skill-addition: the family group or neighbor to place the new skill with. */
   originalText: z.string().optional(),
   /** bullet-rewrite: the full reworded bullet text.
-   *  skill-addition: the single skill/tool name to add. */
+   *  skill-addition: the rewritten family group, or the new standalone name. */
   suggestedText: z.string(),
   /** One sentence: why this JD keyword fits here. */
   rationale: z.string(),

@@ -158,7 +158,8 @@ export default function SuggestionChecklist({
                     {it.groundedness}
                   </span>
                 </div>
-                {it.kind === "bullet-rewrite" ? (
+                {it.kind === "bullet-rewrite" ||
+                (it.kind === "skill-addition" && it.originalText && it.suggestedText.includes("(")) ? (
                   <>
                     {it.originalText && <WordDiff before={it.originalText} after={it.suggestedText} />}
                     <textarea
@@ -169,6 +170,10 @@ export default function SuggestionChecklist({
                       className="w-full text-sm font-mono border border-paper-border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none"
                     />
                   </>
+                ) : it.originalText ? (
+                  <p className="text-sm font-medium text-paper-ink">
+                    Add &quot;{it.suggestedText}&quot; next to {it.originalText}
+                  </p>
                 ) : (
                   <p className="text-sm font-medium text-paper-ink">
                     Add &quot;{it.suggestedText}&quot; to {it.targetId}
