@@ -243,7 +243,8 @@ export default function PlaygroundFlow() {
                       {s.groundedness}
                     </span>
                   </div>
-                  {s.kind === "bullet-rewrite" ? (
+                  {s.kind === "bullet-rewrite" ||
+                  (s.kind === "skill-addition" && s.originalText && s.suggestedText.includes("(")) ? (
                     <textarea
                       value={s.suggestedText}
                       onChange={(e) => editSuggestionText(s.id, e.target.value)}
@@ -251,6 +252,10 @@ export default function PlaygroundFlow() {
                       onClick={(e) => e.preventDefault()}
                       className="w-full text-sm font-mono border border-paper-border rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none bg-white text-paper-ink"
                     />
+                  ) : s.originalText ? (
+                    <p className="text-sm font-medium text-paper-ink">
+                      Add &quot;{s.suggestedText}&quot; next to {s.originalText}
+                    </p>
                   ) : (
                     <p className="text-sm font-medium text-paper-ink">
                       Add &quot;{s.suggestedText}&quot; to {s.targetId}

@@ -7,15 +7,32 @@ SHORT list of targeted keyword insertions. That is your entire scope.
 
 HARD RULES:
 - The résumé below is FIXED and already exactly one page. Do NOT propose
-  removing, reordering, cutting, or restructuring anything — every existing
-  bullet and skill stays exactly where it is, for every job.
+  removing, cutting, or restructuring experience/project bullets — every
+  existing bullet stays exactly where it is, for every job.
+- You MAY regroup and reorder items WITHIN a skill category so related tools
+  sit together. Do not invent a new category and do not touch Interests.
+  A related tool must never be dumped at the end of the list when a family
+  group already exists. Examples:
+  - CloudWatch / S3 / IAM belong inside an existing "AWS (...)" group, not
+    as a new trailing item.
+  - Docker and Kubernetes should sit next to each other.
+  - Argo CD and Kargo should sit next to each other.
 - Each suggestion is one of:
   - "bullet-rewrite": a small wording change to ONE existing bullet (referenced
     by its exact "id" from the source below) that works in a JD keyword or
     technology the bullet doesn't currently mention.
-  - "skill-addition": a single skill/technology name to add to one of the
-    candidate's skill categories — "targetId" must be exactly "languages",
-    "frameworks", or "tools" (never "interests").
+  - "skill-addition": a skill/technology to add to one of the candidate's
+    skill categories — "targetId" must be exactly "languages", "frameworks",
+    or "tools" (never "interests").
+    When the new item belongs in an existing family group (AWS, GCP, Azure,
+    etc.), set originalText to that group's current text verbatim and
+    suggestedText to the rewritten group with the new item inside the
+    parentheses:
+      originalText: "AWS (EKS, Lambda, Bedrock)"
+      suggestedText: "AWS (EKS, Lambda, Bedrock, CloudWatch)"
+    When the new item should sit next to a related standalone skill rather
+    than at the end, set originalText to that neighbor (it will be inserted
+    after it) and suggestedText to the new name only.
 - Never suggest more than one change per bullet.
 - Never touch Education, Extracurriculars, or any field not shown to you below.
 - It is acceptable to suggest a plausible extrapolation beyond what's literally
@@ -35,9 +52,13 @@ OUTPUT: JSON matching:
       "targetId": string,           // bullet-rewrite: an id from the source below.
                                      // skill-addition: "languages" | "frameworks" | "tools"
       "keyword": string,            // the JD term this addresses
-      "originalText": string,       // bullet-rewrite only: the bullet's CURRENT text, verbatim
+      "originalText": string,       // bullet-rewrite: the bullet's CURRENT text, verbatim.
+                                     // skill-addition: the family group or neighbor to
+                                     //   place this next to (omit only if it's a true
+                                     //   standalone with no related item)
       "suggestedText": string,      // bullet-rewrite: the full reworded bullet text.
-                                     // skill-addition: the skill/tool name to add
+                                     // skill-addition: the rewritten family group, or
+                                     //   the new standalone skill/tool name
       "rationale": string           // one sentence: why this JD keyword fits here
     }
   ]

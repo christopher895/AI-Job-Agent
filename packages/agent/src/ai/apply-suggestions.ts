@@ -49,11 +49,180 @@ function isSkillCategory(s: string): s is SkillCategory {
   return (SKILL_CATEGORIES as readonly string[]).includes(s);
 }
 
+function sameSkill(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+/** "AWS (EKS, Lambda, Bedrock)" → { family: "AWS", items: ["EKS", "Lambda", "Bedrock"] } */
+function parseGroup(entry: string): { family: string; items: string[] } | null {
+  const m = entry.match(/^(.*?)\s*\((.*)\)\s*$/);
+  if (!m || !m[1].trim()) return null;
+  return { family: m[1].trim(), items: m[2].split(",").map((s) => s.trim()).filter(Boolean) };
+}
+
+function formatGroup(family: string, items: string[]): string {
+  return `${family} (${items.join(", ")})`;
+}
+
+function mergeGroupItems(existing: string[], incoming: string[]): string[] {
+  const seen = new Set(existing.map((i) => i.toLowerCase()));
+  const merged = [...existing];
+  for (const item of incoming) {
+    if (!seen.has(item.toLowerCase())) {
+      seen.add(item.toLowerCase());
+      merged.push(item);
+    }
+  }
+  return merged;
+}
+
+/** Well-known children of a vendor family — backstop when the model forgets originalText. */
+const FAMILY_CHILDREN: Record<string, string[]> = {
+  aws: [
+    "cloudwatch",
+    "s3",
+    "ec2",
+    "lambda",
+    "eks",
+    "ecs",
+    "bedrock",
+    "rds",
+    "dynamodb",
+    "sqs",
+    "sns",
+    "iam",
+    "vpc",
+    "cloudformation",
+    "fargate",
+    "sagemaker",
+    "athena",
+    "glue",
+    "api gateway",
+    "cognito",
+    "cloudfront",
+    "route 53",
+    "elasticache",
+    "redshift",
+    "kinesis",
+    "opensearch",
+    "x-ray",
+    "waf",
+    "step functions",
+  ],
+  gcp: ["gke", "bigquery", "cloud run", "cloud functions", "pub/sub", "cloud storage", "dataflow"],
+  azure: ["aks", "azure functions", "cosmos db", "blob storage", "app service"],
+};
+
+function familyKey(name: string): string | null {
+  const n = name.toLowerCase();
+  if (n === "aws" || n === "amazon web services" || n.startsWith("aws ")) return "aws";
+  if (n === "gcp" || n === "google cloud" || n.startsWith("gcp ") || n.startsWith("google cloud ")) return "gcp";
+  if (n === "azure" || n.startsWith("azure ")) return "azure";
+  return null;
+}
+
+function alreadyListed(category: string[], addition: string): boolean {
+  return category.some((c) => {
+    if (sameSkill(c, addition)) return true;
+    const g = parseGroup(c);
+    if (!g) return false;
+    return sameSkill(g.family, addition) || g.items.some((i) => sameSkill(i, addition));
+  });
+}
+
+function findFamilyHost(category: string[], addition: string): number {
+  const add = addition.toLowerCase();
+  for (let i = 0; i < category.length; i++) {
+    const parsed = parseGroup(category[i]);
+    const familyName = parsed?.family ?? category[i];
+    const key = familyKey(familyName);
+    if (!key || sameSkill(familyName, addition) || key === add) continue;
+    const children = FAMILY_CHILDREN[key] ?? [];
+    if (children.includes(add)) return i;
+  }
+  return -1;
+}
+
+/**
+ * Place a new skill next to its family instead of always appending. Prefers
+ * folding into an existing "AWS (...)" group; falls back to insert-after a
+ * neighbor, then a vendor-family backstop, then append.
+ */
+export function placeSkill(category: string[], suggestedText: string, originalText?: string): void {
+  const proposed = suggestedText.trim();
+  if (!proposed) return;
+
+  if (!alreadyListed(category, proposed)) {
+    const proposedGroup = parseGroup(proposed);
+
+    if (proposedGroup) {
+      const hostIdx = category.findIndex((c) => {
+        const g = parseGroup(c);
+        return g !== null && sameSkill(g.family, proposedGroup.family);
+      });
+      if (hostIdx >= 0) {
+        const host = parseGroup(category[hostIdx])!;
+        category[hostIdx] = formatGroup(host.family, mergeGroupItems(host.items, proposedGroup.items));
+      } else {
+        category.push(proposed);
+      }
+    } else if (originalText) {
+      const idx = category.findIndex((c) => sameSkill(c, originalText));
+      if (idx >= 0) {
+        const host = parseGroup(category[idx]);
+        if (host) {
+          category[idx] = formatGroup(host.family, mergeGroupItems(host.items, [proposed]));
+        } else {
+          category.splice(idx + 1, 0, proposed);
+        }
+      } else {
+        const familyIdx = findFamilyHost(category, proposed);
+        if (familyIdx >= 0) {
+          nestOrInsert(category, familyIdx, proposed);
+        } else {
+          category.push(proposed);
+        }
+      }
+    } else {
+      const familyIdx = findFamilyHost(category, proposed);
+      if (familyIdx >= 0) {
+        nestOrInsert(category, familyIdx, proposed);
+      } else {
+        category.push(proposed);
+      }
+    }
+  }
+
+  foldOrphanFamilyMembers(category);
+}
+
+function nestOrInsert(category: string[], hostIdx: number, proposed: string): void {
+  const host = parseGroup(category[hostIdx]);
+  if (host) {
+    category[hostIdx] = formatGroup(host.family, mergeGroupItems(host.items, [proposed]));
+    return;
+  }
+  category.splice(hostIdx + 1, 0, proposed);
+}
+
+/** Pull standalone vendor services (CloudWatch, S3, …) into an existing family group. */
+function foldOrphanFamilyMembers(category: string[]): void {
+  for (let i = category.length - 1; i >= 0; i--) {
+    if (parseGroup(category[i])) continue;
+    const hostIdx = findFamilyHost(category, category[i]);
+    if (hostIdx < 0 || hostIdx === i) continue;
+    const host = parseGroup(category[hostIdx]);
+    if (!host) continue;
+    category[hostIdx] = formatGroup(host.family, mergeGroupItems(host.items, [category[i]]));
+    category.splice(i, 1);
+  }
+}
+
 /**
  * Applies only the accepted suggestions on top of the master resume. Every
  * bullet from every experience/project is included, in master order — this
- * flow never reorders, cuts, or restructures anything, only rewrites specific
- * bullets or adds specific skills that Christopher explicitly checked off.
+ * flow never cuts or restructures sections, only rewrites specific bullets
+ * or adds/regroups specific skills that Christopher explicitly checked off.
  *
  * Returns an adjusted master (skill additions merged in) plus a full-coverage
  * TailoredResume, so the existing renderMarkdown(master, tailored) from
@@ -67,9 +236,11 @@ export function applySuggestions(
 
   for (const s of accepted) {
     if (s.kind !== "skill-addition" || !isSkillCategory(s.targetId)) continue;
-    const category = adjustedMaster.skills[s.targetId];
-    const already = category.some((c) => c.toLowerCase() === s.suggestedText.toLowerCase());
-    if (!already) category.push(s.suggestedText);
+    placeSkill(adjustedMaster.skills[s.targetId], s.suggestedText, s.originalText);
+  }
+
+  for (const category of SKILL_CATEGORIES) {
+    foldOrphanFamilyMembers(adjustedMaster.skills[category]);
   }
 
   const rewrites = new Map(
