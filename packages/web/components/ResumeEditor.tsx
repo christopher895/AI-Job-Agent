@@ -119,6 +119,7 @@ export default function ResumeEditor({
     stage: resume.stage,
     stage_started_at: resume.stage_started_at,
     suggestions: resume.suggestions,
+    application_answers: resume.application_answers,
   });
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
   const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -258,7 +259,14 @@ export default function ResumeEditor({
           // Still running — just surface the current stage, nothing else has
           // changed yet (markdown/PDF are only written once status flips).
           setMeta((m) =>
-            m.stage === fresh.stage ? m : { ...m, stage: fresh.stage, stage_started_at: fresh.stage_started_at }
+            m.stage === fresh.stage && m.application_answers?.status === fresh.application_answers?.status
+              ? m
+              : {
+                  ...m,
+                  stage: fresh.stage,
+                  stage_started_at: fresh.stage_started_at,
+                  application_answers: fresh.application_answers,
+                }
           );
           return;
         }
@@ -275,6 +283,7 @@ export default function ResumeEditor({
           stage: fresh.stage,
           stage_started_at: fresh.stage_started_at,
           suggestions: fresh.suggestions,
+          application_answers: fresh.application_answers,
         });
         setMarkdown(fresh.markdown);
         setJobTitle(fresh.job_title ?? "");
@@ -418,6 +427,7 @@ export default function ResumeEditor({
                 </svg>
                 <p className="text-xs text-paper-muted mt-4">
                   This usually takes well under a minute. This page updates automatically.
+                  {meta.application_answers?.status === "generating" && " Application answers are drafting in the background too."}
                 </p>
               </>
             ) : (
@@ -458,6 +468,7 @@ export default function ResumeEditor({
                   </div>
                   <p className="text-[11px] text-paper-muted mt-1.5">
                     {progress.elapsedSeconds}s / ~{progress.expectedSeconds}s typical
+                    {meta.application_answers?.status === "generating" && " · answers drafting too"}
                   </p>
                 </div>
               </>
@@ -535,6 +546,14 @@ export default function ResumeEditor({
             Review suggestions{title ? ` for ${title}` : ""}
           </p>
         </div>
+        {(meta.application_answers || resume.application_answers) && (
+          <ApplicationAnswers
+            resumeId={resume.id}
+            initial={meta.application_answers ?? resume.application_answers}
+            hasJd={Boolean(resume.jd_text?.trim())}
+            company={company}
+          />
+        )}
         <SuggestionChecklist
           resumeId={resume.id}
           suggestions={meta.suggestions ?? []}
@@ -784,7 +803,7 @@ export default function ResumeEditor({
 
       <ApplicationAnswers
         resumeId={resume.id}
-        initial={resume.application_answers}
+        initial={meta.application_answers ?? resume.application_answers}
         hasJd={Boolean(resume.jd_text?.trim())}
         company={company}
       />

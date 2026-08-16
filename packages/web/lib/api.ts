@@ -271,6 +271,7 @@ export const api = {
     jobTitle?: string;
     company?: string;
     location?: string;
+    questions?: string;
   }) =>
     request<{ id: string; status: "pending" }>("POST", "/tailor", body),
   applySuggestions: (id: string, accepted: Suggestion[]) =>
