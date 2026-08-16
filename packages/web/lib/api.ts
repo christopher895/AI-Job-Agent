@@ -72,6 +72,7 @@ export type AppliedJob = {
   job_url: string | null;
   status: string | null;
   applied_at: string;
+  created_at: string;
   resume_id: string | null;
   sheets_row: number | null;
   status_events?: StatusEvent[];

@@ -39,6 +39,7 @@ export type AppliedJobRow = {
   job_url: string | null;
   status: string | null;
   applied_at: Date;
+  created_at: Date;
   resume_id: string | null;
   sheets_row: number | null;
 };
@@ -425,8 +426,18 @@ export async function createAppliedJob(fields: {
   return rows[0];
 }
 
+/**
+ * Newest application first. applied_at alone isn't enough: it's a user-picked date, so
+ * everything logged on one day ties and Postgres is free to return ties in any order.
+ * created_at breaks the tie by when the row was actually logged; sheets_row (assigned in
+ * Google Sheets append order) catches rows predating created_at, whose backfilled value
+ * equals applied_at and therefore still ties.
+ */
 export async function listAppliedJobs(): Promise<AppliedJobRow[]> {
-  const { rows } = await pool.query("SELECT * FROM applied_jobs ORDER BY applied_at DESC");
+  const { rows } = await pool.query(
+    `SELECT * FROM applied_jobs
+     ORDER BY applied_at DESC, created_at DESC, sheets_row DESC NULLS LAST`
+  );
   return rows;
 }
 

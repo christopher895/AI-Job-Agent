@@ -116,6 +116,29 @@ export async function initSchema() {
     ALTER TABLE applied_jobs ALTER COLUMN status DROP DEFAULT;
   `);
 
+  // Rows logged before applied.ts stamped a real time-of-day landed on exact UTC
+  // midnight, because `new Date("2026-08-16")` (a bare date-input value) parses as UTC.
+  // That reads as the *previous* day anywhere west of UTC. Nudge those to midday so they
+  // show the day they were meant to; NOW()-stamped rows have sub-second precision and
+  // never hit 00:00:00, so this only touches rows the bug created.
+  await pool.query(`
+    UPDATE applied_jobs
+       SET applied_at = applied_at + INTERVAL '12 hours'
+     WHERE applied_at = date_trunc('day', applied_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';
+  `);
+
+  // When the row was logged, as distinct from applied_at (the calendar date the user
+  // picked). Two applications logged on the same day are a tie on applied_at alone, so
+  // without this the log's "newest first" order is whatever Postgres happens to return.
+  // Backfilled to applied_at for pre-existing rows — their real insert time is lost, so
+  // they fall through to the sheets_row tiebreaker in listAppliedJobs().
+  await pool.query(`
+    ALTER TABLE applied_jobs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ;
+    UPDATE applied_jobs SET created_at = applied_at WHERE created_at IS NULL;
+    ALTER TABLE applied_jobs ALTER COLUMN created_at SET DEFAULT NOW();
+    ALTER TABLE applied_jobs ALTER COLUMN created_at SET NOT NULL;
+  `);
+
   // Tracks the error from the most recent PDF render attempt, if any, so a failed
   // re-render after an edit doesn't silently leave a stale PDF with no indication.
   await pool.query(`

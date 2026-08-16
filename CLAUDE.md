@@ -233,7 +233,9 @@ applied_jobs (
   location      text,
   job_url       text,
   status        text,           -- 'applied' | 'interviewing' | 'rejected' | 'offer' | 'assessment' | 'no_response'
-  applied_at    timestamptz,
+  applied_at    timestamptz,    -- the moment applied to, not just the day: the client sends a full
+                                -- timestamp so same-day entries can be ordered newest-first
+  created_at    timestamptz,    -- when the row was logged; tiebreaker for same-day applied_at
   resume_id     uuid references tailored_resumes(id),
   sheets_row    int             -- row number in Google Sheet for updates
 )
