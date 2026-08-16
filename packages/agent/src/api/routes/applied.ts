@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { createAppliedJob, listAppliedJobs, updateAppliedJob, createStatusEvent, listStatusEventsByApplication } from "../../db/queries";
+import { DUPLICATE_APPLIED_JOB_ERROR } from "../../applied/duplicate";
+import { createAppliedJob, findDuplicateAppliedJob, listAppliedJobs, updateAppliedJob, createStatusEvent, listStatusEventsByApplication } from "../../db/queries";
 import { appendRow, syncStatusToSheet } from "../../integrations/sheets";
 
 const router = Router();
@@ -18,6 +19,20 @@ router.post("/", async (req, res) => {
 
   if (!company || !jobTitle) {
     res.status(400).json({ error: "company and jobTitle are required" });
+    return;
+  }
+
+  const duplicate = await findDuplicateAppliedJob({
+    company,
+    jobTitle,
+    jobUrl,
+    resumeId,
+  });
+  if (duplicate) {
+    res.status(409).json({
+      error: DUPLICATE_APPLIED_JOB_ERROR,
+      existingId: duplicate.id,
+    });
     return;
   }
 

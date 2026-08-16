@@ -20,7 +20,7 @@ export default function TailorForm({
   const [fetchStatus, setFetchStatus] = useState<"idle" | "fetching" | "done" | "failed">("idle");
   const [generating, setGenerating] = useState(false);
   const [logging, setLogging] = useState(false);
-  const [logStatus, setLogStatus] = useState<"idle" | "done">("idle");
+  const [logStatus, setLogStatus] = useState<"idle" | "done" | "duplicate">("idle");
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -63,7 +63,11 @@ export default function TailorForm({
       setLogStatus("done");
       setTimeout(() => setLogStatus("idle"), 3000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't add to the log. Try again.");
+      const message = e instanceof Error ? e.message : "Couldn't add to the log. Try again.";
+      setError(message);
+      if (message === "This job is already in your applied log.") {
+        setLogStatus("duplicate");
+      }
     } finally {
       setLogging(false);
     }
@@ -137,6 +141,7 @@ export default function TailorForm({
               onChange={(e) => {
                 setJobUrl(e.target.value);
                 if (fetchStatus !== "idle") setFetchStatus("idle");
+                if (logStatus === "duplicate") setLogStatus("idle");
               }}
               onKeyDown={(e) => e.key === "Enter" && handleFetchJd()}
               placeholder="https://boards.greenhouse.io/vercel/jobs/1234567"
@@ -171,7 +176,10 @@ export default function TailorForm({
           <input
             type="text"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (logStatus === "duplicate") setLogStatus("idle");
+            }}
             placeholder="Frontend Engineer"
             className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm text-paper-ink placeholder:text-paper-muted focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
           />
@@ -183,7 +191,10 @@ export default function TailorForm({
           <input
             type="text"
             value={company}
-            onChange={(e) => setCompany(e.target.value)}
+            onChange={(e) => {
+              setCompany(e.target.value);
+              if (logStatus === "duplicate") setLogStatus("idle");
+            }}
             placeholder="Vercel"
             className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm text-paper-ink placeholder:text-paper-muted focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
           />
@@ -223,11 +234,11 @@ export default function TailorForm({
           {/* Add to Log — logs the application to Google Sheets without generating a resume */}
           <button
             onClick={handleAddToLog}
-            disabled={logging || logStatus === "done"}
+            disabled={logging || logStatus === "done" || logStatus === "duplicate"}
             title="Log this application to Google Sheets without generating a resume"
             className="flex-1 border border-paper-border hover:bg-black/5 text-paper-ink font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white"
           >
-            {logging ? "Adding…" : logStatus === "done" ? "Added to log ✓" : "Add to Log"}
+            {logging ? "Adding…" : logStatus === "done" ? "Added to log ✓" : logStatus === "duplicate" ? "Already in log" : "Add to Log"}
           </button>
 
           {/* Generate button */}

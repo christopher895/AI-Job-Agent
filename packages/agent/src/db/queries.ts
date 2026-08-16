@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { pool } from "./pool";
 import { ApplicationAnswersState, MasterResume, MasterResumeSchema, Suggestion } from "../ai/types";
+import { findDuplicateInList, type AppliedJobIdentity } from "../applied/duplicate";
 import { Preferences, FILTERS } from "../config";
 
 export type TailoredResumeRow = {
@@ -377,6 +378,13 @@ export async function deleteTailoredResume(id: string): Promise<boolean> {
 }
 
 // ── Applied jobs ───────────────────────────────────────────────────────────────
+
+export async function findDuplicateAppliedJob(
+  fields: AppliedJobIdentity
+): Promise<AppliedJobRow | null> {
+  const rows = await listAppliedJobs();
+  return findDuplicateInList(rows, fields) ?? null;
+}
 
 export async function createAppliedJob(fields: {
   company: string;
