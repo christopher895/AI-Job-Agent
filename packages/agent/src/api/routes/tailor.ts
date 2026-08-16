@@ -20,13 +20,20 @@ import { runAnswersPipeline } from "../../ai/answers-pipeline";
 const router = Router();
 
 router.post("/", async (req, res) => {
-  const { jdText, jobUrl, jobTitle, company, location } = req.body as {
+  const { jdText, jobUrl, jobTitle, company, location, questions } = req.body as {
     jdText?: string;
     jobUrl?: string;
     jobTitle?: string;
     company?: string;
     location?: string;
+    questions?: string;
   };
+
+  const pastedQuestions = typeof questions === "string" ? questions.trim() : "";
+  if (pastedQuestions.length > MAX_PASTE_CHARS) {
+    res.status(400).json({ error: `Pasted questions are too long (max ${MAX_PASTE_CHARS} characters).` });
+    return;
+  }
 
   let jd = jdText?.trim() ?? "";
   let resolvedTitle = jobTitle;
@@ -81,6 +88,16 @@ router.post("/", async (req, res) => {
   runSuggestPipeline(row.id, jd).catch((err) => {
     console.error("[tailor] background pipeline crashed:", err);
   });
+
+  // Answers use a separate run key (`answers:${id}`), so they can draft in
+  // parallel with suggestKeywords and never flip resume status to pending.
+  if (pastedQuestions) {
+    beginGeneratingAnswers(row.id, pastedQuestions)
+      .then(() => runAnswersPipeline(row.id, pastedQuestions, row))
+      .catch((err) => {
+        console.error("[tailor] answers pipeline crashed:", err);
+      });
+  }
 });
 
 export async function runSuggestPipeline(id: string, jd: string) {

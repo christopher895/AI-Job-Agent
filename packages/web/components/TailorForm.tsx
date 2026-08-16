@@ -151,6 +151,7 @@ export default function TailorForm({
         jobTitle: title.trim() || undefined,
         company: company.trim() || undefined,
         location: location.trim() || undefined,
+        questions: questions.trim() || undefined,
       });
       router.push(`/resume/${result.id}`);
     } catch (e) {
@@ -275,8 +276,8 @@ export default function TailorForm({
         <div>
           <label className="block text-sm font-medium text-paper-ink mb-1.5">Application questions</label>
           <p className="text-xs text-paper-muted mb-1.5">
-            Optional. Paste the form questions if you want drafts without tailoring a resume. Uses the
-            job description above and your master resume.
+            Optional. Generate answers only, or leave them here and click Generate Tailored Resume
+            to do both. Drafts use the job description above and your master resume.
           </p>
           <textarea
             value={questions}
