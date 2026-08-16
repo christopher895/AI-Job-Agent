@@ -10,7 +10,7 @@
     "test": "npm run test:resume-stage && npm run test:auth-allowlist && npm run test:applied-at",
     "test:resume-stage": "tsx lib/test-resume-stage.ts",
     "test:auth-allowlist": "tsx lib/test-auth-allowlist.ts",
-    "test:applied-at": "tsx lib/test-applied-at.ts"
+    "test:applied-at": "TZ=America/New_York tsx lib/test-applied-at.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

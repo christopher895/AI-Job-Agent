@@ -1,16 +1,32 @@
-import { appliedAtTimestamp } from "./appliedAt";
-
-function dateInputValue(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
+import { appliedAtTimestamp, todayDateInputValue } from "./appliedAt";
 
 function main() {
-  const today = dateInputValue(new Date());
+  // These cases only mean anything west of UTC, where a late-evening local time has
+  // already rolled over into tomorrow's UTC date. Run under TZ=America/New_York.
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const eveningEt = new Date("2026-08-16T01:30:00Z"); // 9:30pm ET on Aug 15
+  const morningEt = new Date("2026-08-15T14:00:00Z"); // 10:00am ET on Aug 15
+  const today = todayDateInputValue();
 
   const results: Record<string, boolean> = {
-    // The bug this exists to prevent: a bare date-input value parses as UTC midnight, so
-    // everything logged on one day is an exact tie and the log can't sort newest-first.
+    runningInEasternTime: tz === "America/New_York",
+
+    // The regression: toISOString() would say "2026-08-16" here — tomorrow — which
+    // defaults the picker to the wrong day and dates the row into the future.
+    eveningUsesLocalDayNotUtcDay: todayDateInputValue(eveningEt) === "2026-08-15",
+    utcDateWouldHaveBeenWrong: eveningEt.toISOString().split("T")[0] === "2026-08-16",
+    morningUsesLocalDay: todayDateInputValue(morningEt) === "2026-08-15",
+
+    // An evening application logged against the picker's default is stamped at that
+    // moment, so it stays on the local day it belongs to rather than jumping ahead.
+    eveningRoundTripsToItsLocalDay: (() => {
+      const stamped = appliedAtTimestamp(todayDateInputValue(eveningEt), eveningEt);
+      const local = new Date(stamped);
+      return local.getFullYear() === 2026 && local.getMonth() === 7 && local.getDate() === 15;
+    })(),
+
+    // The bug this whole change exists to prevent: a bare date-input value parses as UTC
+    // midnight, so everything logged on one day ties and the log can't sort newest-first.
     todayIsNotUtcMidnight: !appliedAtTimestamp(today).endsWith("T00:00:00.000Z"),
 
     todayIsDistinctPerCall: (() => {

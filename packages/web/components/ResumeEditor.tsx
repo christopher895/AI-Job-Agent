@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, Resume } from "../lib/api";
 import { STAGE_SEGMENTS, segmentIndex, estimateStageProgress } from "../lib/resumeStage";
-import { appliedAtTimestamp } from "../lib/appliedAt";
+import { appliedAtTimestamp, todayDateInputValue } from "../lib/appliedAt";
 import SuggestionChecklist from "./SuggestionChecklist";
 import ApplicationAnswers from "./ApplicationAnswers";
 
@@ -127,7 +127,7 @@ export default function ResumeEditor({
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [applyForm, setApplyForm] = useState<ApplyForm>({
     status: "applied",
-    appliedAt: new Date().toISOString().split("T")[0],
+    appliedAt: todayDateInputValue(),
   });
   const [applyStatus, setApplyStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [applyError, setApplyError] = useState<string | null>(null);
