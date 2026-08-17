@@ -13,11 +13,11 @@ import { hashIp, logPlaygroundUsage, countRecentPlaygroundUsage } from "../../db
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
-const RATE_LIMIT_PER_HOUR = 5;
+const RATE_LIMIT_PER_HOUR = 10;
 
 function clientIp(req: import("express").Request): string {
   // Railway terminates TLS at the edge and forwards the real client IP via
-  // X-Forwarded-For; req.ip alone would be Railway's internal proxy address.
+  // X-Forwarded-For; the web playground proxy copies that header through.
   const forwarded = req.headers["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded.trim()) {
     return forwarded.split(",")[0].trim();
@@ -27,6 +27,23 @@ function clientIp(req: import("express").Request): string {
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Returns false after sending 429. Does not record a hit — call recordPlaygroundHit after the request is valid. */
+async function checkPlaygroundRateLimit(
+  req: import("express").Request,
+  res: import("express").Response
+): Promise<boolean> {
+  const recentCount = await countRecentPlaygroundUsage(hashIp(clientIp(req)));
+  if (recentCount >= RATE_LIMIT_PER_HOUR) {
+    res.status(429).json({ error: "Playground rate limit reached — try again in a bit." });
+    return false;
+  }
+  return true;
+}
+
+async function recordPlaygroundHit(req: import("express").Request): Promise<void> {
+  await logPlaygroundUsage(hashIp(clientIp(req)));
 }
 
 function requireApiKey(req: import("express").Request, res: import("express").Response): string | null {
@@ -40,12 +57,7 @@ function requireApiKey(req: import("express").Request, res: import("express").Re
 
 // POST /api/playground/parse-resume — multipart (file) or JSON (text). Rate-limited entry point.
 router.post("/parse-resume", upload.single("file"), async (req, res) => {
-  const ipHash = hashIp(clientIp(req));
-  const recentCount = await countRecentPlaygroundUsage(ipHash);
-  if (recentCount >= RATE_LIMIT_PER_HOUR) {
-    res.status(429).json({ error: "Playground rate limit reached — try again in a bit." });
-    return;
-  }
+  if (!(await checkPlaygroundRateLimit(req, res))) return;
 
   const apiKey = requireApiKey(req, res);
   if (!apiKey) return;
@@ -80,7 +92,7 @@ router.post("/parse-resume", upload.single("file"), async (req, res) => {
     rawText = rawText.slice(0, MAX_IMPORT_TEXT_CHARS);
   }
 
-  await logPlaygroundUsage(ipHash);
+  await recordPlaygroundHit(req);
 
   try {
     const master = await importMasterResume(rawText, apiKey);
@@ -93,11 +105,13 @@ router.post("/parse-resume", upload.single("file"), async (req, res) => {
 
 // POST /api/playground/fetch-jd — no key needed, no LLM call, reuses the existing scraper.
 router.post("/fetch-jd", async (req, res) => {
+  if (!(await checkPlaygroundRateLimit(req, res))) return;
   const { url } = req.body as { url?: string };
   if (!url) {
     res.status(400).json({ error: "url is required" });
     return;
   }
+  await recordPlaygroundHit(req);
   let result;
   try {
     result = await fetchJd(url);
@@ -126,12 +140,14 @@ const SuggestBodySchema = z.object({
 
 // POST /api/playground/suggest
 router.post("/suggest", async (req, res) => {
+  if (!(await checkPlaygroundRateLimit(req, res))) return;
   const parsed = SuggestBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body", details: parsed.error.flatten() });
     return;
   }
   const { masterResume, jd, apiKey } = parsed.data;
+  await recordPlaygroundHit(req);
 
   try {
     const raw = await suggestKeywords(jd, masterResume, apiKey);
@@ -155,12 +171,14 @@ const ApplyBodySchema = z.object({
 
 // POST /api/playground/apply
 router.post("/apply", async (req, res) => {
+  if (!(await checkPlaygroundRateLimit(req, res))) return;
   const parsed = ApplyBodySchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request body", details: parsed.error.flatten() });
     return;
   }
   const { masterResume, accepted, apiKey } = parsed.data;
+  await recordPlaygroundHit(req);
 
   try {
     const relabeledAccepted = accepted.map((s) => ({

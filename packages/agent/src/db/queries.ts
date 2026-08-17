@@ -458,7 +458,10 @@ export async function updateAppliedJob(
   return rows[0] ?? null;
 }
 
-const PLAYGROUND_IP_PEPPER = process.env.PLAYGROUND_IP_PEPPER ?? "dev-only-pepper-set-a-real-one-in-prod";
+const PLAYGROUND_IP_PEPPER =
+  process.env.PLAYGROUND_IP_PEPPER ||
+  process.env.INTERNAL_API_SECRET ||
+  "dev-only-pepper-set-a-real-one-in-prod";
 
 /** Hashes an IP with a server-only pepper so raw IPs never sit in the DB. */
 export function hashIp(ip: string): string {

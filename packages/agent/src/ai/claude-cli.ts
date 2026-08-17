@@ -40,6 +40,10 @@ export function buildClaudeCliArgs(schema: z.ZodTypeAny, opts: { system: string;
     "json",
     "--json-schema",
     JSON.stringify(jsonSchema),
+    // JD text is untrusted (pasted or fetched). Disable every built-in tool so
+    // prompt injection cannot Read/Bash the Railway container's env or disk.
+    "--tools",
+    "",
   ];
   if (opts.model) args.push("--model", opts.model);
   return args;

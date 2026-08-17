@@ -4,7 +4,7 @@ import {
   listAppliedJobs, getAppliedJob, updateAppliedJob, createStatusEvent, enqueueReview,
 } from "../db/queries";
 import { matchApplication, MatchCandidate } from "./match";
-import { isCandidateEmail } from "./prefilter";
+import { isCandidateEmail, isAllowlistedSender } from "./prefilter";
 import { canAdvance } from "./status-order";
 import { classifyEmail } from "../ai/classify-email";
 import { getGmailClient, fetchNewMessages } from "../integrations/gmail";
@@ -13,6 +13,7 @@ import { syncStatusToSheet } from "../integrations/sheets";
 import { EmailMessage, ClassifiedEmail } from "./types";
 
 export const NOTIFY_STATUSES = new Set(["assessment", "interviewing", "offer"]);
+const TERMINAL_STATUSES = new Set(["rejected", "no_response"]);
 
 export function gmailLink(messageId: string): string {
   return `https://mail.google.com/mail/u/0/#all/${messageId}`;
@@ -107,7 +108,22 @@ export async function runEmailIngest(
       const match = matchApplication(candidates, { company: classified.company, role: classified.role });
 
       const app = match ? await getAppliedJob(match.applicationId) : null;
-      if (app) {
+      if (app && TERMINAL_STATUSES.has(classified.status) && !isAllowlistedSender(email.fromDomain)) {
+        // A random inbox message that mentions "unfortunately" must not mark an
+        // application rejected. ATS/recruiting senders on the allowlist still auto-apply.
+        await enqueueReview({
+          emailMessageId: email.id,
+          emailFrom: email.from,
+          emailSubject: email.subject,
+          emailSnippet: email.snippet,
+          emailLink: gmailLink(email.id),
+          detectedStatus: classified.status,
+          detectedDeadlineAt: classified.deadlineAt ? new Date(classified.deadlineAt) : null,
+          suggestedApplicationId: app.id,
+          matchScore: match?.score ?? null,
+        });
+        queued++;
+      } else if (app) {
         await applyStatusEvent(app, classified, email, deps);
         applied++;
       } else {

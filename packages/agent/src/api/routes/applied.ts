@@ -5,6 +5,22 @@ import { appendRow, syncStatusToSheet } from "../../integrations/sheets";
 
 const router = Router();
 
+/** Matches applied_jobs_status_check in schema.ts. */
+const APPLIED_JOB_STATUSES = new Set([
+  "applied",
+  "interviewing",
+  "rejected",
+  "offer",
+  "assessment",
+  "no_response",
+]);
+
+function isAllowedStatus(value: unknown, allowEmpty: boolean): boolean {
+  if (value === undefined) return true;
+  if (allowEmpty && (value === null || value === "")) return true;
+  return typeof value === "string" && APPLIED_JOB_STATUSES.has(value);
+}
+
 /**
  * Parses the client's appliedAt into an instant.
  *
@@ -34,6 +50,10 @@ router.post("/", async (req, res) => {
 
   if (!company || !jobTitle) {
     res.status(400).json({ error: "company and jobTitle are required" });
+    return;
+  }
+  if (!isAllowedStatus(status, false)) {
+    res.status(400).json({ error: "invalid status" });
     return;
   }
 
@@ -94,6 +114,10 @@ router.get("/", async (_req, res) => {
 // PATCH /api/applied/:id
 router.patch("/:id", async (req, res) => {
   const { status, sheetsRow } = req.body as { status?: string; sheetsRow?: number };
+  if (!isAllowedStatus(status, true)) {
+    res.status(400).json({ error: "invalid status" });
+    return;
+  }
   const row = await updateAppliedJob(req.params.id, { status, sheetsRow });
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);
