@@ -23,6 +23,11 @@ function check(label: string, ok: boolean, detail?: string) {
     args.includes("--output-format") && args[args.indexOf("--output-format") + 1] === "json"
   );
   check("args-json-schema-present", args.includes("--json-schema"));
+  check(
+    "args-tools-disabled",
+    args.includes("--tools") && args[args.indexOf("--tools") + 1] === "",
+    "untrusted JD text must not have Claude Code tools"
+  );
   check("args-no-model-flag-when-unset", !args.includes("--model"), "should omit --model when opts.model is undefined");
 }
 {

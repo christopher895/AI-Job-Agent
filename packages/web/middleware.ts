@@ -15,7 +15,8 @@ export default auth((req) => {
 
   if (isLoggedIn) {
     // Already signed in — don't show the login page (e.g. after hitting back post-sign-in).
-    if (isPublicPage) {
+    // /playground stays reachable while signed in; it's a public demo, not an auth page.
+    if (pathname === "/login") {
       return NextResponse.redirect(new URL("/", req.nextUrl));
     }
     return;

@@ -3,6 +3,7 @@ import type { CheerioAPI } from "cheerio";
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
 import { closeBrowserSafely } from "./browser-utils";
+import { assertSafeUrl, fetchFollowingSafeRedirects } from "./ssrf";
 
 export type FetchJdResult = {
   text: string;
@@ -14,33 +15,6 @@ export type FetchJdResult = {
 
 const MIN_LENGTH = 200;
 const TIMEOUT_MS = 15_000;
-
-// Blocks SSRF: private IPs, localhost, cloud metadata endpoints
-function validateUrl(url: string): void {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error("Invalid URL");
-  }
-  if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("URL must use http or https");
-  }
-  const host = parsed.hostname.toLowerCase();
-  if (
-    host === "localhost" ||
-    host === "::1" ||
-    /^127\./.test(host) ||
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
-    /^169\.254\./.test(host) ||
-    host.endsWith(".local") ||
-    host.endsWith(".internal")
-  ) {
-    throw new Error("URL targets a private or internal address");
-  }
-}
 
 const CONTAINER_SELECTORS = [
   '[class*="job-description"]',
@@ -520,7 +494,7 @@ export function extractFromHtml(html: string, url: string): ExtractResult {
 }
 
 async function tryCheerio(url: string): Promise<ExtractResult> {
-  const res = await fetch(url, {
+  const res = await fetchFollowingSafeRedirects(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; JobAgent/1.0)" },
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
@@ -540,6 +514,19 @@ async function tryPlaywright(url: string): Promise<ExtractResult> {
   const browser = await chromium.launch({ args: ["--disable-dev-shm-usage"] });
   try {
     const page = await browser.newPage();
+    await page.route("**/*", async (route) => {
+      const target = route.request().url();
+      if (/^(about|data|blob):/i.test(target)) {
+        await route.continue();
+        return;
+      }
+      try {
+        await assertSafeUrl(target);
+        await route.continue();
+      } catch {
+        await route.abort("blockedbyclient");
+      }
+    });
     await page.goto(url, { waitUntil: "networkidle", timeout: TIMEOUT_MS });
     const html = await page.content();
     return extractFromHtml(html, url);
@@ -549,15 +536,16 @@ async function tryPlaywright(url: string): Promise<ExtractResult> {
 }
 
 export async function fetchJd(url: string): Promise<FetchJdResult> {
-  validateUrl(url); // throws on invalid scheme or private IP
+  await assertSafeUrl(url);
 
   try {
     const r = await tryCheerio(url);
     if (r.text.length >= MIN_LENGTH) {
       return { text: r.text, method: "cheerio", title: r.title, company: r.company, location: r.location };
     }
-  } catch {
-    // fall through to Playwright
+  } catch (err) {
+    if (err instanceof Error && /private or internal|Too many redirects|must use http|Could not resolve/.test(err.message)) throw err;
+    // other fetch failures fall through to Playwright
   }
 
   try {

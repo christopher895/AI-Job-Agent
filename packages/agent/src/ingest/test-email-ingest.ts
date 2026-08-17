@@ -111,6 +111,51 @@ async function main() {
   );
   check("terminal-application email queued, not applied", terminalResult.applied === 0 && terminalResult.queued === 1);
 
+  // A keyword-matching email from a random mailbox must not auto-reject a live application.
+  const phishCompany = `Phish Co ${run}`;
+  const phishRole = `Phish Role ${run}`;
+  const phishApp = await createAppliedJob({ company: phishCompany, jobTitle: phishRole, status: "applied" });
+  const phishId = `e-phish-${run}`;
+  const phishResult = await runEmailIngest({
+    fetch: async () => ({
+      messages: [mk({
+        id: phishId,
+        from: "x <x@gmail.com>",
+        fromDomain: "gmail.com",
+        subject: "unfortunately",
+        body: `unfortunately your application for ${phishRole} at ${phishCompany}`,
+      })],
+      newHistoryId: `cursor-phish-${run}`,
+    }),
+    classify: async () => ({ isJobRelated: true, status: "rejected", company: phishCompany, role: phishRole, deadlineAt: null }),
+    notify: async () => { notified++; },
+  });
+  const phishAfter = await getAppliedJob(phishApp.id);
+  check("spoofed rejection left status as applied", phishAfter?.status === "applied");
+  check("spoofed rejection went to review, not applied", phishResult.applied === 0 && phishResult.queued === 1);
+  check("spoofed rejection sent no notification", notified === 1);
+
+  const atsCompany = `ATS Co ${run}`;
+  const atsRole = `ATS Role ${run}`;
+  const atsApp = await createAppliedJob({ company: atsCompany, jobTitle: atsRole, status: "applied" });
+  const atsId = `e-ats-reject-${run}`;
+  const atsResult = await runEmailIngest({
+    fetch: async () => ({
+      messages: [mk({
+        id: atsId,
+        fromDomain: "greenhouse.io",
+        subject: "your candidacy",
+        body: `unfortunately ${atsCompany} ${atsRole}`,
+      })],
+      newHistoryId: `cursor-ats-${run}`,
+    }),
+    classify: async () => ({ isJobRelated: true, status: "rejected", company: atsCompany, role: atsRole, deadlineAt: null }),
+    notify: async () => { notified++; },
+  });
+  const atsAfter = await getAppliedJob(atsApp.id);
+  check("allowlisted ATS rejection auto-applied", atsAfter?.status === "rejected");
+  check("allowlisted ATS rejection counted as applied, not queued", atsResult.applied === 1 && atsResult.queued === 0);
+
   await pool.end();
   console.log(pass ? "\n✓ email-ingest test PASSED" : "\n✗ email-ingest test FAILED");
   process.exit(pass ? 0 : 1);

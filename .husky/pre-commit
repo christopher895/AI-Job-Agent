@@ -13,7 +13,7 @@ fi
 
 # Block OpenAI and Resend keys in staged content (skip lockfiles)
 STAGED_DIFF=$(git diff --cached -- ':!package-lock.json' ':!node_modules' 2>/dev/null || true)
-SECRETS=$(echo "$STAGED_DIFF" | grep -E "(sk-[a-zA-Z0-9]{20,}|re_[a-zA-Z0-9]{20,})" || true)
+SECRETS=$(echo "$STAGED_DIFF" | grep -E "(sk-[a-zA-Z0-9_-]{20,}|re_[a-zA-Z0-9]{20,})" || true)
 if [ -n "$SECRETS" ]; then
   echo ""
   echo "ERROR: Staged files appear to contain API keys or secrets."

@@ -76,7 +76,7 @@ export async function appendRow(data: SheetRowData): Promise<number | null> {
   const res = await client.sheets.spreadsheets.values.append({
     spreadsheetId: client.sheetId,
     range: `${sheetName}!${COLUMNS}`,
-    valueInputOption: "USER_ENTERED",
+    valueInputOption: "RAW",
     requestBody: { values: [toRow(data)] },
   });
 
@@ -97,7 +97,7 @@ export async function syncStatusToSheet(sheetsRow: number, status: string): Prom
   await client.sheets.spreadsheets.values.update({
     spreadsheetId: client.sheetId,
     range: `${sheetName}!F${sheetsRow}`,
-    valueInputOption: "USER_ENTERED",
+    valueInputOption: "RAW",
     requestBody: { values: [[status]] },
   });
 }

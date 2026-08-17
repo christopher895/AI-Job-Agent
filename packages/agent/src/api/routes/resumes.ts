@@ -30,6 +30,7 @@ import { runAnswersPipeline } from "../../ai/answers-pipeline";
 import { ApplicationAnswerSchema, Suggestion, SuggestionSchema } from "../../ai/types";
 import { LLM_PROVIDER } from "../../ai/llm";
 import { buildResumeFilename } from "../../utils/filename";
+import { escapeHtml } from "../../notifications/email";
 import { z } from "zod";
 
 function errorMessage(err: unknown): string {
@@ -434,7 +435,7 @@ router.post("/resume/:id/email", async (req, res) => {
     from,
     to: toEmail,
     subject,
-    html: `<p>Tailored resume for <strong>${row.job_title ?? "this role"}</strong> at <strong>${row.company ?? "this company"}</strong>.</p>`,
+    html: `<p>Tailored resume for <strong>${escapeHtml(row.job_title ?? "this role")}</strong> at <strong>${escapeHtml(row.company ?? "this company")}</strong>.</p>`,
     attachments: [{ filename, content: pdf }],
   });
 

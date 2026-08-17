@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { forwardedClientIp, playgroundAgentPath } from "@/lib/proxy-path";
 
 const AGENT_API_URL = process.env.AGENT_API_URL ?? "http://localhost:3001/api";
 
@@ -7,7 +8,11 @@ async function handle(
   { params }: { params: Promise<{ path: string[] }> }
 ): Promise<Response> {
   const { path } = await params;
-  const targetUrl = `${AGENT_API_URL}/playground/${path.join("/")}${req.nextUrl.search}`;
+  const safePath = playgroundAgentPath(path);
+  if (!safePath) {
+    return Response.json({ error: "not found" }, { status: 404 });
+  }
+  const targetUrl = `${AGENT_API_URL}/playground/${safePath}${req.nextUrl.search}`;
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   const body = hasBody ? await req.arrayBuffer() : undefined;
@@ -17,6 +22,8 @@ async function handle(
   };
   const contentType = req.headers.get("content-type");
   if (contentType) headers["Content-Type"] = contentType;
+  const clientIp = forwardedClientIp(req);
+  if (clientIp) headers["X-Forwarded-For"] = clientIp;
 
   let agentRes: Response;
   try {
