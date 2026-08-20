@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { completeJSON } from "./llm";
+import { normalizeSkillCategories } from "./apply-suggestions";
 import { MasterResume, RawSuggestion, RawSuggestionSchema } from "./types";
 
 const SYSTEM_PROMPT = `You analyze a job description against a candidate's résumé and suggest a
@@ -68,21 +69,23 @@ Return ONLY the JSON object.`;
 const ResponseSchema = z.object({ suggestions: z.array(RawSuggestionSchema) });
 
 function tailorableSlice(master: MasterResume) {
+  const normalized: MasterResume = JSON.parse(JSON.stringify(master));
+  normalizeSkillCategories(normalized);
   return {
-    experience: master.experience.map((e) => ({
+    experience: normalized.experience.map((e) => ({
       id: e.id,
       company: e.company,
       bullets: e.bullets.map((b) => ({ id: b.id, text: b.text, tech: b.tech })),
     })),
-    projects: master.projects.map((p) => ({
+    projects: normalized.projects.map((p) => ({
       id: p.id,
       name: p.name,
       bullets: p.bullets.map((b) => ({ id: b.id, text: b.text, tech: b.tech })),
     })),
     skills: {
-      languages: master.skills.languages,
-      frameworks: master.skills.frameworks,
-      tools: master.skills.tools,
+      languages: normalized.skills.languages,
+      frameworks: normalized.skills.frameworks,
+      tools: normalized.skills.tools,
     },
   };
 }
