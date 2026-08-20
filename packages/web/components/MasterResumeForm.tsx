@@ -40,6 +40,27 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
+/** Keep "AWS (EKS, Lambda, Bedrock)" as one skill instead of splitting on inner commas. */
+function splitCsvRespectingParens(csv: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let depth = 0;
+  for (const ch of csv) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "," && depth === 0) {
+      const t = cur.trim();
+      if (t) out.push(t);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  const t = cur.trim();
+  if (t) out.push(t);
+  return out;
+}
+
 /** A textarea that grows to fit its content instead of scrolling internally — bullet text should always be fully visible. */
 function AutoGrowTextarea({
   value,
@@ -590,7 +611,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       ...prev,
       skills: {
         ...prev.skills,
-        [field]: csv.split(",").map((s) => s.trim()).filter(Boolean),
+        [field]: splitCsvRespectingParens(csv),
       },
     }));
   }

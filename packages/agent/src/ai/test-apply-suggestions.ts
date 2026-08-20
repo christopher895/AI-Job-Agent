@@ -1,5 +1,10 @@
 import { MASTER_RESUME } from "./master-resume";
-import { labelGroundedness, applySuggestions, placeSkill } from "./apply-suggestions";
+import {
+  labelGroundedness,
+  applySuggestions,
+  placeSkill,
+  coalesceParentheticalGroups,
+} from "./apply-suggestions";
 import { MasterResume, RawSuggestion, Suggestion } from "./types";
 
 // exp-scout-1's real text: "Launched an AI security assistant with Copilot Studio
@@ -159,6 +164,48 @@ const orphanFolded =
   !foldedOrphan.skills.tools.includes("CloudWatch");
 console.log("trailing CloudWatch folded into AWS on apply:", orphanFolded);
 
+const splitFragments = ["AWS (EKS", "Lambda", "Bedrock)", "Docker", "Kubernetes", "Terraform", "PostgreSQL", "Git", "Argo CD", "Kargo", "n8n"];
+const coalesced = coalesceParentheticalGroups(splitFragments);
+const fragmentsRejoined =
+  coalesced[0] === "AWS (EKS, Lambda, Bedrock)" && coalesced[1] === "Docker" && coalesced.length === 9;
+console.log("comma-split AWS fragments rejoined:", fragmentsRejoined);
+
+const splitMaster = withAwsGroup();
+splitMaster.skills.tools = [...splitFragments];
+const { master: mergedSplit } = applySuggestions(splitMaster, [
+  {
+    id: "sugg-8",
+    kind: "skill-addition",
+    targetId: "tools",
+    keyword: "SageMaker",
+    suggestedText: "AWS (EKS, Lambda, Bedrock, SageMaker, Redshift, Athena)",
+    rationale: "JD wants SageMaker/Redshift/Athena — must merge into the existing AWS group, not append a second one.",
+    groundedness: "extrapolated",
+    accepted: true,
+  },
+]);
+const awsGroups = mergedSplit.skills.tools.filter((t) => t.toLowerCase().startsWith("aws"));
+const noDuplicateAwsGroup =
+  awsGroups.length === 1 &&
+  awsGroups[0] === "AWS (EKS, Lambda, Bedrock, SageMaker, Redshift, Athena)" &&
+  mergedSplit.skills.tools.includes("Docker") &&
+  mergedSplit.skills.tools.includes("n8n");
+console.log("split master + full AWS rewrite merges to one group:", noDuplicateAwsGroup);
+
+const alreadyDuplicated = withAwsGroup();
+alreadyDuplicated.skills.tools = [
+  "AWS (EKS, Lambda, Bedrock)",
+  "Docker",
+  "Kubernetes",
+  "n8n",
+  "AWS (EKS, Lambda, Bedrock, SageMaker, Redshift, Athena)",
+];
+const { master: collapsed } = applySuggestions(alreadyDuplicated, []);
+const collapsedDupes =
+  collapsed.skills.tools.filter((t) => t.toLowerCase().startsWith("aws")).length === 1 &&
+  collapsed.skills.tools[0] === "AWS (EKS, Lambda, Bedrock, SageMaker, Redshift, Athena)";
+console.log("two AWS groups collapse on apply:", collapsedDupes);
+
 const pass =
   gRewrite === "grounded" &&
   gFabricated === "extrapolated" &&
@@ -174,7 +221,10 @@ const pass =
   unioned &&
   insertedAfterNeighbor &&
   skippedDuplicate &&
-  orphanFolded;
+  orphanFolded &&
+  fragmentsRejoined &&
+  noDuplicateAwsGroup &&
+  collapsedDupes;
 
 console.log(pass ? "\n✓ apply-suggestions test PASSED" : "\n✗ apply-suggestions test FAILED");
 process.exit(pass ? 0 : 1);

@@ -64,6 +64,65 @@ function formatGroup(family: string, items: string[]): string {
   return `${family} (${items.join(", ")})`;
 }
 
+/**
+ * Rejoin comma-split parenthetical fragments.
+ * The master-resume form used to split on every comma, so
+ * "AWS (EKS, Lambda, Bedrock)" was stored as ["AWS (EKS", "Lambda", "Bedrock)"].
+ * Joining for display hid the split; apply then couldn't find a family host
+ * and appended a second AWS (...) group.
+ */
+export function coalesceParentheticalGroups(items: string[]): string[] {
+  const out: string[] = [];
+  let buf: string[] = [];
+  let depth = 0;
+  for (const item of items) {
+    const open = (item.match(/\(/g) ?? []).length;
+    const close = (item.match(/\)/g) ?? []).length;
+    if (buf.length === 0 && open === close) {
+      out.push(item);
+      continue;
+    }
+    buf.push(item);
+    depth += open - close;
+    if (depth <= 0) {
+      out.push(buf.join(", "));
+      buf = [];
+      depth = 0;
+    }
+  }
+  if (buf.length) out.push(buf.join(", "));
+  return out;
+}
+
+/** Merge every "AWS (...)" (same family name) into the first occurrence. */
+function collapseDuplicateFamilies(category: string[]): void {
+  const firstIdx = new Map<string, number>();
+  for (let i = 0; i < category.length; ) {
+    const g = parseGroup(category[i]);
+    if (!g) {
+      i++;
+      continue;
+    }
+    const key = g.family.toLowerCase();
+    const prev = firstIdx.get(key);
+    if (prev === undefined) {
+      firstIdx.set(key, i);
+      i++;
+      continue;
+    }
+    const host = parseGroup(category[prev])!;
+    category[prev] = formatGroup(host.family, mergeGroupItems(host.items, g.items));
+    category.splice(i, 1);
+  }
+}
+
+export function normalizeSkillCategories(master: MasterResume): void {
+  for (const category of SKILL_CATEGORIES) {
+    master.skills[category] = coalesceParentheticalGroups(master.skills[category]);
+    collapseDuplicateFamilies(master.skills[category]);
+  }
+}
+
 function mergeGroupItems(existing: string[], incoming: string[]): string[] {
   const seen = new Set(existing.map((i) => i.toLowerCase()));
   const merged = [...existing];
@@ -233,6 +292,7 @@ export function applySuggestions(
   accepted: Suggestion[]
 ): { master: MasterResume; tailored: TailoredResume } {
   const adjustedMaster: MasterResume = JSON.parse(JSON.stringify(master));
+  normalizeSkillCategories(adjustedMaster);
 
   for (const s of accepted) {
     if (s.kind !== "skill-addition" || !isSkillCategory(s.targetId)) continue;
@@ -240,6 +300,7 @@ export function applySuggestions(
   }
 
   for (const category of SKILL_CATEGORIES) {
+    collapseDuplicateFamilies(adjustedMaster.skills[category]);
     foldOrphanFamilyMembers(adjustedMaster.skills[category]);
   }
 
