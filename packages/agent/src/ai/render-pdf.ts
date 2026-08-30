@@ -526,8 +526,8 @@ function masterResumeToDoc(mr: MasterResume): ParsedDoc {
   const b = mr.basics;
   const skillLines: string[] = [];
   if (mr.skills.languages.length) skillLines.push(`**Languages:** ${mr.skills.languages.join(", ")}`);
-  if (mr.skills.frameworks.length) skillLines.push(`**Frameworks:** ${mr.skills.frameworks.join(", ")}`);
-  if (mr.skills.tools.length) skillLines.push(`**Tools:** ${mr.skills.tools.join(", ")}`);
+  if (mr.skills.frameworks.length) skillLines.push(`**Frameworks & Libraries:** ${mr.skills.frameworks.join(", ")}`);
+  if (mr.skills.tools.length) skillLines.push(`**Tools & Technologies:** ${mr.skills.tools.join(", ")}`);
   if (mr.skills.interests.length) skillLines.push(`**Interests:** ${mr.skills.interests.join(", ")}`);
 
   return {
@@ -587,8 +587,8 @@ export async function renderMasterResumePdf(mr: MasterResume): Promise<Buffer> {
       const b = mr.basics;
       const skills = [
         mr.skills.languages.length ? `Languages: ${mr.skills.languages.join(", ")}` : "",
-        mr.skills.frameworks.length ? `Frameworks: ${mr.skills.frameworks.join(", ")}` : "",
-        mr.skills.tools.length ? `Tools: ${mr.skills.tools.join(", ")}` : "",
+        mr.skills.frameworks.length ? `Frameworks & Libraries: ${mr.skills.frameworks.join(", ")}` : "",
+        mr.skills.tools.length ? `Tools & Technologies: ${mr.skills.tools.join(", ")}` : "",
         mr.skills.interests.length ? `Interests: ${mr.skills.interests.join(", ")}` : "",
       ].filter(Boolean).map((s) => `- ${s}`);
       const md = [

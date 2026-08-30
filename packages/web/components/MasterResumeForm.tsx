@@ -8,6 +8,15 @@ const SECTIONS = ["Basics", "Experience", "Projects", "Skills", "Education", "Ex
 type Section = (typeof SECTIONS)[number];
 type ViewMode = "edit" | "split" | "preview";
 
+// Display labels for the four skill categories — these are the headings that end
+// up in the rendered resume, so they must match the ones format.ts/render-pdf.ts emit.
+const SKILL_LABELS = {
+  languages: "Languages",
+  frameworks: "Frameworks & Libraries",
+  tools: "Tools & Technologies",
+  interests: "Interests",
+} as const;
+
 function Label({ children }: { children: React.ReactNode }) {
   return <label className="block text-xs font-medium text-paper-muted mb-1">{children}</label>;
 }
@@ -193,8 +202,8 @@ function masterResumeToText(mr: MasterResume): string {
 
   const skillLines: string[] = [];
   if (mr.skills.languages.length) skillLines.push(`Languages: ${mr.skills.languages.join(", ")}`);
-  if (mr.skills.frameworks.length) skillLines.push(`Frameworks: ${mr.skills.frameworks.join(", ")}`);
-  if (mr.skills.tools.length) skillLines.push(`Tools: ${mr.skills.tools.join(", ")}`);
+  if (mr.skills.frameworks.length) skillLines.push(`Frameworks & Libraries: ${mr.skills.frameworks.join(", ")}`);
+  if (mr.skills.tools.length) skillLines.push(`Tools & Technologies: ${mr.skills.tools.join(", ")}`);
   if (mr.skills.interests.length) skillLines.push(`Interests: ${mr.skills.interests.join(", ")}`);
   if (skillLines.length) lines.push("", "SKILLS", ...skillLines);
 
@@ -790,7 +799,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
               <div className="border border-paper-border rounded-xl p-4 bg-paper grid grid-cols-2 gap-4">
                 {(["languages", "frameworks", "tools", "interests"] as const).map((field) => (
                   <div key={field}>
-                    <Label>{field.charAt(0).toUpperCase() + field.slice(1)}</Label>
+                    <Label>{SKILL_LABELS[field]}</Label>
                     <TextInput
                       value={resume.skills[field].join(", ")}
                       onChange={(v) => setSkills(field, v)}
