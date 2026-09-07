@@ -58,6 +58,33 @@ export default function DashboardClient({
     }
   }
 
+  async function handleDuplicate(id: string) {
+    try {
+      const copy = await api.duplicateResume(id);
+      // Prepend rather than refetch so the copy is visible before the next poll.
+      setItems((cur) => [
+        {
+          id: copy.id,
+          job_title: copy.job_title,
+          company: copy.company,
+          location: copy.location,
+          job_url: copy.job_url,
+          pdf_error: copy.pdf_error,
+          status: copy.status,
+          error: copy.error,
+          stage: copy.stage,
+          stage_started_at: copy.stage_started_at,
+          suggestions: copy.suggestions,
+          created_at: copy.created_at,
+          updated_at: copy.updated_at,
+        },
+        ...cur,
+      ]);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to duplicate resume. Please try again.");
+    }
+  }
+
   const filtered = items
     .filter((r) => {
       if (!search) return true;
@@ -153,7 +180,7 @@ export default function DashboardClient({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((r) => (
-              <ResumeCard key={r.id} resume={r} editedAgo={timeAgo(r.updated_at)} onDelete={handleDelete} />
+              <ResumeCard key={r.id} resume={r} editedAgo={timeAgo(r.updated_at)} onDelete={handleDelete} onDuplicate={handleDuplicate} />
             ))}
           </div>
         )}

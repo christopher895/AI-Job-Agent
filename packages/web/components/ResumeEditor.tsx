@@ -126,7 +126,6 @@ export default function ResumeEditor({
   const [meta, setMeta] = useState({
     status: resume.status,
     error: resume.error,
-    critic_score: resume.critic_score,
     location: resume.location,
     job_url: resume.job_url,
     created_at: resume.created_at,
@@ -294,7 +293,6 @@ export default function ResumeEditor({
         setMeta({
           status: fresh.status,
           error: fresh.error,
-          critic_score: fresh.critic_score,
           location: fresh.location,
           job_url: fresh.job_url,
           created_at: fresh.created_at,
@@ -719,17 +717,10 @@ export default function ResumeEditor({
               day: "numeric",
               year: "numeric",
             })}
-            {meta.critic_score != null ? ` • Match Score: ${meta.critic_score}` : ""}
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-          {meta.critic_score != null && (
-            <div className="w-10 h-10 rounded-full border-2 border-green-400 flex items-center justify-center mr-1">
-              <span className="text-sm font-bold text-paper-ink">{meta.critic_score}</span>
-            </div>
-          )}
-
           {/* View mode toggle */}
           <div className="flex items-center border border-paper-border rounded-lg overflow-hidden">
             {(["edit", "split", "preview"] as ViewMode[]).map((mode) => (

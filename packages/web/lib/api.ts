@@ -31,7 +31,6 @@ export type ResumeListItem = {
   company: string | null;
   location: string | null;
   job_url: string | null;
-  critic_score: number | null;
   /** Error from the most recent PDF render attempt; null if the last attempt succeeded. */
   pdf_error: string | null;
   /** 'pending' while the generate->critique->revise pipeline is still running in the background. */
@@ -262,6 +261,8 @@ export const api = {
     ),
   emailResume: (id: string) => request<{ sent: boolean }>("POST", `/resume/${id}/email`),
   deleteResume: (id: string) => request<void>("DELETE", `/resume/${id}`),
+  /** Copies a finished resume — same JD, content and PDF — into a new row. */
+  duplicateResume: (id: string) => request<Resume>("POST", `/resume/${id}/duplicate`),
   fetchJd: (url: string) =>
     request<{ text: string; method: string; title?: string; company?: string; location?: string }>(
       "POST",
