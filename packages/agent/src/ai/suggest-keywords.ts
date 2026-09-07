@@ -68,7 +68,11 @@ Return ONLY the JSON object.`;
 
 const ResponseSchema = z.object({ suggestions: z.array(RawSuggestionSchema) });
 
-function tailorableSlice(master: MasterResume) {
+/**
+ * The parts of the master resume a suggestion may target, keyed by the ids the
+ * model must reference. Shared with suggest-from-feedback.ts.
+ */
+export function tailorableSlice(master: MasterResume) {
   const normalized: MasterResume = JSON.parse(JSON.stringify(master));
   normalizeSkillCategories(normalized);
   return {
