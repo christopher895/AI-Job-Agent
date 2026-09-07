@@ -6,6 +6,7 @@ import { api, Resume } from "../lib/api";
 import { STAGE_SEGMENTS, segmentIndex, estimateStageProgress } from "../lib/resumeStage";
 import { appliedAtTimestamp, todayDateInputValue } from "../lib/appliedAt";
 import SuggestionChecklist from "./SuggestionChecklist";
+import { FEEDBACK_STAGE, isFollowUpRound, undecided } from "../lib/suggestionRounds";
 import ApplicationAnswers from "./ApplicationAnswers";
 
 type ApplyForm = { status: string; appliedAt: string };
@@ -100,6 +101,18 @@ function PdfPane({
   );
 }
 
+/** Amber, dismissible notice for a message the row carries while not 'failed' (feedback rounds, apply-pass errors). */
+function RowNotice({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  return (
+    <div className="bg-amber-50 border-b border-amber-200 px-6 py-2 text-xs text-amber-800 flex items-center justify-between gap-4 flex-shrink-0">
+      <span>{message}</span>
+      <button onClick={onDismiss} className="text-amber-700 hover:text-amber-900 font-medium flex-shrink-0">
+        Dismiss
+      </button>
+    </div>
+  );
+}
+
 export default function ResumeEditor({
   resume,
   initialView = "edit",
@@ -133,6 +146,10 @@ export default function ResumeEditor({
   const [applyError, setApplyError] = useState<string | null>(null);
   const [cancelState, setCancelState] = useState<"idle" | "working" | "error">("idle");
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackStatus, setFeedbackStatus] = useState<"idle" | "submitting" | "error">("idle");
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(initialView);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -327,6 +344,39 @@ export default function ResumeEditor({
       // effect picks up the real terminal state a moment later either way.
       setCancelState("error");
       setCancelError(err instanceof Error ? err.message : "Could not cancel — it may have just finished.");
+    }
+  }
+
+  // Clears the notice left by a failed/empty feedback round or a failed apply
+  // pass. Optimistic: the banner goes away immediately, the server write follows.
+  async function handleDismissError() {
+    setMeta((m) => ({ ...m, error: null }));
+    await api.clearResumeError(resume.id).catch(() => {});
+  }
+
+  // Kicks off a feedback round: the pasted notes become a new batch of
+  // suggestions, reviewed in the same checklist as the JD pass. The row goes
+  // through 'pending' again, so the existing poll effect carries it home.
+  async function handleSubmitFeedback() {
+    const feedback = feedbackText.trim();
+    if (!feedback) return;
+    setFeedbackStatus("submitting");
+    setFeedbackError(null);
+    try {
+      await api.submitFeedback(resume.id, feedback);
+      setFeedbackText("");
+      setShowFeedbackForm(false);
+      setFeedbackStatus("idle");
+      setMeta((m) => ({
+        ...m,
+        status: "pending",
+        stage: FEEDBACK_STAGE,
+        stage_started_at: new Date().toISOString(),
+        error: null,
+      }));
+    } catch (err) {
+      setFeedbackStatus("error");
+      setFeedbackError(err instanceof Error ? err.message : "Could not start the feedback round.");
     }
   }
 
@@ -547,6 +597,8 @@ export default function ResumeEditor({
             Review suggestions{title ? ` for ${title}` : ""}
           </p>
         </div>
+        {/* A failed apply pass comes back here, checklist intact, with its error. */}
+        {meta.error && <RowNotice message={meta.error} onDismiss={handleDismissError} />}
         {(meta.application_answers || resume.application_answers) && (
           <ApplicationAnswers
             resumeId={resume.id}
@@ -557,7 +609,8 @@ export default function ResumeEditor({
         )}
         <SuggestionChecklist
           resumeId={resume.id}
-          suggestions={meta.suggestions ?? []}
+          suggestions={undecided(meta.suggestions ?? [])}
+          followUp={isFollowUpRound(meta.suggestions ?? [])}
           onApplied={() => setMeta((m) => ({ ...m, status: "pending", stage: null }))}
         />
       </div>
@@ -738,6 +791,19 @@ export default function ResumeEditor({
               : "Email to me"}
           </button>
           <button
+            onClick={() => setShowFeedbackForm((v) => !v)}
+            className={`flex items-center gap-1.5 text-sm px-3 py-1.5 border rounded-lg transition-colors ${
+              showFeedbackForm
+                ? "border-violet-400 bg-violet-50 text-violet-800"
+                : "border-paper-border hover:bg-black/[0.03] text-paper-ink"
+            }`}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            Apply feedback
+          </button>
+          <button
             onClick={() => setShowApplyForm((v) => !v)}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors"
           >
@@ -748,6 +814,47 @@ export default function ResumeEditor({
           </button>
         </div>
       </div>
+
+      {/* A failed or empty feedback round lands back here with its notice on the row. */}
+      {meta.error && !showFeedbackForm && <RowNotice message={meta.error} onDismiss={handleDismissError} />}
+
+      {/* Feedback form — paste reviewer notes, get a new batch of suggestions to review */}
+      {showFeedbackForm && (
+        <div className="bg-black/[0.03] border-b border-paper-border px-6 py-3 flex flex-col gap-2 flex-shrink-0">
+          <p className="text-xs text-paper-muted">
+            Paste feedback on this resume — a reviewer&apos;s notes, a recruiter&apos;s nitpicks, anything.
+            Each point becomes a suggested edit you review before it&apos;s applied, shown as the exact
+            change against the current wording. Your format and every earlier accepted edit stay as they are.
+          </p>
+          <textarea
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+            placeholder={"e.g. Your skills section is missing SQL and Git. The posting calls out testing — add Jest.\nThe Mandy bullets should mention the API you built."}
+            rows={5}
+            className="w-full text-sm px-3 py-2 border border-paper-border rounded-lg bg-paper focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y"
+          />
+          <p className="text-[11px] text-amber-700">
+            Applying regenerates the resume from your master plus every accepted suggestion. Edits typed
+            directly into the text editor are not carried over.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSubmitFeedback}
+              disabled={feedbackStatus === "submitting" || !feedbackText.trim()}
+              className="text-sm px-4 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+            >
+              {feedbackStatus === "submitting" ? "Starting…" : "Suggest edits"}
+            </button>
+            <button
+              onClick={() => setShowFeedbackForm(false)}
+              className="text-sm px-3 py-1.5 text-paper-muted hover:text-paper-ink transition-colors"
+            >
+              Cancel
+            </button>
+            {feedbackError && <span className="text-xs text-red-600">{feedbackError}</span>}
+          </div>
+        </div>
+      )}
 
       {/* Apply form */}
       {showApplyForm && (

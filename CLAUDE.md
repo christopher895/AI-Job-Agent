@@ -21,6 +21,7 @@ Everything below is implemented and running in production, not aspirational — 
 - **Web app** — `/`, `/tailor`, `/resume/[id]`, `/resume/master`, `/applied`, `/preferences` all built (see table below)
 - **Cron scheduler** — scraper runs every 15 min, in-process (no queue layer), guarded against overlapping ticks
 - **Async tailoring** — `POST /api/tailor` returns immediately (202) with a `pending` row; the background job runs `suggestKeywords(jd, master)` and lands the row at `awaiting_review` with proposed suggestions attached (not `ready`). After Christopher reviews and approves suggestions in the checklist, `POST /api/resume/:id/apply-suggestions` runs the rest of the pipeline (apply, render, fit-to-page, PDF) in the background and takes the row to `ready`. The editor polls `GET /api/resumes/:id` until status leaves `pending`
+- **Feedback rounds** — on a `ready` resume, `/resume/[id]` has an "Apply feedback" panel: paste free-form notes (a reviewer's critique, a recruiter's nitpicks) and `POST /api/resume/:id/feedback` runs `suggestFromFeedback(feedback, jd, master, priorAccepted)` (`packages/agent/src/ai/suggest-from-feedback.ts`) against the resume as it currently stands. The result is appended to the row's `suggestions` as a new undecided batch and reviewed in the same checklist; `apply-suggestions` re-applies every earlier accepted suggestion alongside the new picks (`composeAccepted` in `suggestion-rounds.ts`), so rounds stack instead of replacing each other. Hand edits typed into the Markdown editor are not carried over — the apply pass always regenerates from the master
 - **Cancellable generation** — the pending screen has a "Cancel generation" button. `POST /api/resume/:id/cancel` aborts the in-flight run for real: an `AbortSignal` from `ai/cancellation.ts` is threaded through `completeJSON` down to the spawned `claude` subprocess, which is SIGTERM'd rather than left running with its output discarded. Where the row lands depends on which pipeline was running — the first (suggestion) pass goes to `cancelled`, the apply pass reverts to `awaiting_review` so the review checklist survives. A `cancelled` row keeps its `jd_text`, so `POST /api/resume/:id/retry` re-runs the suggestion pass in place without re-fetching the JD
 - **Gmail status ingestion** — opt-in cron tick (`GMAIL_INGEST_ENABLED=true`) reads Christopher's Gmail via a dedicated OAuth2 client (`GMAIL_OAUTH_*`, `gmail.readonly` scope — separate from the Sheets service account, which can't read consumer Gmail), classifies recruiter emails with the LLM, deterministically matches them to an existing `applied_jobs` row, and advances that row's status forward-only, logging every event and notifying on the statuses that matter. See `packages/agent/src/ingest/` and the pipeline below
 
@@ -83,6 +84,8 @@ agent/src/
 │   └── adapters/           # greenhouse.ts, ashby.ts, lever.ts, amazon.ts, goldman.ts
 ├── ai/
 │   ├── suggest-keywords.ts    # Single-pass JD keyword-suggestion call (current tailoring ENTRY POINT)
+│   ├── suggest-from-feedback.ts # Turns pasted reviewer feedback into a suggestion batch against the current resume
+│   ├── suggestion-rounds.ts   # Stacking rounds in one `suggestions` column: undecided/appendBatch/composeAccepted, FEEDBACK_STAGE
 │   ├── apply-suggestions.ts   # Deterministic groundedness labeling + applies only accepted suggestions
 │   ├── import-master-resume.ts # Parses pasted/PDF resume text into MasterResume (LLM call + id dedup)
 │   ├── grounding.ts         # Checks no invented facts; numbers() also reused by apply-suggestions.ts's groundedness labeling
@@ -140,7 +143,8 @@ web/
 │   └── Nav.tsx                # Top navigation bar
 └── lib/
     ├── api.ts                # Typed fetch wrappers for agent API
-    └── resumeStage.ts        # Maps a raw backend stage string to the 3-segment pending-screen stepper
+    ├── resumeStage.ts        # Maps a raw backend stage string to the 3-segment pending-screen stepper
+    └── suggestionRounds.ts   # Client mirror of the agent's suggestion-rounds helpers (undecided, isFollowUpRound, FEEDBACK_STAGE)
 ```
 
 ## Tech Stack
@@ -211,10 +215,11 @@ tailored_resumes (
   pdf_error     text,           -- error from the most recent PDF render attempt, if any
   critic_score  int,            -- vestigial: scored by the removed critique loop; always null on new rows
   status        text,           -- 'pending' | 'awaiting_review' | 'ready' | 'failed' | 'cancelled' — tailoring runs as a background job
-  error         text,           -- error message if status = 'failed'
+  error         text,           -- error message if status = 'failed'; also a dismissible notice on a 'ready' /
+                                -- 'awaiting_review' row after a failed/empty feedback round or a failed apply pass
   stage         text,           -- current pipeline step while status = 'pending' (e.g. "Analyzing job description"); null otherwise
   stage_started_at timestamptz, -- when the current `stage` began; null whenever `stage` is null. Drives the pending-screen's elapsed-vs-typical progress estimate
-  suggestions   jsonb,          -- proposed keyword-insertion suggestions; accepted/rejected state stored per item after review
+  suggestions   jsonb,          -- every suggestion round so far; per item accepted = null (under review) | true | false (decided in an earlier round)
   kind          text,           -- vestigial: always 'tailored' now; the 'general' path was removed (column + partial index retained)
   created_at    timestamptz,
   updated_at    timestamptz
@@ -275,12 +280,28 @@ POST /api/tailor (jd text or job URL)
         → frontend polls GET /api/resumes/:id again until status leaves 'pending'
 ```
 
+A finished resume can take further rounds from pasted feedback:
+```
+POST /api/resume/:id/feedback { feedback }   (409 unless status='ready')
+  → row to status='pending', stage='Analyzing feedback' (one guarded write), respond 202
+    → [background] suggestFromFeedback(feedback, jd_text, master, priorAccepted)
+       — the résumé the model sees has earlier accepted suggestions applied
+      → suggestions = stored + new batch (accepted: null, ids de-duplicated), status='awaiting_review'
+        → checklist shows only the undecided batch; apply-suggestions composes
+          prior accepted + new picks and regenerates as above
+  → zero usable edits, or a failure → the row returns to 'ready' with `error` set
+    as a dismissible notice (not 'failed', whose retry would re-run the JD pass
+    and overwrite the suggestion set). A failed APPLY pass likewise returns to
+    'awaiting_review' with `error` set, checklist intact. POST /api/resume/:id/clear-error dismisses it
+```
+
 Either 'pending' phase can be cancelled from the editor:
 ```
 POST /api/resume/:id/cancel   (409 unless status='pending')
   → abortRun(id) — fires the AbortSignal registered by the running pipeline,
     killing the spawned `claude` subprocess (SIGTERM → SIGKILL) mid-call
     → the route writes the new status itself so the UI flips without a poll tick:
+        stage = 'Analyzing feedback' (feedback round)  → status='ready'
         suggestions IS NULL  (first pass was running)  → status='cancelled'
         suggestions NOT NULL (apply pass was running)  → status='awaiting_review'
       → the pipeline's catch sees CancelledError and returns WITHOUT writing

@@ -79,10 +79,14 @@ export default function SuggestionChecklist({
   resumeId,
   suggestions,
   onApplied,
+  followUp = false,
 }: {
   resumeId: string;
+  /** Only the suggestions still under review — earlier rounds' decided items are not shown again. */
   suggestions: Suggestion[];
   onApplied: () => void;
+  /** True when this batch came from pasted feedback on an already-finished resume. */
+  followUp?: boolean;
 }) {
   const [items, setItems] = useState<Item[]>(suggestions.map((s) => ({ ...s, accepted: false })));
   const [submitting, setSubmitting] = useState(false);
@@ -115,7 +119,9 @@ export default function SuggestionChecklist({
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
         <p className="text-sm text-paper-muted max-w-sm">
-          No keyword suggestions found for this job description — your resume already covers it well.
+          {followUp
+            ? "Nothing in that feedback could be turned into an edit your resume supports — it may already cover those points, or they need experience it doesn't list."
+            : "No keyword suggestions found for this job description — your resume already covers it well."}
         </p>
         <button
           onClick={apply}
@@ -133,8 +139,9 @@ export default function SuggestionChecklist({
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="px-6 pt-6 pb-2 flex-shrink-0">
         <p className="text-sm text-paper-muted">
-          Review each suggested change before it&apos;s applied. Nothing here is final — uncheck
-          anything you don&apos;t want, or edit the wording directly.
+          {followUp
+            ? "Each change below comes from the feedback you pasted, shown against the resume as it currently reads. Everything you accepted earlier stays applied. Uncheck anything you don't want, or edit the wording directly."
+            : "Review each suggested change before it's applied. Nothing here is final — uncheck anything you don't want, or edit the wording directly."}
         </p>
       </div>
       <div className="flex-1 overflow-y-auto px-6 pb-4">
