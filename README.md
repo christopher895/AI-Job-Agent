@@ -95,7 +95,7 @@ agent/src/
 │   ├── index.ts          # Express router mount
 │   └── routes/
 │       ├── tailor.ts        # POST /api/tailor
-│       ├── resumes.ts       # GET /api/resumes, GET /api/resume/:id, PATCH /api/resume/:id, POST /api/resume/:id/{apply-suggestions,feedback,cancel,retry,clear-error}
+│       ├── resumes.ts       # GET /api/resumes, GET /api/resume/:id, PATCH /api/resume/:id, POST /api/resume/:id/{apply-suggestions,feedback,duplicate,cancel,retry,clear-error}
 │       ├── applied.ts       # GET/POST /api/applied, PATCH /api/applied/:id
 │       ├── master-resume.ts # GET/PUT /api/master-resume, POST /api/master-resume/preview-pdf, POST /api/master-resume/import
 │       ├── preferences.ts   # GET/PUT /api/preferences — scraper filter settings

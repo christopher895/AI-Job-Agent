@@ -74,6 +74,31 @@ function texUrl(s: string): string {
   return String(s ?? "").replace(/%/g, "\\%").replace(/#/g, "\\#");
 }
 
+/**
+ * How a link reads on the page: protocol, "www." and any trailing slash
+ * stripped, so "https://swimvolt.com/" prints as "swimvolt.com". The full URL
+ * still goes into the \href target.
+ */
+/** A standalone line under a project header that names its link. */
+export function isLinkLine(s: string): boolean {
+  const t = String(s ?? "").trim();
+  return t.startsWith("http") || t.startsWith("www.") || BARE_DOMAIN_RE.test(t);
+}
+
+/** The \href target: a schemeless link is browser-unusable without one. */
+export function hrefUrl(s: string): string {
+  const t = String(s ?? "").trim();
+  return /^https?:\/\//i.test(t) ? t : `https://${t.replace(/^\/+/, "")}`;
+}
+
+export function displayUrl(s: string): string {
+  return String(s ?? "")
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .replace(/\/+$/, "");
+}
+
 function inlineTex(s: string): string {
   return s.split(/\*\*(.+?)\*\*/).map((p, i) => i % 2 === 1 ? `\\textbf{${tex(p)}}` : tex(p)).join("");
 }
@@ -254,8 +279,11 @@ function parseMd(md: string): ParsedDoc {
               ? (parts.pop() as string).replace(/–/g, "--")
               : "";
           cur = { name: m[1], tech: parts.join(", "), dates, link: "", bullets: [] };
-        } else if ((l.startsWith("http") || l.startsWith("www.")) && !l.startsWith("- ")) {
+        } else if (!l.startsWith("- ") && isLinkLine(l)) {
           if (!cur) throw new Error(`Project link "${l}" appears before any project header`);
+          // Bare domains count: /resume/master's Link field is free text, and
+          // "swimvolt.com" is what anyone actually types. A link the parser
+          // doesn't recognise is dropped silently, which is the whole bug.
           if (!cur.link) cur.link = l;
         } else if (l.startsWith("- ")) {
           if (!cur) throw new Error(`Bullet "${l}" appears before any project header`);
@@ -393,7 +421,12 @@ function buildLatex(doc: ParsedDoc): string {
       // Tech sits inline right after the project name rather than flushed to the
       // right margin: with project dates gone there is nothing anchoring the
       // right edge, and a lone right-aligned tech stack reads as a stray column.
-      const header = `\\item \\textbf{${tex(p.name)},} {\\em ${tex(p.tech)}}`;
+      // A project link renders between the two, as "Name - domain, tech", since
+      // a live demo URL is one of the first things a reader looks for.
+      const linked = p.link
+        ? `\\textbf{${tex(p.name)} -} \\href{${texUrl(hrefUrl(p.link))}}{\\textbf{${tex(displayUrl(p.link))}}}\\textbf{,}`
+        : `\\textbf{${tex(p.name)},}`;
+      const header = `\\item ${linked} {\\em ${tex(p.tech)}}`;
       lines.push(p.dates ? `${header} \\hfill {\\em ${tex(p.dates)}}` : header);
       if (p.bullets.length) {
         lines.push(`\\begin{itemize}`);
@@ -603,6 +636,7 @@ export async function renderMasterResumePdf(mr: MasterResume): Promise<Buffer> {
         `## Projects`,
         ...mr.projects.flatMap((p) => [
           `**${p.name}** · ${p.tech.join(", ")}`,
+          ...(p.link ? [p.link] : []),
           ...p.bullets.map((bullet) => `- ${bullet.text}`),
         ]),
         `## Skills`,

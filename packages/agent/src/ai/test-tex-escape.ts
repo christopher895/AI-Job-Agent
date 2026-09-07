@@ -10,11 +10,15 @@
  *     the build — tectonic emits a "Missing character" warning and drops them,
  *     so "Kafka → Spark" silently ships to a recruiter as "Kafka  Spark".
  *
+ * Also covers the project-link helpers (displayUrl/hrefUrl/isLinkLine), which
+ * are pure string functions on the same render path: a project link that the
+ * parser doesn't recognise is dropped from the PDF with no error at all.
+ *
  * No tectonic/DB/network needed — this runs in the default `npm test` gate.
  * The companion integration test (test-render-pdf.ts) proves these macros
  * actually compile; this one proves we emit them.
  */
-import { tex } from "./render-pdf";
+import { tex, displayUrl, hrefUrl, isLinkLine } from "./render-pdf";
 
 let failures = 0;
 
@@ -64,6 +68,35 @@ console.log("\nOrdering — math delimiters we introduce must not be re-escaped:
 // arrow would come out as "\$\rightarrow\$" and print literally.
 check("arrow beside a literal dollar", "$5 → $10", "\\$5 $\\rightarrow$ \\$10");
 check("arrow chain", "A → B → C", "A $\\rightarrow$ B $\\rightarrow$ C");
+
+function eq(name: string, actual: unknown, expected: unknown): void {
+  if (actual === expected) {
+    console.log(`  ✓ ${name}`);
+  } else {
+    console.log(`  ✗ ${name}\n      expected: ${JSON.stringify(expected)}\n      actual:   ${JSON.stringify(actual)}`);
+    failures++;
+  }
+}
+
+console.log("\nProject links — displayUrl() is what prints, hrefUrl() is what opens:");
+eq("display strips protocol", displayUrl("https://swimvolt.com"), "swimvolt.com");
+eq("display strips www and trailing slash", displayUrl("http://www.swimvolt.com/"), "swimvolt.com");
+eq("display keeps the path", displayUrl("https://github.com/x/y"), "github.com/x/y");
+eq("display leaves a bare domain alone", displayUrl("swimvolt.com"), "swimvolt.com");
+eq("display of empty", displayUrl(""), "");
+eq("href keeps an explicit scheme", hrefUrl("https://swimvolt.com"), "https://swimvolt.com");
+// A schemeless href target is not a working link in any PDF reader.
+eq("href adds a scheme to a bare domain", hrefUrl("swimvolt.com"), "https://swimvolt.com");
+eq("href adds a scheme to www.", hrefUrl("www.swimvolt.com"), "https://www.swimvolt.com");
+
+console.log("\nProject links — which standalone lines count as a link:");
+// The /resume/master Link field is free text, so a bare domain is what gets typed.
+eq("bare domain is a link", isLinkLine("swimvolt.com"), true);
+eq("bare domain with path is a link", isLinkLine("github.com/x/y"), true);
+eq("http is a link", isLinkLine("https://swimvolt.com"), true);
+eq("www is a link", isLinkLine("www.swimvolt.com"), true);
+eq("prose is not a link", isLinkLine("Shipped a swim-start analyzer"), false);
+eq("empty is not a link", isLinkLine(""), false);
 
 console.log(
   failures === 0
