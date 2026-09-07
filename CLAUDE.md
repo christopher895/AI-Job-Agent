@@ -390,4 +390,5 @@ Use these proactively:
 - Master resume is the single source of truth — the AI may only select/rephrase facts that exist in it, never invent
 - Alert score threshold: top-ranked jobs by keyword score, capped at `FILTERS.maxPerEmail`
 - PDF design: renders via the custom `Resume_Template/czresume.cls` LaTeX template, ATS-safe
+- Stored PDFs are only re-rendered when a resume's Markdown changes. After editing `Resume_Template/czresume.cls` or `render-pdf.ts`, run `npm run rerender-pdfs` in `packages/agent` (with the target `DATABASE_URL`; `--dry-run` to list) so already-generated resumes pick up the change. Production's Postgres is only reachable from inside Railway's network, so run it there (`railway ssh`) rather than from a laptop.
 - Tests: `npm test` (from the repo root) runs the fast, self-contained unit tests across both workspaces — no DB/LLM/network needed. Each `test-*.ts` script exits non-zero on failure so the chain fails fast. `npm run test:integration` runs the tests that need live infra (Postgres, LLM, Tectonic); run those manually, not in the default gate.
