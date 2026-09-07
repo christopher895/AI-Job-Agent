@@ -47,10 +47,13 @@
   \addressskip
 }
 
+% \centerline is a fixed-width box, so it stays centered even under
+% \raggedright (which adds a right-side fill that would otherwise pull an
+% \hfil-centered line to the left). Same approach as \printaddress.
 \def \printname {
   \begingroup
-    \hfil{\namesize\bf \@name}\hfil
-    \nameskip\break
+    \centerline{\namesize\bf \@name}
+    \nameskip
   \endgroup
 }
 
