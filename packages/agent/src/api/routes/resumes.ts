@@ -5,6 +5,7 @@ import {
   getTailoredResume,
   updateTailoredResume,
   deleteTailoredResume,
+  duplicateTailoredResume,
   getPdf,
   storePdf,
   setPdfError,
@@ -479,6 +480,23 @@ router.patch("/resume/:id/application-answers", async (req, res) => {
 });
 
 // DELETE /api/resume/:id
+// POST /api/resume/:id/duplicate — copies a settled resume (content, suggestion
+// history and rendered PDF) into a new row, so a variant can be edited without
+// re-running the pipeline or re-pasting the JD.
+router.post("/resume/:id/duplicate", async (req, res) => {
+  const existing = await getTailoredResume(req.params.id);
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+  if (existing.status !== "ready" && existing.status !== "awaiting_review") {
+    res.status(409).json({ error: `Resume is ${existing.status} — only a finished resume can be duplicated.` });
+    return;
+  }
+
+  const copy = await duplicateTailoredResume(req.params.id);
+  // Null here means the status changed between the read and the insert.
+  if (!copy) { res.status(409).json({ error: "Resume is no longer in a state that can be duplicated." }); return; }
+  res.status(201).json(copy);
+});
+
 router.delete("/resume/:id", async (req, res) => {
   const deleted = await deleteTailoredResume(req.params.id);
   if (!deleted) { res.status(404).json({ error: "Not found" }); return; }

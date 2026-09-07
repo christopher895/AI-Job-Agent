@@ -176,6 +176,30 @@ export async function createReadyResume(fields: {
   return rows[0];
 }
 
+/**
+ * Copies a finished resume into a new row — same JD, markdown, suggestion
+ * history and PDF, so the copy opens ready to edit without re-running the
+ * pipeline. Only a settled row can be copied (a 'pending' one has no stable
+ * content, and the copy would have no pipeline of its own to finish it).
+ * Drafted answers come along only when they finished generating.
+ */
+export async function duplicateTailoredResume(id: string): Promise<TailoredResumeRow | null> {
+  const { rows } = await pool.query(
+    `INSERT INTO tailored_resumes
+       (job_title, company, location, job_url, jd_text, markdown, suggestions, application_answers, pdf, status)
+     SELECT
+       CASE WHEN job_title IS NULL THEN NULL ELSE job_title || ' (copy)' END,
+       company, location, job_url, jd_text, markdown, suggestions,
+       CASE WHEN application_answers ->> 'status' = 'ready' THEN application_answers ELSE NULL END,
+       pdf, status
+     FROM tailored_resumes
+     WHERE id = $1 AND status IN ('ready', 'awaiting_review')
+     RETURNING ${TAILORED_RESUME_COLUMNS}`,
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
 /** Marks a pending resume as ready once the tailoring pipeline finishes successfully. */
 export async function completeTailoredResume(
   id: string,
