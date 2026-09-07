@@ -26,6 +26,8 @@ Review/edit/approve suggestions in a checklist → apply-suggestions applies onl
 LaTeX PDF rendered via tectonic + czresume.cls
   ↓
 Edit inline → Download PDF → Log to Google Sheets
+  ↓ (optional, repeatable)
+Paste reviewer feedback on the finished resume → suggestFromFeedback → another checklist round, stacked on the last
 ```
 
 ---
@@ -93,7 +95,7 @@ agent/src/
 │   ├── index.ts          # Express router mount
 │   └── routes/
 │       ├── tailor.ts        # POST /api/tailor
-│       ├── resumes.ts       # GET /api/resumes, GET /api/resume/:id, PATCH /api/resume/:id, POST /api/resume/:id/apply-suggestions
+│       ├── resumes.ts       # GET /api/resumes, GET /api/resume/:id, PATCH /api/resume/:id, POST /api/resume/:id/{apply-suggestions,feedback,cancel,retry,clear-error}
 │       ├── applied.ts       # GET/POST /api/applied, PATCH /api/applied/:id
 │       ├── master-resume.ts # GET/PUT /api/master-resume, POST /api/master-resume/preview-pdf, POST /api/master-resume/import
 │       ├── preferences.ts   # GET/PUT /api/preferences — scraper filter settings
@@ -178,6 +180,12 @@ POST /api/resume/:id/apply-suggestions  (accepted suggestions)
   → applySuggestions(master, accepted) + renderMarkdown + fitToOnePage (skips the widow-fix pass, since
     bullets must stay verbatim except for explicitly-approved edits)
   → render PDF via tectonic + czresume.cls, status='ready'
+
+POST /api/resume/:id/feedback  (pasted free-form feedback; only from status='ready')
+  → suggestFromFeedback(feedback, jd, master, priorAccepted) — sees the resume with earlier accepted edits applied
+  → new batch appended to the row's suggestions as undecided (source='feedback'), status='awaiting_review'
+  → apply-suggestions re-applies every earlier accepted suggestion alongside the new picks, so rounds stack
+  → zero usable edits, a failure, or a cancel → back to 'ready' with a dismissible notice; the resume is untouched
 ```
 
 The old generate → critique → revise loop (`chain.ts`) still exists but now only backs the dormant, UI-removed general-resume feature.

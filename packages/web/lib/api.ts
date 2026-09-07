@@ -21,6 +21,8 @@ export type Suggestion = {
   groundedness: "grounded" | "extrapolated";
   rationale: string;
   accepted: boolean | null;
+  /** Which pass proposed it; absent on older rows (all JD). */
+  source?: "jd" | "feedback";
 };
 
 export type ResumeListItem = {
@@ -280,7 +282,12 @@ export const api = {
   /** Stops an in-flight generation. Resolves with where the row landed: back to
    *  the review checklist if the apply pass was running, 'cancelled' otherwise. */
   cancelResume: (id: string) =>
-    request<{ id: string; status: "cancelled" | "awaiting_review" }>("POST", `/resume/${id}/cancel`),
+    request<{ id: string; status: "cancelled" | "awaiting_review" | "ready" }>("POST", `/resume/${id}/cancel`),
+  /** Dismisses the notice a failed/empty feedback round or a failed apply pass left on the row. */
+  clearResumeError: (id: string) => request<{ id: string; error: null }>("POST", `/resume/${id}/clear-error`),
+  /** Starts a feedback round on a ready resume: the pasted notes become a new batch of suggestions to review. */
+  submitFeedback: (id: string, feedback: string) =>
+    request<{ id: string; status: "pending" }>("POST", `/resume/${id}/feedback`, { feedback }),
   /** Re-runs the suggestion pass on a cancelled/failed row using its stored JD. */
   retryResume: (id: string) =>
     request<{ id: string; status: "pending" }>("POST", `/resume/${id}/retry`),

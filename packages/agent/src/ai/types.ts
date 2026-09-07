@@ -154,6 +154,8 @@ export type RawSuggestion = z.infer<typeof RawSuggestionSchema>;
 export const SuggestionSchema = RawSuggestionSchema.extend({
   groundedness: z.enum(["grounded", "extrapolated"]),
   accepted: z.boolean().nullable().default(null),
+  /** Which pass proposed it. Absent on rows written before feedback rounds existed (all JD). */
+  source: z.enum(["jd", "feedback"]).optional(),
 });
 export type Suggestion = z.infer<typeof SuggestionSchema>;
 
