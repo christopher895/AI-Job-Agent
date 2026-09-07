@@ -110,6 +110,7 @@ export async function runSuggestPipeline(id: string, jd: string) {
       ...s,
       groundedness: labelGroundedness(master, s),
       accepted: null,
+      source: "jd",
     }));
     await setSuggestions(id, suggestions);
   } catch (err) {

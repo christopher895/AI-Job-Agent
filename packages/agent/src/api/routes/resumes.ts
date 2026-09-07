@@ -11,13 +11,16 @@ import {
   getMasterResume,
   beginApplyingSuggestions,
   completeTailoredResume,
-  failTailoredResume,
   updateResumeStage,
   cancelResumeGeneration,
   revertToAwaitingReview,
+  revertToReady,
+  beginFeedbackRound,
   restartSuggestions,
   beginGeneratingAnswers,
   updateApplicationAnswerItems,
+  setSuggestions,
+  clearResumeError,
 } from "../../db/queries";
 import { registerRun, clearRun, abortRun, isCancelledError, CancelledError } from "../../ai/cancellation";
 import { runSuggestPipeline } from "./tailor";
@@ -25,6 +28,8 @@ import { renderPdf } from "../../ai/render-pdf";
 import { renderMarkdown } from "../../ai/format";
 import { fitToOnePage } from "../../ai/fit-page";
 import { applySuggestions, labelGroundedness } from "../../ai/apply-suggestions";
+import { suggestFromFeedback, currentMaster } from "../../ai/suggest-from-feedback";
+import { FEEDBACK_STAGE, appendBatch, composeAccepted } from "../../ai/suggestion-rounds";
 import { MAX_PASTE_CHARS } from "../../ai/generate-answers";
 import { runAnswersPipeline } from "../../ai/answers-pipeline";
 import { ApplicationAnswerSchema, Suggestion, SuggestionSchema } from "../../ai/types";
@@ -147,7 +152,11 @@ router.post("/resume/:id/apply-suggestions", async (req, res) => {
   await beginApplyingSuggestions(req.params.id);
   res.status(202).json({ id: req.params.id, status: "pending" });
 
-  runApplyPipeline(req.params.id, accepted, row.suggestions ?? []).catch((err) => {
+  // The apply pass regenerates from the master resume, so suggestions accepted
+  // in an earlier round (a feedback round builds on the JD round) must be
+  // re-applied alongside this round's picks or they would silently vanish.
+  const stored = row.suggestions ?? [];
+  runApplyPipeline(req.params.id, composeAccepted(stored, accepted), stored).catch((err) => {
     console.error("[resume] apply-suggestions pipeline crashed:", err);
   });
 });
@@ -161,10 +170,15 @@ async function runApplyPipeline(id: string, accepted: Suggestion[], originalSugg
     // Re-label groundedness against the FINAL text — a user's hand-edit can
     // turn a "grounded" suggestion into an "extrapolated" one (or vice versa);
     // the stored label must reflect what was actually applied, not what the
-    // model originally proposed.
+    // model originally proposed. Items from earlier rounds are judged against
+    // the raw master, as they were originally; this round's items against the
+    // résumé those earlier rounds produced — the text the model actually saw.
+    const priorAccepted = originalSuggestions.filter((s) => s.accepted === true);
+    const priorIds = new Set(priorAccepted.map((s) => s.id));
+    const priorMaster = priorAccepted.length ? currentMaster(master, priorAccepted) : master;
     const relabeledAccepted = accepted.map((s) => ({
       ...s,
-      groundedness: labelGroundedness(master, s),
+      groundedness: labelGroundedness(priorIds.has(s.id) ? master : priorMaster, s),
     }));
 
     const { master: adjustedMaster, tailored } = applySuggestions(master, relabeledAccepted);
@@ -212,7 +226,7 @@ async function runApplyPipeline(id: string, accepted: Suggestion[], originalSugg
     }
   } catch (err) {
     // POST /api/resume/:id/cancel already put the row back to 'awaiting_review';
-    // writing 'failed' here would clobber it and lose the review checklist.
+    // writing anything else here would clobber it.
     if (isCancelledError(err) || signal.aborted) {
       console.log(`[resume] apply-suggestions pipeline cancelled for ${id}`);
       return;
@@ -220,7 +234,10 @@ async function runApplyPipeline(id: string, accepted: Suggestion[], originalSugg
     console.error("[resume] apply-suggestions pipeline error:", err);
     const credentialHint =
       LLM_PROVIDER === "openai" ? "check OPENAI_API_KEY" : "check CLAUDE_CODE_OAUTH_TOKEN";
-    await failTailoredResume(id, `Applying suggestions failed — ${credentialHint} and try again.`);
+    // Back to the checklist with the error, not to 'failed': the checklist is
+    // the user's work, and 'failed' only offers a retry of the JD pass, which
+    // replaces the whole suggestion set (and every earlier round's decisions).
+    await revertToAwaitingReview(id, `Applying suggestions failed — ${credentialHint} and try again.`);
   } finally {
     clearRun(id);
   }
@@ -231,11 +248,14 @@ async function runApplyPipeline(id: string, accepted: Suggestion[], originalSugg
 // Kills the run (aborting the spawned `claude` subprocess, not just discarding
 // its output) and writes the resulting status here rather than leaving it to
 // the pipeline, so the editor flips immediately instead of waiting a poll tick.
-// Where the row lands depends on which pipeline was running, which
-// `suggestions` identifies: setSuggestions() is the only thing that populates
-// it, so a null means the first (suggestion) pass and a non-null means the
-// apply pass — the latter goes back to awaiting_review with the user's
-// checklist intact.
+// Where the row lands depends on which pipeline was running:
+//   - stage = FEEDBACK_STAGE      → a feedback round; back to 'ready', where
+//                                   the finished resume is untouched
+//   - suggestions IS NULL         → the first (JD suggestion) pass; 'cancelled'
+//   - suggestions NOT NULL        → the apply pass; back to 'awaiting_review'
+//                                   with the user's checklist intact
+// The stage check comes first because a feedback round also runs with
+// suggestions set (from the rounds before it).
 router.post("/resume/:id/cancel", async (req, res) => {
   const row = await getTailoredResume(req.params.id);
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
@@ -246,9 +266,12 @@ router.post("/resume/:id/cancel", async (req, res) => {
 
   abortRun(req.params.id);
 
-  const wasApplying = row.suggestions != null;
+  const wasFeedbackRound = row.stage === FEEDBACK_STAGE;
+  const wasApplying = !wasFeedbackRound && row.suggestions != null;
   try {
-    const updated = wasApplying
+    const updated = wasFeedbackRound
+      ? await revertToReady(req.params.id)
+      : wasApplying
       ? await revertToAwaitingReview(req.params.id)
       : await cancelResumeGeneration(req.params.id);
 
@@ -268,8 +291,102 @@ router.post("/resume/:id/cancel", async (req, res) => {
     return;
   }
 
-  res.json({ id: req.params.id, status: wasApplying ? "awaiting_review" : "cancelled" });
+  res.json({
+    id: req.params.id,
+    status: wasFeedbackRound ? "ready" : wasApplying ? "awaiting_review" : "cancelled",
+  });
 });
+
+// POST /api/resume/:id/feedback — starts a new suggestion round on a finished
+// resume from pasted free-form feedback (a reviewer's notes, a recruiter's
+// nitpicks). Same async shape as POST /api/tailor: 202 now, background LLM
+// call, and the row lands at awaiting_review with the new batch appended as
+// undecided items — the editor's existing polling and checklist take it from
+// there. Only allowed from 'ready'.
+router.post("/resume/:id/feedback", async (req, res) => {
+  const feedback = typeof req.body?.feedback === "string" ? req.body.feedback.trim() : "";
+  if (!feedback) { res.status(400).json({ error: "feedback must be a non-empty string" }); return; }
+  if (feedback.length > MAX_PASTE_CHARS) {
+    res.status(400).json({ error: `feedback is too long (max ${MAX_PASTE_CHARS} characters)` });
+    return;
+  }
+
+  const row = await getTailoredResume(req.params.id);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (row.status !== "ready") {
+    res.status(409).json({ error: `Resume is ${row.status} — feedback can only be applied to a finished resume.` });
+    return;
+  }
+
+  let started: boolean;
+  try {
+    started = await beginFeedbackRound(req.params.id, FEEDBACK_STAGE);
+  } catch (err) {
+    console.error("[resume] feedback status write failed:", err);
+    res.status(500).json({ error: `Could not start the feedback round: ${errorMessage(err)}` });
+    return;
+  }
+  if (!started) { res.status(409).json({ error: "Resume is no longer ready — another run may have started." }); return; }
+
+  res.status(202).json({ id: req.params.id, status: "pending" });
+
+  runFeedbackPipeline(req.params.id, feedback, row.jd_text, row.suggestions ?? []).catch((err) => {
+    console.error("[resume] feedback pipeline crashed:", err);
+  });
+});
+
+// POST /api/resume/:id/clear-error — dismisses the notice a failed or empty
+// feedback round (or a failed apply pass) left on the row.
+router.post("/resume/:id/clear-error", async (req, res) => {
+  const cleared = await clearResumeError(req.params.id);
+  if (!cleared) { res.status(409).json({ error: "Nothing to clear on this resume." }); return; }
+  res.json({ id: req.params.id, error: null });
+});
+
+async function runFeedbackPipeline(id: string, feedback: string, jd: string | null, stored: Suggestion[]) {
+  const signal = registerRun(id);
+  try {
+    const master = await getMasterResume();
+    const priorAccepted = stored.filter((s) => s.accepted === true);
+    const raw = await suggestFromFeedback(feedback, jd, master, priorAccepted, undefined, signal);
+    // Labelled against the résumé the model saw (earlier rounds applied), so a
+    // term an earlier round added counts as grounded here.
+    const current = currentMaster(master, priorAccepted);
+    const batch: Suggestion[] = raw.map((s) => ({
+      ...s,
+      groundedness: labelGroundedness(current, s),
+      accepted: null,
+      source: "feedback",
+    }));
+    if (signal.aborted) throw new CancelledError();
+    if (batch.length === 0) {
+      // Nothing to review — stay 'ready' rather than routing through an empty
+      // checklist whose only exit regenerates the resume (and would discard any
+      // hand edits in the Markdown editor for no gain).
+      await revertToReady(
+        id,
+        "That feedback didn't turn into any edits your resume supports — it may already cover those points, or they'd need experience it doesn't list."
+      );
+      return;
+    }
+    await setSuggestions(id, appendBatch(stored, batch));
+  } catch (err) {
+    // POST /api/resume/:id/cancel already put the row back to 'ready'.
+    if (isCancelledError(err) || signal.aborted) {
+      console.log(`[resume] feedback pipeline cancelled for ${id}`);
+      return;
+    }
+    console.error("[resume] feedback pipeline error:", err);
+    const credentialHint =
+      LLM_PROVIDER === "openai" ? "check OPENAI_API_KEY" : "check CLAUDE_CODE_OAUTH_TOKEN";
+    // Back to 'ready', not 'failed': the resume itself is fine, only this
+    // round didn't happen. 'failed' would offer a retry of the JD pass, which
+    // overwrites the whole suggestion set.
+    await revertToReady(id, `Applying feedback failed — ${credentialHint} and try again.`);
+  } finally {
+    clearRun(id);
+  }
+}
 
 // POST /api/resume/:id/retry — re-runs the suggestion pass on a cancelled or
 // failed row, reusing the jd_text already stored on it so the JD never has to

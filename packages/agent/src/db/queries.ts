@@ -275,11 +275,20 @@ export async function cancelResumeGeneration(id: string): Promise<boolean> {
  * Cancels an apply-suggestions run by putting the row back where it came from,
  * so the review checklist the user already worked through is still there.
  */
-export async function revertToAwaitingReview(id: string): Promise<boolean> {
+export async function revertToAwaitingReview(id: string, error: string | null = null): Promise<boolean> {
   const { rowCount } = await pool.query(
     `UPDATE tailored_resumes
-        SET status = 'awaiting_review', error = NULL, stage = NULL, stage_started_at = NULL, updated_at = NOW()
+        SET status = 'awaiting_review', error = $2, stage = NULL, stage_started_at = NULL, updated_at = NOW()
       WHERE id = $1 AND status = 'pending'`,
+    [id, error]
+  );
+  return rowCount === 1;
+}
+
+/** Dismisses the notice a failed/empty feedback round left on a finished resume. */
+export async function clearResumeError(id: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE tailored_resumes SET error = NULL WHERE id = $1 AND status IN ('ready', 'awaiting_review')`,
     [id]
   );
   return rowCount === 1;
@@ -292,6 +301,38 @@ export async function restartSuggestions(id: string): Promise<boolean> {
         SET status = 'pending', error = NULL, stage = NULL, stage_started_at = NULL, updated_at = NOW()
       WHERE id = $1 AND status IN ('cancelled', 'failed')`,
     [id]
+  );
+  return rowCount === 1;
+}
+
+/**
+ * Starts a feedback round on a finished resume: 'ready' → 'pending' with the
+ * feedback stage set in the same write, so a cancel that races the pipeline
+ * start can still tell this round apart from an apply pass. Guarded on
+ * status = 'ready' so two clicks can't stack rounds.
+ */
+export async function beginFeedbackRound(id: string, stage: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE tailored_resumes
+        SET status = 'pending', error = NULL, stage = $2, stage_started_at = NOW(), updated_at = NOW()
+      WHERE id = $1 AND status = 'ready'`,
+    [id, stage]
+  );
+  return rowCount === 1;
+}
+
+/**
+ * Puts a resume back to 'ready' when a feedback round is cancelled or fails.
+ * Its markdown/PDF from the last apply pass are untouched, so nothing is
+ * lost — `error` carries the failure message for the editor to show (null on
+ * a deliberate cancel). Guarded on status = 'pending'.
+ */
+export async function revertToReady(id: string, error: string | null = null): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE tailored_resumes
+        SET status = 'ready', error = $2, stage = NULL, stage_started_at = NULL, updated_at = NOW()
+      WHERE id = $1 AND status = 'pending'`,
+    [id, error]
   );
   return rowCount === 1;
 }
