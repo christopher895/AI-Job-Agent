@@ -90,9 +90,45 @@ async function nameCenterOffset(): Promise<{ offset: number; detail: string }> {
   }
 }
 
+/**
+ * Regression: a project's link was parsed off the markdown into the document
+ * model but never emitted into the LaTeX, so it silently vanished from every
+ * rendered PDF. Renders a project with a link and reads the text back.
+ */
+async function projectLinkText(): Promise<string> {
+  const md = [
+    "# T",
+    "a@b.com",
+    "",
+    "## Projects",
+    "**SwimVolt** · Python, TypeScript",
+    // Schemeless on purpose: this is what /resume/master's free-text Link field gets.
+    "swimvolt.com",
+    "- Shipped a computer-vision swim-start analyzer",
+  ].join("\n");
+  const pdf = await renderPdf(md);
+  const tmp = path.join(os.tmpdir(), `render-pdf-link-${Date.now()}.pdf`);
+  try {
+    await fs.writeFile(tmp, pdf);
+    const { stdout } = await execFileAsync(process.env.PDFTOTEXT_PATH || "pdftotext", [tmp, "-"]);
+    return stdout;
+  } finally {
+    fs.rm(tmp, { force: true }).catch(() => {});
+  }
+}
+
 (async () => {
   const { offset, detail } = await nameCenterOffset();
   check("name-centered", Math.abs(offset) < 2, detail);
+
+  const projectText = await projectLinkText();
+  check("project-link-rendered", projectText.includes("swimvolt.com"), JSON.stringify(projectText.slice(0, 220)));
+  check(
+    "project-link-before-tech",
+    projectText.indexOf("swimvolt.com") < projectText.indexOf("Python"),
+    JSON.stringify(projectText.slice(0, 220))
+  );
+  check("project-link-no-protocol", !projectText.includes("https://swimvolt"), JSON.stringify(projectText.slice(0, 220)));
 
   console.log(allPass ? "\n✓ render-pdf test PASSED" : "\n✗ render-pdf test FAILED");
   process.exit(allPass ? 0 : 1);
