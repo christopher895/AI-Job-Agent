@@ -206,25 +206,37 @@ async function runApplyPipeline(id: string, accepted: Suggestion[], originalSugg
       return applied ? { ...applied, accepted: true } : { ...orig, accepted: false };
     });
 
+    // Render and store the PDF BEFORE flipping the row to 'ready'. The editor
+    // stops polling the moment it sees 'ready' and immediately asks for the
+    // PDF, so storing it afterwards left a window where a finished resume had
+    // no PDF yet and the preview pane fell back to its "click Refresh" empty
+    // state. Failures here don't block the flip — the row still goes 'ready'
+    // with pdf_error set, and /pdf renders on demand.
+    let pdfError: string | null = null;
+    if (!pdf) {
+      try {
+        pdf = await renderPdf(markdown);
+      } catch (err) {
+        if (isCancelledError(err) || signal.aborted) throw err;
+        console.error("[resume] pdf render failed:", err);
+        pdfError = errorMessage(err);
+      }
+    }
+    if (pdf) {
+      try {
+        await storePdf(id, pdf);
+      } catch (err) {
+        console.error("[resume] pdf store failed:", err);
+        pdfError = errorMessage(err);
+      }
+    }
+
     // Last checkpoint before the run becomes irreversible: past this write the
     // row is 'ready' and a cancel would have nothing left to undo.
     if (signal.aborted) throw new CancelledError();
     await completeTailoredResume(id, { markdown, suggestions: finalSuggestions });
-
-    if (pdf) {
-      await storePdf(id, pdf).catch((err) => {
-        console.error("[resume] pdf store failed:", err);
-        setPdfError(id, errorMessage(err)).catch(() => {});
-      });
-    } else {
-      try {
-        const rendered = await renderPdf(markdown);
-        await storePdf(id, rendered);
-      } catch (err) {
-        console.error("[resume] pdf render failed:", err);
-        await setPdfError(id, errorMessage(err));
-      }
-    }
+    // After the flip, so a stored PDF's `pdf_error = NULL` can't wipe it.
+    if (pdfError) await setPdfError(id, pdfError).catch(() => {});
   } catch (err) {
     // POST /api/resume/:id/cancel already put the row back to 'awaiting_review';
     // writing anything else here would clobber it.

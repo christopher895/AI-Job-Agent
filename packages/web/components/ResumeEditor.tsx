@@ -245,15 +245,21 @@ export default function ResumeEditor({
     }
   }, [resume.id]);
 
-  // Load PDF whenever the user switches into a mode that shows the preview
+  // Load the PDF whenever the user switches into a mode that shows the preview.
+  // `meta.status` is a dependency on purpose: 'ready' is the only status with a
+  // PDF behind it (every other one 409s), so the fetch is skipped until the row
+  // gets there — and the status change is what re-runs this effect once the
+  // pipeline settles, loading the PDF on its own. The poll below clears
+  // hasAttemptedLoadRef, but a ref mutation alone never re-ran this effect,
+  // which is why a finished resume used to sit there until a manual Refresh.
   useEffect(() => {
-    if (viewMode !== "edit" && !pdfBlobUrl && !pdfLoading && !hasAttemptedLoadRef.current) {
-      hasAttemptedLoadRef.current = true;
-      loadPdf().catch(() => {
-        // Error already handled in loadPdf
-      });
-    }
-  }, [viewMode, pdfBlobUrl, pdfLoading, loadPdf]);
+    if (viewMode === "edit" || meta.status !== "ready") return;
+    if (pdfBlobUrl || pdfLoading || hasAttemptedLoadRef.current) return;
+    hasAttemptedLoadRef.current = true;
+    loadPdf().catch(() => {
+      // Error already handled in loadPdf
+    });
+  }, [viewMode, meta.status, pdfBlobUrl, pdfLoading, loadPdf]);
 
   // Revoke blob URL on unmount
   useEffect(() => {
@@ -287,9 +293,11 @@ export default function ResumeEditor({
           );
           return;
         }
-        // Let the PDF pane's auto-load effect retry now that a PDF might exist —
-        // it latched hasAttemptedLoadRef after an earlier attempt 409'd while pending.
+        // Let the PDF pane's auto-load effect retry now that a PDF exists — it
+        // latched hasAttemptedLoadRef after an earlier attempt 409'd while pending.
+        // The status change below is what actually re-runs that effect.
         hasAttemptedLoadRef.current = false;
+        setPdfError(null);
         setMeta({
           status: fresh.status,
           error: fresh.error,
