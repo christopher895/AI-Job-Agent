@@ -7,6 +7,7 @@ import { SortableSection, DragHandle } from "./SortableSection";
 const SECTIONS = ["Basics", "Experience", "Projects", "Skills", "Education", "Extracurriculars"] as const;
 type Section = (typeof SECTIONS)[number];
 type ViewMode = "edit" | "split" | "preview";
+type SkillField = keyof MasterResume["skills"];
 
 // Display labels for the four skill categories — these are the headings that end
 // up in the rendered resume, so they must match the ones format.ts/render-pdf.ts emit.
@@ -24,10 +25,12 @@ function Label({ children }: { children: React.ReactNode }) {
 function TextInput({
   value,
   onChange,
+  onBlur,
   placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
 }) {
   return (
@@ -35,6 +38,7 @@ function TextInput({
       type="text"
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
       placeholder={placeholder}
       className="w-full border border-paper-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-paper"
     />
@@ -68,6 +72,49 @@ function splitCsvRespectingParens(csv: string): string[] {
   const t = cur.trim();
   if (t) out.push(t);
   return out;
+}
+
+/** Plain comma-separated list: no special treatment for inner commas. */
+function splitCsv(csv: string): string[] {
+  return csv.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
+/**
+ * Text input over a list of values stored as an array.
+ *
+ * A parsed array can't round-trip what is being typed — "Rust," parses back to
+ * "Rust", so binding the input straight to `values.join(", ")` erased every
+ * comma the instant it was typed, making a second entry impossible to add. The
+ * raw keystrokes are kept here and shown as long as they still describe
+ * `values`; when they no longer do, the resume was replaced from elsewhere
+ * (import, text mode, reorder) and the canonical join wins. Blur clears the
+ * draft so the field settles back to canonical spacing.
+ */
+function CsvTextInput({
+  values,
+  onChange,
+  split = splitCsv,
+  placeholder,
+}: {
+  values: string[];
+  onChange: (values: string[]) => void;
+  split?: (csv: string) => string[];
+  placeholder?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const canonical = values.join(", ");
+  const value = draft !== null && split(draft).join(", ") === canonical ? draft : canonical;
+  return (
+    <TextInput
+      value={value}
+      onChange={(v) => {
+        setDraft(v);
+        onChange(split(v));
+      }}
+      onBlur={() => setDraft(null)}
+      placeholder={placeholder}
+    />
+  );
 }
 
 /** A textarea that grows to fit its content instead of scrolling internally — bullet text should always be fully visible. */
@@ -310,6 +357,13 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       await api.putMasterResume(resume);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
+      // The preview is a render of what was just saved, so re-render it rather
+      // than leaving a stale PDF next to the edits that produced it. Skipped in
+      // edit mode, where no preview is on screen and compiling one would be waste.
+      if (viewMode !== "edit" || previewBlobUrl) {
+        hasAttemptedPreviewRef.current = true;
+        generatePreview();
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -615,13 +669,10 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   }
 
   // ── Skills ───────────────────────────────────────────────────────
-  function setSkills(field: keyof MasterResume["skills"], csv: string) {
+  function setSkills(field: SkillField, values: string[]) {
     setResume((prev) => ({
       ...prev,
-      skills: {
-        ...prev.skills,
-        [field]: splitCsvRespectingParens(csv),
-      },
+      skills: { ...prev.skills, [field]: values },
     }));
   }
 
@@ -761,9 +812,9 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                         <div><Label>Name</Label><TextInput value={proj.name} onChange={(v) => setProjField(pi, "name", v)} /></div>
                         <div>
                           <Label>Tech (comma-separated)</Label>
-                          <TextInput
-                            value={proj.tech.join(", ")}
-                            onChange={(v) => setProjField(pi, "tech", v.split(",").map((s) => s.trim()).filter(Boolean))}
+                          <CsvTextInput
+                            values={proj.tech}
+                            onChange={(v) => setProjField(pi, "tech", v)}
                           />
                         </div>
                         <div><Label>Link</Label><TextInput value={proj.link} onChange={(v) => setProjField(pi, "link", v)} /></div>
@@ -800,9 +851,10 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                 {(["languages", "frameworks", "tools", "interests"] as const).map((field) => (
                   <div key={field}>
                     <Label>{SKILL_LABELS[field]}</Label>
-                    <TextInput
-                      value={resume.skills[field].join(", ")}
+                    <CsvTextInput
+                      values={resume.skills[field]}
                       onChange={(v) => setSkills(field, v)}
+                      split={splitCsvRespectingParens}
                       placeholder="TypeScript, Python, Go, ..."
                     />
                   </div>
@@ -825,16 +877,16 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                   </div>
                   <div className="mt-3">
                     <Label>Degrees (comma-separated)</Label>
-                    <TextInput
-                      value={edu.degrees.join(", ")}
-                      onChange={(v) => setEduField(idx, "degrees", v.split(",").map((s) => s.trim()).filter(Boolean))}
+                    <CsvTextInput
+                      values={edu.degrees}
+                      onChange={(v) => setEduField(idx, "degrees", v)}
                     />
                   </div>
                   <div className="mt-3">
                     <Label>Coursework (comma-separated)</Label>
-                    <TextInput
-                      value={edu.coursework.join(", ")}
-                      onChange={(v) => setEduField(idx, "coursework", v.split(",").map((s) => s.trim()).filter(Boolean))}
+                    <CsvTextInput
+                      values={edu.coursework}
+                      onChange={(v) => setEduField(idx, "coursework", v)}
                     />
                   </div>
                 </div>
