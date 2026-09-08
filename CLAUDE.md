@@ -51,6 +51,8 @@ When a job URL is submitted, the backend fetches the page with Playwright (JS-he
 ### PDF generation
 Every tailored or edited resume, and the master resume preview, is rendered to PDF via Tectonic (LaTeX) using `Resume_Template/czresume.cls`, and stored in the database alongside the resume record. Downloadable from the editor and the dashboard. Attached when "Email to me" is clicked.
 
+**The apply pass stores the PDF before it flips the row to `ready`.** The editor stops polling the instant it sees `ready` and immediately asks for the PDF, so storing it afterwards left a window where a finished resume had no PDF and `GET /resume/:id/pdf` had to render one on demand mid-request — the preview pane fell back to its "click Refresh" empty state and the resume sat there looking broken until a manual refresh. The pane's auto-load effect also keys on the row's status (`ResumeEditor.tsx`), so the load re-fires on its own when the pipeline settles; clearing `hasAttemptedLoadRef` alone never re-ran it, since a ref mutation doesn't re-trigger an effect.
+
 Tectonic downloads TeX Live fonts lazily on first use, so the Docker image pre-warms its cache at build time: `Resume_Template/cache-warmup.tex` is compiled into `TECTONIC_CACHE_DIR=/opt/tectonic-cache`, baking every font the renderer can reach into the image. Without this, the first render in each fresh container fetches fonts mid-request and dies outright when the upstream bundle CDN rate-limits (HTTP 429) — `error: Cannot proceed without .vf or "physical" font for PDF output`. **Keep `cache-warmup.tex` in sync with the character replacements in `render-pdf.ts`'s `tex()`** — any new macro it can emit must also appear in the warm-up doc, or that macro's font won't be cached.
 
 Non-Latin-1 characters an LLM emits into a bullet (`→ ← ↔ ⇒ − ≤ ≥ … • ™ " " ' '`) have no glyph in this template's 8-bit font stack. `tex()` maps each to a LaTeX macro; left raw they don't fail the render, they *silently vanish* from the PDF with only a "Missing character" warning. `test:tex-escape` guards this.
@@ -278,8 +280,10 @@ POST /api/tailor (jd text or job URL)
       → POST /api/resume/:id/apply-suggestions (accepted suggestions)
         → row back to status='pending', respond 202 immediately
           → [background] applySuggestions(master, accepted) + renderMarkdown + fitToOnePage(skipWidowFix)
-            → update row: markdown, suggestions (full accepted+rejected set), status='ready' (or 'failed')
-              → [background] render PDF via Tectonic/czresume.cls → store in tailored_resumes.pdf (or pdf_error)
+            → render PDF via Tectonic/czresume.cls → store in tailored_resumes.pdf, BEFORE the flip below
+              (a fitToOnePage failure falls back to a plain renderPdf here; if that fails too the row
+               still goes 'ready' with pdf_error set and /pdf renders on demand)
+              → update row: markdown, suggestions (full accepted+rejected set), status='ready' (or 'failed')
         → frontend polls GET /api/resumes/:id again until status leaves 'pending'
 ```
 
