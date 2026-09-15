@@ -353,5 +353,31 @@ function check(label: string, ok: boolean, detail?: string) {
   );
 }
 
+// Case: Greenhouse's current job board (job-boards.greenhouse.io), structure
+// copied from a real Figma posting — no JSON-LD, <title> is
+// "Job Application for {title} at {company}", location lives in .job__location.
+// Previously company and location both came back empty.
+{
+  const html = `<html><head><title>Job Application for Software Engineer - Infra (Summer 2027) at Figma</title></head>
+<body><div class="job__header"><div class="job__title"><h1 class="section-header">Software Engineer - Infra (Summer 2027)</h1>
+<div class="job__location"><svg></svg><div>San Francisco, CA • New York, NY</div></div></div></div>
+<div class="job__description body"><div><h2>What you'll do</h2><p>${"Build collaborative design tooling used by millions. ".repeat(10)}</p></div></div>
+</body></html>`;
+  const url = "https://job-boards.greenhouse.io/figma/jobs/6143238004?gh_jid=6143238004";
+  const result = extractFromHtml(html, url);
+
+  check(
+    "greenhouse",
+    result.title === "Software Engineer - Infra (Summer 2027)",
+    `title mismatch: got ${JSON.stringify(result.title)}`
+  );
+  check("greenhouse", result.company === "Figma", `company mismatch: got ${JSON.stringify(result.company)}`);
+  check(
+    "greenhouse",
+    result.location === "San Francisco, CA • New York, NY",
+    `location mismatch: got ${JSON.stringify(result.location)}`
+  );
+}
+
 console.log(allPass ? "\n✓ fetch-jd extraction test PASSED" : "\n✗ fetch-jd extraction test FAILED");
 process.exit(allPass ? 0 : 1);

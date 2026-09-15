@@ -153,6 +153,17 @@ function extractTitleCompany($: CheerioAPI, url: string): { title?: string; comp
   const pageTitle = stripJobBoardBrand(normalize($("title").first().text()), url);
   if (!pageTitle) return {};
 
+  // Greenhouse's job boards (job-boards.greenhouse.io and embedded boards) title
+  // every posting "Job Application for {Job Title} at {Company}" — no separator
+  // and no JSON-LD, so without this the company is lost entirely. Checked before
+  // the separator split, which would otherwise cut a title like
+  // "Software Engineer - Infra" at its own " - ". Greedy match splits on the
+  // LAST " at ", since a job title can contain " at " but a company rarely does.
+  const greenhouse = pageTitle.match(/^Job Application for (.+) at (.+)$/i);
+  if (greenhouse) {
+    return { title: h1 || normalize(greenhouse[1]), company: normalize(greenhouse[2]) };
+  }
+
   // Job titles often contain " - " themselves (e.g. "X 2027 - Software Engineer"),
   // so prefer stripping the h1's own text off the front of <title> over a naive split.
   if (h1 && pageTitle.toLowerCase().startsWith(h1.toLowerCase())) {
@@ -177,8 +188,9 @@ function extractTitleCompany($: CheerioAPI, url: string): { title?: string; comp
   return { title: h1 || pageTitle };
 }
 
-// Greenhouse, Lever, Ashby, and Workday all embed a schema.org JobPosting
-// block for SEO — it's the most reliable source for structured location and
+// Lever, Ashby, and Workday embed a schema.org JobPosting block for SEO
+// (Greenhouse's current job-boards.greenhouse.io layout does NOT — see
+// extractAtsLocation and the title pattern in extractTitleCompany) — it's the most reliable source for structured location and
 // company data, since scraping visible page text is brittle across ATS
 // themes. Extracted together in one scan since both live on the same node.
 function extractJsonLdJobPosting($: CheerioAPI): { location?: string; company?: string } {
@@ -228,6 +240,20 @@ function extractJsonLdJobPosting($: CheerioAPI): { location?: string; company?: 
     }
   }
   return {};
+}
+
+// ATS themes that render location in a dedicated element rather than JSON-LD
+// or a "Location:" label: Greenhouse's current job boards (.job__location),
+// its classic boards.greenhouse.io layout (#header .location), and Lever
+// (.posting-categories .location).
+const ATS_LOCATION_SELECTORS = [".job__location", "#header .location", ".posting-categories .location"];
+
+function extractAtsLocation($: CheerioAPI): string | undefined {
+  for (const sel of ATS_LOCATION_SELECTORS) {
+    const text = normalize($(sel).first().text());
+    if (text) return text;
+  }
+  return undefined;
 }
 
 const LOCATION_LABEL_RE = /^location:?$/i;
@@ -424,7 +450,7 @@ export function extractFromHtml(html: string, url: string): ExtractResult {
   const jsonLd = extractJsonLdJobPosting($);
   const hostGuess = companyFromHost(url);
   const company = jsonLd.company ?? titleCompany.company ?? (hostGuess ? improveCasing(hostGuess, $) : undefined);
-  const location = jsonLd.location ?? extractLabelLocation($);
+  const location = jsonLd.location ?? extractAtsLocation($) ?? extractLabelLocation($);
 
   $(NOISE_SELECTORS).remove();
   const cleanedHtml = $.html();
