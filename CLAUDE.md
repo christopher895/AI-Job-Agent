@@ -51,6 +51,8 @@ When a job URL is submitted, the backend fetches the page with Playwright (JS-he
 ### PDF generation
 Every tailored or edited resume, and the master resume preview, is rendered to PDF via Tectonic (LaTeX) using `Resume_Template/czresume.cls`, and stored in the database alongside the resume record. Downloadable from the editor and the dashboard. Attached when "Email to me" is clicked.
 
+The download/attachment filename comes from `buildResumeFilename()` (`src/utils/filename.ts`), shared by `GET /resume/:id/pdf` and "Email to me" so the two never drift. Raw ATS titles are far too long to use as-is ("Software Engineer Data & AI I (Intern) - United States"), so `condenseJobTitle()` keeps only the chunk that carries the role: it splits on dashes/pipes and takes the **first chunk naming a role** (`ROLE_NOUNS`), falling back to the first chunk with any word left after noise removal. Not simply the first chunk — "2026 Summer Internship - Software Engineer" leads with noise and "Amazon Web Services - Software Development Engineer" leads with an org that survives noise removal. Not the longest either — that picks the location out of "Data Scientist | Greater New York City Area". Parentheticals, level markers, `Intern`/`Remote`/country words and posting dates are dropped; `Senior` and a comma-introduced specialty are kept. A season is dropped only when a year sits next to it, so "Spring Boot Engineer" survives. The bracket strip requires a closing bracket — making it optional let one stray `(` in a scraped title swallow the role and every separator after it. Output is capped at 40 characters on a word boundary, and never empty — an all-noise title falls back to its first chunk. `test:filename` (fast gate) guards all of this.
+
 **The apply pass stores the PDF before it flips the row to `ready`.** The editor stops polling the instant it sees `ready` and immediately asks for the PDF, so storing it afterwards left a window where a finished resume had no PDF and `GET /resume/:id/pdf` had to render one on demand mid-request — the preview pane fell back to its "click Refresh" empty state and the resume sat there looking broken until a manual refresh. The pane's auto-load effect also keys on the row's status (`ResumeEditor.tsx`), so the load re-fires on its own when the pipeline settles; clearing `hasAttemptedLoadRef` alone never re-ran it, since a ref mutation doesn't re-trigger an effect.
 
 Tectonic downloads TeX Live fonts lazily on first use, so the Docker image pre-warms its cache at build time: `Resume_Template/cache-warmup.tex` is compiled into `TECTONIC_CACHE_DIR=/opt/tectonic-cache`, baking every font the renderer can reach into the image. Without this, the first render in each fresh container fetches fonts mid-request and dies outright when the upstream bundle CDN rate-limits (HTTP 429) — `error: Cannot proceed without .vf or "physical" font for PDF output`. **Keep `cache-warmup.tex` in sync with the character replacements in `render-pdf.ts`'s `tex()`** — any new macro it can emit must also appear in the warm-up doc, or that macro's font won't be cached.
@@ -116,6 +118,8 @@ agent/src/
 │   ├── pool.ts               # pg Pool
 │   ├── schema.ts             # CREATE TABLE statements
 │   └── queries.ts            # All DB access functions
+├── utils/
+│   └── filename.ts          # buildResumeFilename() + condenseJobTitle() — the download/email PDF filename
 └── config.ts                # FILTERS/Preferences type, thresholds
 ```
 
