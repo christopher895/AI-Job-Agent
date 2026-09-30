@@ -82,6 +82,12 @@ export const MasterResumeSchema = z.object({
     tools: z.array(z.string()).default([]),
     interests: z.array(z.string()).default([]),
   }),
+  /**
+   * Free-form notes in the candidate's own words — motivations, goals, the story
+   * behind projects. Never rendered into a resume; only fed to generateAnswers()
+   * so "why this company?" answers draw on real reasons instead of guesses.
+   */
+  aboutMe: z.string().default(""),
 });
 export type MasterResume = z.infer<typeof MasterResumeSchema>;
 

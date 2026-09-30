@@ -343,6 +343,7 @@ const master: MasterResume = {
       "Video Editing",
     ],
   },
+  aboutMe: "",
 };
 
 /** Validated at import so a malformed edit fails fast. */
