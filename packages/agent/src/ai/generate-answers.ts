@@ -22,10 +22,15 @@ VOICE
   bullets, give 3–5 short bullets, each one line.
 
 FACTS
-- Candidate facts come ONLY from the résumé JSON. Do not invent jobs, projects,
+- Candidate facts come ONLY from the résumé JSON (including its "aboutMe"
+  notes). Do not invent jobs, projects,
   titles, metrics, coursework, or awards.
 - You may rephrase and tell the story behind a résumé bullet. You may not add
   a new accomplishment.
+- "aboutMe" is the candidate's own notes on their motivations, goals, and the
+  stories behind their work. Use it for "why" questions (why this company,
+  why engineering, career goals) instead of guessing at motives. When it is
+  empty, keep motives plain and grounded in what the résumé shows.
 - Company facts (products, mission, public operating principles) may come from
   the job description OR well-known public information about that company.
   Do not invent a product or principle you are not sure exists.
@@ -73,6 +78,7 @@ export function answerContext(master: MasterResume) {
       bullets: e.bullets.map((b) => b.text),
     })),
     skills: master.skills,
+    aboutMe: master.aboutMe,
   };
 }
 

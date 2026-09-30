@@ -4,7 +4,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, MasterResume, ExperienceEntry, ProjectEntry, EducationEntry } from "../lib/api";
 import { SortableSection, DragHandle } from "./SortableSection";
 
-const SECTIONS = ["Basics", "Experience", "Projects", "Skills", "Education", "Extracurriculars"] as const;
+const SECTIONS = ["Basics", "Experience", "Projects", "Skills", "Education", "Extracurriculars", "About me"] as const;
 type Section = (typeof SECTIONS)[number];
 type ViewMode = "edit" | "split" | "preview";
 type SkillField = keyof MasterResume["skills"];
@@ -328,6 +328,14 @@ function PdfPreviewPane({
   );
 }
 
+/**
+ * Imports and "Edit as text" rebuild the resume from résumé text, which never
+ * carries the About-me notes — keep the current ones instead of blanking them.
+ */
+function keepAboutMe(parsed: MasterResume, prev: MasterResume): MasterResume {
+  return { ...parsed, aboutMe: prev.aboutMe ?? "" };
+}
+
 export default function MasterResumeForm({ initial }: { initial: MasterResume }) {
   const [resume, setResume] = useState<MasterResume>(initial);
   const [saving, setSaving] = useState(false);
@@ -377,7 +385,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     setImportError(null);
     try {
       const parsed = await api.importMasterResumeText(importText);
-      setResume(parsed);
+      setResume((prev) => keepAboutMe(parsed, prev));
       setShowImport(false);
       setImportText("");
     } catch (e) {
@@ -392,7 +400,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     setImportError(null);
     try {
       const parsed = await api.importMasterResumePdf(file);
-      setResume(parsed);
+      setResume((prev) => keepAboutMe(parsed, prev));
       setShowImport(false);
     } catch (e) {
       setImportError(e instanceof Error ? e.message : "Import failed");
@@ -412,7 +420,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     setTextApplyError(null);
     try {
       const parsed = await api.importMasterResumeText(textDraft);
-      setResume(parsed);
+      setResume((prev) => keepAboutMe(parsed, prev));
     } catch (e) {
       setTextApplyError(e instanceof Error ? e.message : "Failed to parse text");
     } finally {
@@ -891,6 +899,23 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── About me ── */}
+          {activeSection === "About me" && (
+            <div>
+              <SectionHeader title="About me" />
+              <p className="text-sm text-paper-muted mb-3">
+                Never shown on your resume. Used only when drafting application answers, so
+                &ldquo;why this company?&rdquo; answers come from your real reasons: why you like
+                engineering, what you want to work on, the story behind your projects.
+              </p>
+              <AutoGrowTextarea
+                value={resume.aboutMe ?? ""}
+                onChange={(v) => setResume((prev) => ({ ...prev, aboutMe: v }))}
+                className="w-full min-h-[12rem] border border-paper-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-paper resize-none"
+              />
             </div>
           )}
 

@@ -18,6 +18,10 @@ check("context includes the candidate name", ctx.name === MASTER_RESUME.basics.n
 check("context includes education", ctx.education.length === MASTER_RESUME.education.length);
 check("experience bullets are plain strings", typeof ctx.experience[0]?.bullets[0] === "string");
 check("project names survive", ctx.projects.some((p) => p.name === "Dating Profile Analyzer"));
+check(
+  "context carries the aboutMe notes",
+  answerContext({ ...MASTER_RESUME, aboutMe: "I like debugging prod." }).aboutMe === "I like debugging prod."
+);
 check("context has no bullet ids (essays don't need them)", !JSON.stringify(ctx).includes("exp-scout-1"));
 
 const raw = RawApplicationAnswersSchema.parse({

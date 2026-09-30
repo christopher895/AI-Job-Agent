@@ -175,6 +175,8 @@ export type MasterResume = {
     tools: string[];
     interests: string[];
   };
+  /** Candidate's own notes for application answers — never rendered on the resume. */
+  aboutMe?: string;
 };
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {

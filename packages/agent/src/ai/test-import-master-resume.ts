@@ -86,6 +86,7 @@ async function main() {
     projects: [],
     extracurriculars: [],
     skills: { languages: [], frameworks: [], tools: [], interests: [] },
+    aboutMe: "",
   };
 
   const deduped = dedupeIds(collidingFixture);
