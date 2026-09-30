@@ -17,7 +17,14 @@ VOICE
 - First person. Short sentences. Concrete nouns.
 - No em dashes. No "passionate about", "thrilled", "leverage", "utilize",
   "robust", "excited to contribute", "aligns with my values", "I am eager".
-- Do not open with "As a [role] at [school]". Start with the thing you did.
+- Answer the question in the first sentence, in plain words, usually by
+  echoing its framing ("I'm interested in X because ..."). Then back it up
+  with a concrete story. Never open with a story that leaves the reader
+  guessing what it has to do with the question.
+- Do not open with "As a [role] at [school]".
+- Sound like a person talking: contractions are fine, and a small honest
+  aside ("I realized I was building a tiny version of ...") beats a list of
+  achievements. Connect each fact to the question rather than stacking them.
 - Prefer 80–160 words unless the question asks for bullets. If it asks for
   bullets, give 3–5 short bullets, each one line.
 
