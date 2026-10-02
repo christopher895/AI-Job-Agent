@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
 import { closeBrowserSafely } from "./browser-utils";
 import { assertSafeUrl, fetchFollowingSafeRedirects } from "./ssrf";
+import { isJobrightUrl, resolveJobright } from "./jobright";
 
 export type FetchJdResult = {
   text: string;
@@ -591,6 +592,28 @@ async function tryPlaywright(url: string): Promise<ExtractResult> {
 
 export async function fetchJd(url: string): Promise<FetchJdResult> {
   await assertSafeUrl(url);
+
+  // Jobright blocks our server and hides the JD; fetch the employer's own
+  // posting instead (see jobright.ts). Jobright's title/company/location are
+  // the fallback when the ATS page doesn't yield them.
+  if (isJobrightUrl(url)) {
+    const job = await resolveJobright(url);
+    if (job?.originalUrl) {
+      try {
+        const r = await fetchJd(job.originalUrl);
+        if (r.method !== "failed") {
+          return {
+            ...r,
+            title: r.title ?? job.title,
+            company: r.company ?? job.company,
+            location: r.location ?? job.location,
+          };
+        }
+      } catch {
+        // unsafe/unreachable employer link — fall through to fetching Jobright itself
+      }
+    }
+  }
 
   try {
     const r = await tryCheerio(url);
