@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { extractFromHtml } from "./fetch-jd";
+import { extractFromHtml, isBotChallenge } from "./fetch-jd";
 
 let allPass = true;
 
@@ -377,6 +377,28 @@ function check(label: string, ok: boolean, detail?: string) {
     result.location === "San Francisco, CA • New York, NY",
     `location mismatch: got ${JSON.stringify(result.location)}`
   );
+}
+
+// Case: Jobright's anti-bot interstitial, served to Railway's datacenter IP
+// while a laptop gets the real page. Its body text cleared MIN_LENGTH and got
+// tailored against as if it were the JD — must come back empty instead.
+{
+  const html = `<!DOCTYPE html><html><head><title>Jobright</title></head><body><div>
+    <span>Jobright</span><span>✓</span><h1>One quick security check</h1>
+    <p>We’ll continue automatically when the security check is complete. If prompted, complete the check below.</p>
+    <p>Preparing secure check…</p><p>✓Security check complete</p>
+    <p>Loading secure verification… You’ll continue automatically.</p>
+    <button>Continue</button><button>Retry</button></div></body></html>`;
+  const result = extractFromHtml(html, "https://jobright.ai/jobs/info/6aa1bcd0dbc0e60e37e13491");
+  console.log("[bot-challenge] text length:", result.text.length);
+  check("bot-challenge", result.text === "", `challenge text leaked as JD: ${JSON.stringify(result.text.slice(0, 80))}`);
+  check("bot-challenge", !result.confident, "challenge page marked confident");
+
+  check("bot-challenge", isBotChallenge("Just a moment... Enable JavaScript and cookies to continue"), "Cloudflare interstitial not detected");
+  const realJd =
+    "Responsibilities: build internal AI tooling with the DevOps team. Requirements: Python, TypeScript. " +
+    "Candidates must pass a security check and background screening prior to start. ".repeat(12);
+  check("bot-challenge", !isBotChallenge(realJd), "a long real JD mentioning 'security check' was flagged as a challenge");
 }
 
 console.log(allPass ? "\n✓ fetch-jd extraction test PASSED" : "\n✗ fetch-jd extraction test FAILED");

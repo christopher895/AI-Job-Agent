@@ -432,6 +432,20 @@ function hasJdSignal(text: string): boolean {
   return JD_SIGNAL_RE.test(text);
 }
 
+// Anti-bot interstitials (Jobright's "One quick security check", Cloudflare's
+// "Just a moment..." / "Verify you are human") are served to datacenter IPs
+// like Railway's while a laptop gets the real page. Their body text can clear
+// MIN_LENGTH, and the Playwright path accepts unconfident body text, so without
+// this the challenge copy itself got handed to the LLM as the job description.
+// Gated on length so a real JD that mentions "security check" isn't rejected.
+const BOT_CHALLENGE_RE =
+  /\bsecurity check\b|\bsecure verification\b|\bverify(?:ing)? you are (?:a )?human\b|\bchecking your browser\b|\bjust a moment\.\.\.|\benable javascript and cookies to continue\b|\bsecurity of your connection\b/i;
+const BOT_CHALLENGE_MAX_LENGTH = 1000;
+
+export function isBotChallenge(text: string): boolean {
+  return text.length < BOT_CHALLENGE_MAX_LENGTH && BOT_CHALLENGE_RE.test(text);
+}
+
 type ExtractResult = {
   text: string;
   title?: string;
@@ -516,6 +530,10 @@ export function extractFromHtml(html: string, url: string): ExtractResult {
     text = normalize($("body").text());
   }
 
+  if (isBotChallenge(text)) {
+    return { text: "", ...titleCompany, company, location, confident: false };
+  }
+
   return { text, ...titleCompany, company, location, confident };
 }
 
@@ -534,6 +552,9 @@ async function tryCheerio(url: string): Promise<ExtractResult> {
   if (!result.confident) return { ...result, text: "" };
   return result;
 }
+
+const CHALLENGE_POLLS = 3;
+const CHALLENGE_POLL_MS = 2_500;
 
 async function tryPlaywright(url: string): Promise<ExtractResult> {
   const { chromium } = await import("playwright");
@@ -554,8 +575,15 @@ async function tryPlaywright(url: string): Promise<ExtractResult> {
       }
     });
     await page.goto(url, { waitUntil: "networkidle", timeout: TIMEOUT_MS });
-    const html = await page.content();
-    return extractFromHtml(html, url);
+    let result = extractFromHtml(await page.content(), url);
+    // A bot challenge that says it will "continue automatically" sometimes
+    // does clear on its own in a real browser — give it a few seconds before
+    // giving up, rather than reporting failure off the interstitial.
+    for (let i = 0; i < CHALLENGE_POLLS && !result.text && isBotChallenge(normalize(await page.innerText("body").catch(() => ""))); i++) {
+      await page.waitForTimeout(CHALLENGE_POLL_MS);
+      result = extractFromHtml(await page.content(), url);
+    }
+    return result;
   } finally {
     await closeBrowserSafely(browser);
   }
