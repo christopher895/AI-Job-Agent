@@ -49,6 +49,8 @@ Everything below is implemented and running in production, not aspirational — 
 ### JD auto-fetch
 When a job URL is submitted, the backend fetches the page with Playwright (JS-heavy) or Cheerio (static), extracts the article body with Mozilla Readability (`@mozilla/readability` + `jsdom`), and validates the URL against SSRF (blocks localhost/private IPs/cloud metadata endpoints) — see `fetch-jd.ts`. Falls back to a paste box if the page is blocked or returns no useful content. Anti-bot interstitials (Jobright's "One quick security check", Cloudflare's "Just a moment...") are served to Railway's datacenter IP even when a laptop gets the real page; `isBotChallenge()` recognises their short body text and turns it into a failed fetch, since otherwise the Playwright path would accept the challenge copy as the JD. `test:fetch-jd` guards this.
 
+Jobright links get special handling (`scraper/jobright.ts`): even past the challenge, a logged-out Jobright page has only a two-sentence summary. With a saved Jobright session (`JOBRIGHT_AUTH_JSON_B64`, or `packages/agent/auth.json` locally), `fetchJd` reads the employer's own posting URL (`originalUrl`, usually Ashby/Greenhouse/Lever) from the logged-in page's `__NEXT_DATA__` and fetches that instead, keeping Jobright's title/company/location as fallbacks. No session, an expired one (~2 months), or a challenged page falls back to the normal path and the paste box.
+
 ### PDF generation
 Every tailored or edited resume, and the master resume preview, is rendered to PDF via Tectonic (LaTeX) using `Resume_Template/czresume.cls`, and stored in the database alongside the resume record. Downloadable from the editor and the dashboard. Attached when "Email to me" is clicked.
 
@@ -83,6 +85,7 @@ agent/src/
 │   ├── index.ts            # Orchestrator — scrapes all companies, emails new jobs
 │   ├── types.ts            # Shared JobListing type
 │   ├── fetch-jd.ts         # Auto-fetch JD text from a job URL (Cheerio → Playwright fallback, Readability extraction)
+│   ├── jobright.ts         # Resolves a pasted Jobright link to the employer's posting via a saved session
 │   ├── browser-utils.ts    # Shared Playwright browser lifecycle helpers
 │   ├── diff.ts             # Snapshot diffing (hash sets)
 │   ├── filters.ts          # Location + keyword scoring (reads `preferences` table)
@@ -392,6 +395,9 @@ GMAIL_OAUTH_CLIENT_ID          # Gmail ingestion — dedicated OAuth2 client (gm
 GMAIL_OAUTH_CLIENT_SECRET
 GMAIL_OAUTH_REFRESH_TOKEN     # minted via `npx tsx scripts/mint-gmail-token.ts`
 GMAIL_INGEST_ENABLED          # "true" to enable the ingest cron tick (leave unset/false until verified)
+
+JOBRIGHT_AUTH_JSON_B64        # optional — base64 Playwright storageState for a logged-in Jobright session; lets
+                              # pasted jobright.ai links resolve to the employer's posting. Re-mint when it expires (~2 months)
 ```
 
 See `.env.example` for the authoritative, commented list.

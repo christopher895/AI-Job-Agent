@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { extractFromHtml, isBotChallenge } from "./fetch-jd";
+import { isJobrightUrl, jobrightCookieHeader, parseJobrightPage, postingUrlFromApplyLink } from "./jobright";
 
 let allPass = true;
 
@@ -399,6 +400,46 @@ function check(label: string, ok: boolean, detail?: string) {
     "Responsibilities: build internal AI tooling with the DevOps team. Requirements: Python, TypeScript. " +
     "Candidates must pass a security check and background screening prior to start. ".repeat(12);
   check("bot-challenge", !isBotChallenge(realJd), "a long real JD mentioning 'security check' was flagged as a challenge");
+}
+
+// Case: a logged-in Jobright page resolves to the employer's own posting.
+// The apply-form URL is turned back into the posting URL (Ashby's form has no
+// JD), and a logged-out page — no originalUrl — yields no link to follow.
+{
+  const page = (jobResult: object) =>
+    `<html><body><script id="__NEXT_DATA__" type="application/json">${JSON.stringify({
+      props: { pageProps: { dataSource: { jobResult, companyResult: { companyName: "Trajectory" } } } },
+    })}</script></body></html>`;
+
+  const loggedIn = parseJobrightPage(page({
+    jobTitle: "Member of Technical Staff - Intern",
+    jobLocation: "San Francisco, CA",
+    originalUrl: "https://jobs.ashbyhq.com/trajectory/00cd9b1a-5d48-4ecb-8c53-cd27727448c5/application",
+  }));
+  check("jobright", loggedIn?.originalUrl === "https://jobs.ashbyhq.com/trajectory/00cd9b1a-5d48-4ecb-8c53-cd27727448c5",
+    `originalUrl mismatch: got ${JSON.stringify(loggedIn?.originalUrl)}`);
+  check("jobright", loggedIn?.company === "Trajectory" && loggedIn?.location === "San Francisco, CA", "company/location not parsed");
+
+  const loggedOut = parseJobrightPage(page({ jobTitle: "Member of Technical Staff - Intern" }));
+  check("jobright", loggedOut !== undefined && loggedOut.originalUrl === undefined, "logged-out page produced an employer link");
+  check("jobright", parseJobrightPage("<html>One quick security check</html>") === undefined, "challenge page parsed as a job");
+  check("jobright", parseJobrightPage(page({ originalUrl: "https://jobright.ai/jobs/info/abc" }))?.originalUrl === undefined,
+    "a Jobright link was accepted as the employer link (would loop)");
+
+  check("jobright", postingUrlFromApplyLink("https://jobs.lever.co/acme/123/apply") === "https://jobs.lever.co/acme/123", "Lever /apply not stripped");
+  check("jobright", postingUrlFromApplyLink("https://boards.greenhouse.io/acme/jobs/1") === "https://boards.greenhouse.io/acme/jobs/1", "Greenhouse link altered");
+
+  check("jobright", isJobrightUrl("https://jobright.ai/jobs/info/x") && !isJobrightUrl("https://notjobright.ai/x"), "isJobrightUrl host match wrong");
+
+  const state = (cookies: object[]) => JSON.stringify({ cookies });
+  check("jobright", jobrightCookieHeader(state([
+    { name: "SESSION_ID", value: "abc", domain: ".jobright.ai" },
+    { name: "_ga", value: "1", domain: ".jobright.ai" },
+    { name: "other", value: "z", domain: ".duosecurity.com" },
+  ])) === "SESSION_ID=abc; _ga=1", "cookie header wrong");
+  check("jobright", jobrightCookieHeader(state([{ name: "_ga", value: "1", domain: ".jobright.ai" }])) === undefined,
+    "state without a session cookie treated as logged in");
+  check("jobright", jobrightCookieHeader("not json") === undefined, "malformed state not rejected");
 }
 
 console.log(allPass ? "\n✓ fetch-jd extraction test PASSED" : "\n✗ fetch-jd extraction test FAILED");
