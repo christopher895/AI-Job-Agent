@@ -47,7 +47,7 @@ Everything below is implemented and running in production, not aspirational — 
 | `/preferences` | Edit scraper filters (title/required keywords, target locations, priority companies, max alerts per email) — backed by the `preferences` DB table and `/api/preferences` |
 
 ### JD auto-fetch
-When a job URL is submitted, the backend fetches the page with Playwright (JS-heavy) or Cheerio (static), extracts the article body with Mozilla Readability (`@mozilla/readability` + `jsdom`), and validates the URL against SSRF (blocks localhost/private IPs/cloud metadata endpoints) — see `fetch-jd.ts`. Falls back to a paste box if the page is blocked or returns no useful content.
+When a job URL is submitted, the backend fetches the page with Playwright (JS-heavy) or Cheerio (static), extracts the article body with Mozilla Readability (`@mozilla/readability` + `jsdom`), and validates the URL against SSRF (blocks localhost/private IPs/cloud metadata endpoints) — see `fetch-jd.ts`. Falls back to a paste box if the page is blocked or returns no useful content. Anti-bot interstitials (Jobright's "One quick security check", Cloudflare's "Just a moment...") are served to Railway's datacenter IP even when a laptop gets the real page; `isBotChallenge()` recognises their short body text and turns it into a failed fetch, since otherwise the Playwright path would accept the challenge copy as the JD. `test:fetch-jd` guards this.
 
 ### PDF generation
 Every tailored or edited resume, and the master resume preview, is rendered to PDF via Tectonic (LaTeX) using `Resume_Template/czresume.cls`, and stored in the database alongside the resume record. Downloadable from the editor and the dashboard. Attached when "Email to me" is clicked.
