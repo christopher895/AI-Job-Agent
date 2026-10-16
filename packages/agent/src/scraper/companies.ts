@@ -36,7 +36,6 @@ export const COMPANIES: Company[] = [
   { name: "Scale AI",        platform: "greenhouse", slug: "scaleai" },
   { name: "Descript",        platform: "greenhouse", slug: "descript" },
   { name: "Together AI",     platform: "greenhouse", slug: "togetherai" },
-  { name: "Hex",             platform: "greenhouse", slug: "HexTechnologies" },
   { name: "Gusto",           platform: "greenhouse", slug: "gusto" },
   { name: "Pave",            platform: "greenhouse", slug: "paveakatroveinformationtechnologies" },
   { name: "Peloton",         platform: "greenhouse", slug: "peloton" },
@@ -110,6 +109,7 @@ export const COMPANIES: Company[] = [
   { name: "Modal",           platform: "ashby", slug: "modal" },
   { name: "Pinecone",        platform: "ashby", slug: "pinecone" },
   { name: "Temporal",        platform: "ashby", slug: "temporal" },
+  { name: "Hex",             platform: "ashby", slug: "hex" },                  // moved off Greenhouse ("HexTechnologies" 404s)
   { name: "Sentry",          platform: "ashby", slug: "sentry" },
   { name: "Harvey",          platform: "ashby", slug: "harvey" },
   { name: "Sierra",          platform: "ashby", slug: "sierra" },
