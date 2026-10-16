@@ -76,7 +76,6 @@ export const COMPANIES: Company[] = [
   // ── Greenhouse — fintech ────────────────────────────────────────────────────
   { name: "SoFi",            platform: "greenhouse", slug: "sofi" },
   { name: "Betterment",      platform: "greenhouse", slug: "betterment" },
-  { name: "Marqeta",         platform: "greenhouse", slug: "marqeta" },
   { name: "Carta",           platform: "greenhouse", slug: "carta" },
   { name: "BILL",            platform: "greenhouse", slug: "billcom" },
   { name: "Ripple",          platform: "greenhouse", slug: "ripple" },
@@ -101,7 +100,6 @@ export const COMPANIES: Company[] = [
   { name: "Amplitude",       platform: "ashby", slug: "amplitude" },
   { name: "Plaid",           platform: "ashby", slug: "plaid" },
   { name: "Benchling",       platform: "ashby", slug: "benchling" },
-  { name: "Superhuman",      platform: "ashby", slug: "superhuman" },
   { name: "Fin.ai",          platform: "ashby", slug: "fin" },                  // formerly Intercom
   { name: "Whoop",           platform: "ashby", slug: "whoop" },
   { name: "Eight Sleep",     platform: "ashby", slug: "eightsleep" },

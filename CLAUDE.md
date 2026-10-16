@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An autonomous AI agent that monitors 115+ company career pages 24/7, detects new job postings via each company's ATS API (Greenhouse/Ashby/Lever/Amazon/Goldman) and snapshot diffing, auto-tailors Christopher's resume per role by suggesting JD keyword insertions against his fixed master resume for Christopher to review and approve, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, review/approve suggested edits, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — gated behind Google sign-in restricted to his email.
+An autonomous AI agent that monitors 110+ company career pages 24/7, detects new job postings via each company's ATS API (Greenhouse/Ashby/Lever/Amazon/Goldman) and snapshot diffing, auto-tailors Christopher's resume per role by suggesting JD keyword insertions against his fixed master resume for Christopher to review and approve, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, review/approve suggested edits, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — gated behind Google sign-in restricted to his email.
 
 Owner: **Christopher Zhang** (Summer 2026 build)
 
@@ -10,7 +10,7 @@ Owner: **Christopher Zhang** (Summer 2026 build)
 
 Everything below is implemented and running in production, not aspirational — this used to be a "what's being built" roadmap; it has since shipped.
 
-- **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon, Goldman adapters (115+ companies); snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
+- **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon, Goldman adapters (110+ companies); snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
 - **Alert emails** — Resend email listing new jobs (title, company, link) with a "Tailor resume" link per job → `/tailor?jobUrl=...&title=...&company=...`
 - **AI tailoring pipeline** — `suggestKeywords(jd, master)` in `packages/agent/src/ai/suggest-keywords.ts`: a single pass proposes keyword-insertion suggestions (bullet rewrites and skill additions) against the fixed, one-page master resume, which is never reordered or cut. Christopher reviews, edits, and checks off suggestions in a checklist; `POST /api/resume/:id/apply-suggestions` applies only the accepted ones and renders the final one-page Markdown. (The old 3-pass generate→critique→revise loop and the JD-less "general resume" feature it backed have been removed — the suggestion-based flow is the only tailoring path.)
 - **LLM provider** — Claude by default, via the headless `claude -p` CLI (`packages/agent/src/ai/claude-cli.ts`), authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing). Runs on `--model opus` — a tier alias, so it follows new Opus releases rather than pinning a version; override with `CLAUDE_MODEL`. OpenAI/GPT-4o is a manual fallback (`LLM_PROVIDER=openai`)
@@ -89,7 +89,7 @@ agent/src/
 │   ├── browser-utils.ts    # Shared Playwright browser lifecycle helpers
 │   ├── diff.ts             # Snapshot diffing (hash sets)
 │   ├── filters.ts          # Location + keyword scoring (reads `preferences` table)
-│   ├── companies.ts        # Hardcoded company list (Greenhouse/Ashby/Lever/Amazon/Goldman, 115+ companies)
+│   ├── companies.ts        # Hardcoded company list (Greenhouse/Ashby/Lever/Amazon/Goldman, 110+ companies)
 │   ├── run-companies.ts    # CLI entry — `npm run scrape:companies`
 │   └── adapters/           # greenhouse.ts, ashby.ts, lever.ts, amazon.ts, goldman.ts
 ├── ai/
