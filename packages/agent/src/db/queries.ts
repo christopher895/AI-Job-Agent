@@ -84,11 +84,17 @@ export async function getLatestSnapshot(companyId: number) {
   return rows[0] ?? null;
 }
 
+// Keeps exactly one snapshot per company. Only the latest is ever read
+// (getLatestSnapshot), and appending a row per company every 15-min tick
+// filled production's 500 MB Postgres volume and crash-looped the database.
+// One statement, so the delete and insert are atomic; the CTE's DELETE runs
+// against the pre-insert snapshot and can't remove the new row.
 export async function saveSnapshot(companyId: number, jobHashes: string[]) {
-  await pool.query("INSERT INTO snapshots (company_id, job_hashes) VALUES ($1, $2)", [
-    companyId,
-    jobHashes,
-  ]);
+  await pool.query(
+    `WITH old AS (DELETE FROM snapshots WHERE company_id = $1)
+     INSERT INTO snapshots (company_id, job_hashes) VALUES ($1, $2)`,
+    [companyId, jobHashes]
+  );
 }
 
 // ── Master resume ──────────────────────────────────────────────────────────────
