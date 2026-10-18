@@ -789,6 +789,16 @@ export default function ResumeEditor({
               ? "Failed"
               : "Email to me"}
           </button>
+          <Link
+            href={`/grader?resumeId=${resume.id}`}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-paper-border rounded-lg hover:bg-black/[0.03] transition-colors text-paper-ink"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m12 14 4-4" />
+              <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+            </svg>
+            Grade
+          </Link>
           <button
             onClick={() => setShowFeedbackForm((v) => !v)}
             className={`flex items-center gap-1.5 text-sm px-3 py-1.5 border rounded-lg transition-colors ${

@@ -53,6 +53,15 @@ function SettingsIcon() {
   );
 }
 
+function GaugeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m12 14 4-4" />
+      <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+    </svg>
+  );
+}
+
 function LogOutIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -77,6 +86,7 @@ function initialsFrom(name: string | null | undefined, email: string | null | un
 const navLinks = [
   { href: "/", label: "Dashboard", Icon: DashboardIcon },
   { href: "/tailor", label: "Tailor Resume", Icon: SparklesIcon },
+  { href: "/grader", label: "Grader", Icon: GaugeIcon },
   { href: "/resume/master", label: "Master Resume", Icon: FileTextIcon },
   { href: "/applied", label: "Applied", Icon: ClipboardCheckIcon },
   { href: "/preferences", label: "Preferences", Icon: SettingsIcon },

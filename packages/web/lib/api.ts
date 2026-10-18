@@ -179,6 +179,59 @@ export type MasterResume = {
   aboutMe?: string;
 };
 
+export type TargetRole = "swe" | "frontend" | "backend" | "fullstack" | "mobile" | "devops" | "data" | "ml";
+export type Level = "intern" | "entry" | "mid" | "senior" | "staff";
+export type GradeSource = "master" | "tailored" | "upload";
+export type GradeStatus = "pending" | "ready" | "failed" | "cancelled";
+export type SpecialistName = "recruiter" | "ats" | "content" | "domain" | "storyteller";
+export type CategoryKey = "ats" | "content" | "writing" | "job" | "readiness";
+
+export type GradeFinding = {
+  id: string;
+  category: CategoryKey;
+  title: string;
+  severity: "high" | "medium" | "low";
+  quote: string | null;
+  problem: string;
+  rewrite: string | null;
+  groundedness: "grounded" | "needs-your-input";
+};
+
+export type GradeCategory = { key: CategoryKey; label: string; score: number; max: number; summary: string };
+export type GradeReport = { score: number; categories: GradeCategory[]; findings: GradeFinding[] };
+export type SpecialistState = { status: "pending" | "done" | "failed" };
+
+export type GradeListItem = {
+  id: string;
+  label: string;
+  source: GradeSource;
+  resume_id: string | null;
+  target_role: TargetRole;
+  level: Level;
+  status: GradeStatus;
+  score: number | null;
+  created_at: string;
+};
+
+export type Grade = GradeListItem & {
+  resume_text: string;
+  jd_text: string | null;
+  specialists: Partial<Record<SpecialistName, SpecialistState>>;
+  report: GradeReport | null;
+  error: string | null;
+  updated_at: string;
+};
+
+export type CreateGradeBody = {
+  source: GradeSource;
+  resumeId?: string;
+  text?: string;
+  label?: string;
+  targetRole: TargetRole;
+  level: Level;
+  jdText?: string;
+};
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     method,
@@ -291,6 +344,22 @@ export const api = {
   /** Starts a feedback round on a ready resume: the pasted notes become a new batch of suggestions to review. */
   submitFeedback: (id: string, feedback: string) =>
     request<{ id: string; status: "pending" }>("POST", `/resume/${id}/feedback`, { feedback }),
+  createGrade: (body: CreateGradeBody) =>
+    request<{ id: string; status: "pending" }>("POST", "/grades", body),
+  createGradeFromPdf: (file: File, fields: { targetRole: TargetRole; level: Level; jdText?: string }) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("source", "upload");
+    fd.append("targetRole", fields.targetRole);
+    fd.append("level", fields.level);
+    if (fields.jdText) fd.append("jdText", fields.jdText);
+    return requestFormData<{ id: string; status: "pending" }>("POST", "/grades", fd);
+  },
+  listGrades: (resumeId?: string) =>
+    request<GradeListItem[]>("GET", resumeId ? `/grades?resumeId=${encodeURIComponent(resumeId)}` : "/grades"),
+  getGrade: (id: string) => request<Grade>("GET", `/grades/${id}`),
+  cancelGrade: (id: string) => request<{ id: string; status: "cancelled" }>("POST", `/grades/${id}/cancel`),
+  deleteGrade: (id: string) => request<void>("DELETE", `/grades/${id}`),
   /** Re-runs the suggestion pass on a cancelled/failed row using its stored JD. */
   retryResume: (id: string) =>
     request<{ id: string; status: "pending" }>("POST", `/resume/${id}/retry`),
