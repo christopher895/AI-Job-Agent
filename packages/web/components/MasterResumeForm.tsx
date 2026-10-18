@@ -1,7 +1,10 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { api, MasterResume, ExperienceEntry, ProjectEntry, EducationEntry } from "../lib/api";
+import { Handoff, applyFixes, readHandoff, sectionOfBullet } from "../lib/gradeFixes";
+import GradeFixBanner from "./GradeFixBanner";
 import { SortableSection, DragHandle } from "./SortableSection";
 
 const SECTIONS = ["Basics", "Experience", "Projects", "Skills", "Education", "Extracurriculars", "About me"] as const;
@@ -153,12 +156,15 @@ function BulletList<B extends { id: string; text: string }>({
   onAdd,
   onRemove,
   onReorder,
+  highlighted,
 }: {
   bullets: B[];
   onUpdate: (i: number, text: string) => void;
   onAdd: () => void;
   onRemove: (i: number) => void;
   onReorder: (newBullets: B[]) => void;
+  /** Bullet ids changed by a grader hand-off and not yet saved. */
+  highlighted?: ReadonlySet<string>;
 }) {
   return (
     <div className="flex flex-col gap-1.5 mt-2">
@@ -171,7 +177,9 @@ function BulletList<B extends { id: string; text: string }>({
               <AutoGrowTextarea
                 value={b.text}
                 onChange={(text) => onUpdate(i, text)}
-                className="flex-1 border border-paper-border rounded-lg px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none overflow-hidden"
+                className={`flex-1 border border-paper-border rounded-lg px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-violet-500 resize-none overflow-hidden ${
+                  highlighted?.has(b.id) ? "ring-2 ring-violet-300 bg-violet-50/40" : ""
+                }`}
               />
               <button
                 onClick={() => onRemove(i)}
@@ -355,7 +363,50 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
   const [importText, setImportText] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const router = useRouter();
+  const [gradeFix, setGradeFix] = useState<{
+    handoff: Handoff; applied: Set<string>; appliedCount: number; sections: string[]; skipped: number; saved: boolean;
+  } | null>(null);
+  const [regrading, setRegrading] = useState(false);
+  const [regradeError, setRegradeError] = useState<string | null>(null);
   const prevBlobRef = useRef<string | null>(null);
+
+  // Fixes handed over from a grade (/grader/[id] → "Apply N to master resume").
+  // Applied to the unsaved form state only — nothing is written until Save.
+  // Deferred a tick: the server render has no sessionStorage, and the
+  // set-state-in-effect lint rule wants state set from a callback.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      let handoff: Handoff | null = null;
+      try { handoff = readHandoff(sessionStorage); } catch { /* storage unavailable */ }
+      if (!handoff) return;
+      const { resume: fixed, applied, skipped } = applyFixes(initial, handoff.fixes);
+      setResume(fixed);
+      const sections = [...new Set(applied.map((id) => sectionOfBullet(initial, id)).filter((s) => s !== null))];
+      setGradeFix({ handoff, applied: new Set(applied), appliedCount: applied.length, sections, skipped: skipped.length, saved: false });
+      if (sections[0]) setActiveSection(sections[0]);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [initial]);
+
+  function discardGradeFixes() {
+    setResume(initial);
+    setGradeFix(null);
+  }
+
+  async function regrade() {
+    if (!gradeFix) return;
+    setRegrading(true);
+    setRegradeError(null);
+    const { targetRole, level, jdText } = gradeFix.handoff;
+    try {
+      const { id } = await api.createGrade({ source: "master", targetRole, level, jdText: jdText ?? undefined });
+      router.push(`/grader/${id}`);
+    } catch (e) {
+      setRegradeError(e instanceof Error ? e.message : "Could not start a new grade.");
+      setRegrading(false);
+    }
+  }
   const hasAttemptedPreviewRef = useRef(false);
 
   async function save() {
@@ -364,6 +415,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     try {
       await api.putMasterResume(resume);
       setSaved(true);
+      setGradeFix((g) => (g ? { ...g, saved: true, applied: new Set() } : g));
       setTimeout(() => setSaved(false), 2500);
       // The preview is a render of what was just saved, so re-render it rather
       // than leaving a stale PDF next to the edits that produced it. Skipped in
@@ -780,6 +832,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                         onAdd={() => addExpBullet(ei)}
                         onRemove={(bi) => removeExpBullet(ei, bi)}
                         onReorder={(newBullets) => reorderExpBullets(ei, newBullets)}
+                        highlighted={gradeFix?.applied}
                       />
                     </div>
                   );
@@ -837,6 +890,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                         onAdd={() => addProjBullet(pi)}
                         onRemove={(bi) => removeProjBullet(pi, bi)}
                         onReorder={(newBullets) => reorderProjBullets(pi, newBullets)}
+                        highlighted={gradeFix?.applied}
                       />
                     </div>
                   );
@@ -947,6 +1001,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
                         onAdd={() => addExtraBullet(ei)}
                         onRemove={(bi) => removeExtraBullet(ei, bi)}
                         onReorder={(newBullets) => reorderExtraBullets(ei, newBullets)}
+                        highlighted={gradeFix?.applied}
                       />
                     </div>
                   );
@@ -1049,6 +1104,21 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             </div>
           </div>
         </div>
+
+        {gradeFix && (
+          <GradeFixBanner
+            appliedCount={gradeFix.appliedCount}
+            sections={gradeFix.sections}
+            skipped={gradeFix.skipped}
+            todos={gradeFix.handoff.todos}
+            saved={gradeFix.saved}
+            onDiscard={discardGradeFixes}
+            onRegrade={regrade}
+            onClose={() => setGradeFix(null)}
+            regrading={regrading}
+            regradeError={regradeError}
+          />
+        )}
 
         {showImport && (
           <div className="mx-8 mb-6 border border-paper-border rounded-xl p-4 bg-black/[0.03] flex-shrink-0">
