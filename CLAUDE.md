@@ -27,6 +27,7 @@ Everything below is implemented and running in production, not aspirational — 
 - **Feedback rounds** — on a `ready` resume, `/resume/[id]` has an "Apply feedback" panel: paste free-form notes (a reviewer's critique, a recruiter's nitpicks) and `POST /api/resume/:id/feedback` runs `suggestFromFeedback(feedback, jd, master, priorAccepted)` (`packages/agent/src/ai/suggest-from-feedback.ts`) against the resume as it currently stands. The result is appended to the row's `suggestions` as a new undecided batch and reviewed in the same checklist; `apply-suggestions` re-applies every earlier accepted suggestion alongside the new picks (`composeAccepted` in `suggestion-rounds.ts`), so rounds stack instead of replacing each other. Hand edits typed into the Markdown editor are not carried over — the apply pass always regenerates from the master
 - **Cancellable generation** — the pending screen has a "Cancel generation" button. `POST /api/resume/:id/cancel` aborts the in-flight run for real: an `AbortSignal` from `ai/cancellation.ts` is threaded through `completeJSON` down to the spawned `claude` subprocess, which is SIGTERM'd rather than left running with its output discarded. Where the row lands depends on which pipeline was running — the first (suggestion) pass goes to `cancelled`, the apply pass reverts to `awaiting_review` so the review checklist survives. A `cancelled` row keeps its `jd_text`, so `POST /api/resume/:id/retry` re-runs the suggestion pass in place without re-fetching the JD
 - **Gmail status ingestion** — opt-in cron tick (`GMAIL_INGEST_ENABLED=true`) reads Christopher's Gmail via a dedicated OAuth2 client (`GMAIL_OAUTH_*`, `gmail.readonly` scope — separate from the Sheets service account, which can't read consumer Gmail), classifies recruiter emails with the LLM, deterministically matches them to an existing `applied_jobs` row, and advances that row's status forward-only, logging every event and notifying on the statuses that matter. See `packages/agent/src/ingest/` and the pipeline below
+- **Resume grader** — `/grader` scores a resume (the master, a finished tailored one, pasted text or an uploaded PDF) out of 100 for a chosen target role and level, optionally against a JD. Five specialist LLM calls (`packages/agent/src/ai/grade/`) each own one category — ATS & structure 25, Content quality 35, Writing quality 10, Job optimization 20, Application readiness 10 — and run through a shared limiter (`graderLimit`, at most 2 `claude` subprocesses across all grades), so a grade takes ~2–3 minutes. `assembleReport()` is deterministic (no sixth call): it clamps and sums the scores, orders findings by severity, and labels each rewrite `grounded` or `needs-your-input` with `grounding.ts`'s `numbers()` — a number not in the resume, or a `[X%]` placeholder, means the rewrite needs a real figure. Any specialist failing fails the whole grade (a score missing a category would mislead). The resume text is snapshotted on the row, so history shows score movement across edits. On a tailored resume, "Fix N in the resume" turns the checked findings into feedback text (capped at the feedback route's 12,000 chars, whole findings only) and starts a normal feedback round. No percentile curve — there is no corpus to rank against. Spec: `docs/superpowers/specs/2026-10-17-resume-grader-design.md`
 
 ## Core Flows
 
@@ -45,6 +46,8 @@ Everything below is implemented and running in production, not aspirational — 
 | `/resume/master` | Edit master resume fields directly (basics, experience, projects, skills, drag-to-reorder sections) |
 | `/applied` | Application log table — mirrors Google Sheet (date applied, company, location, URL, status, resume link) |
 | `/preferences` | Edit scraper filters (title/required keywords, target locations, priority companies, max alerts per email) — backed by the `preferences` DB table and `/api/preferences` |
+| `/grader` | Start a grade (resume source, target role, level, optional JD; last role/level remembered) and see past grades with scores. `?resumeId=` preselects a tailored resume — the "Grade" button on `/resume/[id]` links here |
+| `/grader/[id]` | Specialist checklist while pending (Cancel; Re-run once older than 10 min), then the score, five category bars and finding cards with Copy + groundedness badges; Re-run, Delete, and — for a tailored resume — "Fix N in the resume" |
 
 ### JD auto-fetch
 When a job URL is submitted, the backend fetches the page with Playwright (JS-heavy) or Cheerio (static), extracts the article body with Mozilla Readability (`@mozilla/readability` + `jsdom`), and validates the URL against SSRF (blocks localhost/private IPs/cloud metadata endpoints) — see `fetch-jd.ts`. Falls back to a paste box if the page is blocked or returns no useful content. Anti-bot interstitials (Jobright's "One quick security check", Cloudflare's "Just a moment...") are served to Railway's datacenter IP even when a laptop gets the real page; `isBotChallenge()` recognises their short body text and turns it into a failed fetch, since otherwise the Playwright path would accept the challenge copy as the JD. `test:fetch-jd` guards this.
@@ -107,11 +110,19 @@ agent/src/
 │   ├── llm.ts               # completeJSON() — dispatches to Claude CLI or OpenAI per LLM_PROVIDER; accepts an AbortSignal
 │   ├── cancellation.ts      # In-process registry of in-flight runs + CancelledError — backs POST /api/resume/:id/cancel
 │   ├── claude-cli.ts        # Headless `claude -p` backend (default provider)
+│   ├── grade/               # Resume grader
+│   │   ├── rubric.ts          # Categories + maxima, role/level tables, Zod schemas, report types
+│   │   ├── specialists.ts     # One system prompt per specialist; runSpecialist() wraps completeJSON
+│   │   ├── assemble.ts        # Pure: clamp + sum scores, order findings, label rewrite groundedness
+│   │   ├── limit.ts           # createLimiter() + shared graderLimit (2 concurrent grader calls)
+│   │   ├── resume-text.ts     # masterToText() (PDF headings/order, never aboutMe) + extractPdfText()
+│   │   ├── request.ts         # parseGradeRequest() + isUuid() — pure POST /api/grades validation
+│   │   └── pipeline.ts        # runGradePipeline(id) — background run, run key `grade:${id}`
 │   └── knowledge/
 │       └── best-practices.ts
 ├── api/
 │   ├── index.ts             # Express router mount
-│   └── routes/              # tailor.ts, resumes.ts, master-resume.ts, applied.ts, preferences.ts, places.ts
+│   └── routes/              # tailor.ts, resumes.ts, master-resume.ts, applied.ts, preferences.ts, places.ts, grades.ts
 ├── integrations/
 │   └── sheets.ts            # Google Sheets API — append/update application rows
 ├── notifications/
@@ -135,6 +146,9 @@ web/
 │   ├── page.tsx              # / — resume history dashboard
 │   ├── tailor/
 │   │   └── page.tsx          # /tailor — paste JD or URL, generate
+│   ├── grader/
+│   │   ├── page.tsx          # /grader — start a grade + history
+│   │   └── [id]/page.tsx     # /grader/[id] — progress, report, fix-in-resume
 │   ├── resume/
 │   │   ├── [id]/page.tsx     # /resume/[id] — Google Doc editor
 │   │   └── master/page.tsx   # /resume/master — edit master resume
@@ -151,11 +165,16 @@ web/
 │   ├── MasterResumeForm.tsx  # Form for editing master resume fields; Import panel (paste/PDF) and one-page warning banner
 │   ├── SortableSection.tsx   # Drag-to-reorder for master resume sections/bullets
 │   ├── TailorForm.tsx        # JD input + generate button
+│   ├── GradeForm.tsx         # Grader start form (source, role/level chips, optional JD)
+│   ├── GradeView.tsx         # /grader/[id] client shell — polls, Re-run/Delete, picks progress vs report
+│   ├── GradeProgress.tsx     # Specialist checklist + Cancel while a grade is pending
+│   ├── GradeReport.tsx       # Score, category bars, finding cards, "Fix N in the resume"
 │   ├── PreferencesForm.tsx   # Scraper filter settings form
 │   └── Nav.tsx                # Top navigation bar
 └── lib/
     ├── api.ts                # Typed fetch wrappers for agent API
     ├── resumeStage.ts        # Maps a raw backend stage string to the 3-segment pending-screen stepper
+    ├── grade.ts              # Grader option tables, findingsToFeedback(), rerunBody(), isStalePending()
     └── suggestionRounds.ts   # Client mirror of the agent's suggestion-rounds helpers (undecided, isFollowUpRound, FEEDBACK_STAGE)
 ```
 
@@ -263,6 +282,24 @@ preferences (
   data          jsonb,          -- Preferences JSON: titleKeywords, requiredKeywords, targetLocations, priorityCompanies, maxPerEmail
   updated_at    timestamptz
 )
+
+resume_grades (
+  id            uuid primary key,
+  source        text,           -- 'master' | 'tailored' | 'upload'
+  resume_id     uuid references tailored_resumes(id) on delete set null,  -- set when source='tailored'
+  label         text,           -- "Master resume", "Company — Title", uploaded filename, or "Pasted resume"
+  resume_text   text,           -- snapshot of exactly what was graded
+  target_role   text,           -- 'swe' | 'frontend' | 'backend' | 'fullstack' | 'mobile' | 'devops' | 'data' | 'ml'
+  level         text,           -- 'intern' | 'entry' | 'mid' | 'senior' | 'staff'
+  jd_text       text,
+  status        text,           -- 'pending' | 'ready' | 'failed' | 'cancelled'
+  specialists   jsonb,          -- { recruiter: { status: 'pending'|'done'|'failed', result? }, ... } — drives the checklist
+  score         int,            -- copy of report.score for cheap listing
+  report        jsonb,          -- { score, categories[], findings[] }
+  error         text,
+  created_at    timestamptz,
+  updated_at    timestamptz
+)
 ```
 
 ## Core Pipelines
@@ -326,6 +363,22 @@ POST /api/resume/:id/cancel   (409 unless status='pending')
 ```
 
 Async because even a single LLM call can exceed Railway's ~300s edge-proxy timeout, which would otherwise kill the request and surface as a generic "Failed to fetch" in the browser.
+
+### Resume grading
+```
+POST /api/grades { source, resumeId? | text? | file? (multipart PDF), targetRole, level, jdText? }
+  → resolve resume text (master → masterToText; tailored → row.markdown, JD defaults to row.jd_text;
+    upload → pasted text or extractPdfText); 400 if empty or over 30,000 chars
+    → insert resume_grades row (status='pending', every specialist 'pending'), respond 202
+      → [background] runGradePipeline(id) — run key `grade:${id}`
+          5 specialists via completeJSON, through graderLimit (max 2 in flight across all grades)
+            → each result written to specialists[name] as it lands (drives the checklist)
+          one failure aborts the rest → status='failed' naming the reviewer
+          assembleReport() (pure) → status='ready', score, report
+  → /grader/[id] polls GET /api/grades/:id until status leaves 'pending'
+POST /api/grades/:id/cancel  (409 unless 'pending') → abortRun, writes 'cancelled' itself; the pipeline
+  sees its signal aborted and returns without writing 'failed'. Also unsticks a grade orphaned by a restart
+```
 
 ### Apply → Google Sheets
 ```

@@ -287,6 +287,31 @@ export async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_applied_jobs_applied ON applied_jobs(applied_at DESC);
   `);
 
+  // Resume grader (docs/superpowers/specs/2026-10-17-resume-grader-design.md).
+  // resume_text is a snapshot so a grade stays meaningful after the resume changes.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS resume_grades (
+      id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      source       TEXT NOT NULL CHECK (source IN ('master', 'tailored', 'upload')),
+      resume_id    UUID REFERENCES tailored_resumes(id) ON DELETE SET NULL,
+      label        TEXT NOT NULL,
+      resume_text  TEXT NOT NULL,
+      target_role  TEXT NOT NULL,
+      level        TEXT NOT NULL,
+      jd_text      TEXT,
+      status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ready', 'failed', 'cancelled')),
+      specialists  JSONB NOT NULL DEFAULT '{}',
+      score        INT,
+      report       JSONB,
+      error        TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_resume_grades_resume ON resume_grades(resume_id, created_at DESC)
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS playground_usage (
       id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
