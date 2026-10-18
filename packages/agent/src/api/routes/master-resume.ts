@@ -5,6 +5,7 @@ import { MasterResumeSchema } from "../../ai/types";
 import { renderMasterResumePdf } from "../../ai/render-pdf";
 import { countPdfPages } from "../../ai/fit-page";
 import { importMasterResume } from "../../ai/import-master-resume";
+import { extractPdfText } from "../../ai/grade/resume-text";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -54,11 +55,7 @@ router.post("/import", upload.single("file"), async (req, res) => {
 
   if (req.file) {
     try {
-      const { PDFParse } = await import("pdf-parse");
-      const parser = new PDFParse({ data: req.file.buffer });
-      const parsed = await parser.getText({ pageJoiner: "" });
-      await parser.destroy();
-      rawText = parsed.text;
+      rawText = await extractPdfText(req.file.buffer);
     } catch (err) {
       console.error("[master-resume] pdf text extraction failed:", err);
       res.status(400).json({ error: "Could not read text from the uploaded PDF." });
