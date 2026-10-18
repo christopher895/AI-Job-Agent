@@ -28,6 +28,7 @@ New-grad and internship postings fill up in days. Checking dozens of career page
 | 📬 **Instant alerts** | One email per batch of new roles, each with a **Tailor resume** link that opens the web app pre-filled. |
 | ✍️ **Suggest-and-approve tailoring** | Claude proposes small keyword insertions against a fixed one-page master resume. Each suggestion is labeled *grounded* or *extrapolated*; only the ones you check off are applied. Nothing is invented, reordered, or cut. |
 | 🔁 **Feedback rounds** | Paste a reviewer's or recruiter's notes onto a finished resume and get another reviewable batch of edits that stacks on the last one. |
+| 💯 **Resume grader** | Five specialist reviewers (Recruiter, ATS, Content, Domain, Storyteller) score any resume out of 100 for a target role and level, and list every fix with a paste-ready rewrite, each marked as using your own facts or needing a real number from you. Findings on a tailored resume can be sent straight into a feedback round. |
 | 🔗 **Paste a link, get the JD** | Job URLs are fetched (Cheerio, falling back to Playwright), cleaned with Mozilla Readability, stripped of benefits/EEO boilerplate, and auto-fill title, company, and location. SSRF-guarded. |
 | 📄 **Pixel-perfect PDFs** | Markdown → LaTeX → PDF via Tectonic and a custom `czresume.cls` template. ATS-safe, one page, with an overflow warning on the master resume. |
 | 📊 **Application tracking** | Log applications from the app; every row syncs to Google Sheets. |
@@ -133,13 +134,13 @@ Every variable is documented in [`.env.example`](.env.example). The essentials:
 │   ├── agent/                 # Express API, scraper, AI pipeline, cron
 │   │   └── src/
 │   │       ├── scraper/       # ATS adapters, diffing, filters, JD fetch
-│   │       ├── ai/            # suggestions, apply, fit-to-page, PDF render, LLM clients
+│   │       ├── ai/            # suggestions, apply, fit-to-page, PDF render, LLM clients, grade/ (resume grader)
 │   │       ├── ingest/        # Gmail classification + application matching
-│   │       ├── api/routes/    # tailor, resumes, master-resume, applied, preferences
+│   │       ├── api/routes/    # tailor, resumes, master-resume, applied, preferences, grades
 │   │       ├── integrations/  # Google Sheets, Gmail
 │   │       ├── notifications/ # Resend emails
 │   │       └── db/            # schema + queries
-│   └── web/                   # Next.js app — dashboard, tailor, editor, master resume, applied, preferences
+│   └── web/                   # Next.js app — dashboard, tailor, editor, master resume, grader, applied, preferences
 ├── Resume_Template/           # czresume.cls LaTeX template + font cache warm-up
 ├── Dockerfile                 # agent service
 └── Dockerfile.web             # web service

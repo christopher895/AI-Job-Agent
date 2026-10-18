@@ -3,6 +3,7 @@ import { pool } from "./pool";
 import { ApplicationAnswersState, MasterResume, MasterResumeSchema, Suggestion } from "../ai/types";
 import { findDuplicateInList, type AppliedJobIdentity } from "../applied/duplicate";
 import { Preferences, FILTERS } from "../config";
+import { GradeReport, Level, SPECIALISTS, SpecialistName, SpecialistState, TargetRole } from "../ai/grade/rubric";
 
 export type TailoredResumeRow = {
   id: string;
@@ -694,4 +695,106 @@ export async function resolveReview(id: string): Promise<void> {
 export async function getAppliedJob(id: string): Promise<AppliedJobRow | null> {
   const { rows } = await pool.query("SELECT * FROM applied_jobs WHERE id = $1", [id]);
   return rows[0] ?? null;
+}
+
+// ── Resume grades ─────────────────────────────────────────────────────────────
+
+export type GradeRow = {
+  id: string;
+  source: "master" | "tailored" | "upload";
+  resume_id: string | null;
+  label: string;
+  resume_text: string;
+  target_role: TargetRole;
+  level: Level;
+  jd_text: string | null;
+  status: "pending" | "ready" | "failed" | "cancelled";
+  specialists: Partial<Record<SpecialistName, SpecialistState>>;
+  score: number | null;
+  report: GradeReport | null;
+  error: string | null;
+  created_at: Date;
+  updated_at: Date;
+};
+
+export type GradeListItem = Pick<
+  GradeRow,
+  "id" | "label" | "source" | "resume_id" | "target_role" | "level" | "status" | "score" | "created_at"
+>;
+
+export async function createGrade(fields: {
+  source: GradeRow["source"];
+  resumeId: string | null;
+  label: string;
+  resumeText: string;
+  targetRole: TargetRole;
+  level: Level;
+  jdText: string | null;
+}): Promise<{ id: string }> {
+  // Every specialist starts 'pending' so the progress checklist renders all five at once.
+  const specialists = Object.fromEntries(SPECIALISTS.map((s) => [s, { status: "pending" }]));
+  const { rows } = await pool.query(
+    `INSERT INTO resume_grades (source, resume_id, label, resume_text, target_role, level, jd_text, specialists)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id`,
+    [fields.source, fields.resumeId, fields.label, fields.resumeText, fields.targetRole, fields.level,
+     fields.jdText, JSON.stringify(specialists)]
+  );
+  return { id: rows[0].id };
+}
+
+export async function getGrade(id: string): Promise<GradeRow | null> {
+  const { rows } = await pool.query(`SELECT * FROM resume_grades WHERE id = $1`, [id]);
+  return rows[0] ?? null;
+}
+
+export async function listGrades(resumeId?: string): Promise<GradeListItem[]> {
+  const cols = `id, label, source, resume_id, target_role, level, status, score, created_at`;
+  const { rows } = resumeId
+    ? await pool.query(`SELECT ${cols} FROM resume_grades WHERE resume_id = $1 ORDER BY created_at DESC`, [resumeId])
+    : await pool.query(`SELECT ${cols} FROM resume_grades ORDER BY created_at DESC LIMIT 200`);
+  return rows;
+}
+
+/** Records one specialist's outcome. Guarded so a late finisher can't touch a cancelled grade. */
+export async function setGradeSpecialist(id: string, name: SpecialistName, state: SpecialistState): Promise<void> {
+  await pool.query(
+    `UPDATE resume_grades
+        SET specialists = jsonb_set(specialists, ARRAY[$2::text], $3::jsonb), updated_at = NOW()
+      WHERE id = $1 AND status = 'pending'`,
+    [id, name, JSON.stringify(state)]
+  );
+}
+
+export async function completeGrade(id: string, report: GradeReport): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE resume_grades
+        SET status = 'ready', score = $2, report = $3, error = NULL, updated_at = NOW()
+      WHERE id = $1 AND status = 'pending'`,
+    [id, report.score, JSON.stringify(report)]
+  );
+  return rowCount === 1;
+}
+
+export async function failGrade(id: string, message: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE resume_grades SET status = 'failed', error = $2, updated_at = NOW()
+      WHERE id = $1 AND status = 'pending'`,
+    [id, message]
+  );
+  return rowCount === 1;
+}
+
+export async function cancelGrade(id: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE resume_grades SET status = 'cancelled', updated_at = NOW()
+      WHERE id = $1 AND status = 'pending'`,
+    [id]
+  );
+  return rowCount === 1;
+}
+
+export async function deleteGrade(id: string): Promise<boolean> {
+  const { rowCount } = await pool.query(`DELETE FROM resume_grades WHERE id = $1`, [id]);
+  return rowCount === 1;
 }
