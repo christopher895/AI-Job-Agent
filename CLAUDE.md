@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An autonomous AI agent that monitors 110+ company career pages 24/7, detects new job postings via each company's ATS API (Greenhouse/Ashby/Lever/Amazon/Goldman) and snapshot diffing, auto-tailors Christopher's resume per role by suggesting JD keyword insertions against his fixed master resume for Christopher to review and approve, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, review/approve suggested edits, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — gated behind Google sign-in restricted to his email.
+An autonomous AI agent that monitors 110+ company career pages 24/7, detects new job postings via each company's ATS API (Greenhouse/Ashby/Lever/Amazon/Goldman/Workday) and snapshot diffing, auto-tailors Christopher's resume per role by suggesting JD keyword insertions against his fixed master resume for Christopher to review and approve, and delivers email alerts with a one-click link to generate a tailored resume in a web editor. The web app lets Christopher paste a job description or URL, review/approve suggested edits, edit the tailored output like a Google Doc, download a PDF, and log applications to Google Sheets — gated behind Google sign-in restricted to his email.
 
 Owner: **Christopher Zhang** (Summer 2026 build)
 
@@ -96,9 +96,9 @@ agent/src/
 │   ├── filters.ts          # Location + keyword scoring (reads `preferences` table)
 │   ├── season.ts           # passesSeason() — deterministic season rule for alerts
 │   ├── alert-filter.ts     # filterForAlert() — season rule then AI judge, before every alert email
-│   ├── companies.ts        # Hardcoded company list (Greenhouse/Ashby/Lever/Amazon/Goldman, 110+ companies)
+│   ├── companies.ts        # Hardcoded company list (Greenhouse/Ashby/Lever/Amazon/Goldman/Workday, 110+ companies)
 │   ├── run-companies.ts    # CLI entry — `npm run scrape:companies`
-│   └── adapters/           # greenhouse.ts, ashby.ts, lever.ts, amazon.ts, goldman.ts
+│   └── adapters/           # greenhouse.ts, ashby.ts, lever.ts, amazon.ts, goldman.ts, workday.ts
 ├── ai/
 │   ├── suggest-keywords.ts    # Single-pass JD keyword-suggestion call (current tailoring ENTRY POINT)
 │   ├── suggest-from-feedback.ts # Turns pasted reviewer feedback into a suggestion batch against the current resume
@@ -194,7 +194,7 @@ web/
 - Node.js + Express (API server in `packages/agent`), PostgreSQL, node-cron
 
 ### Scraping
-- Direct ATS API calls per company (Greenhouse/Ashby/Lever/Amazon/Goldman adapters), custom snapshot diffing via hash sets
+- Direct ATS API calls per company (Greenhouse/Ashby/Lever/Amazon/Goldman/Workday adapters), custom snapshot diffing via hash sets
 - Playwright + Cheerio + Mozilla Readability — used only for JD auto-fetch from a pasted job URL, not for company scraping
 
 ### AI
@@ -314,7 +314,7 @@ resume_grades (
 ### Scraping → Alert
 ```
 cron (every 15 min, in-process, guarded against overlapping ticks)
-  → fetch each company's ATS API/page (greenhouse/ashby/lever/amazon/goldman adapters)
+  → fetch each company's ATS API/page (greenhouse/ashby/lever/amazon/goldman/workday adapters)
     → diff.ts (new job hashes)
       → upsertJob gate (jobs.url UNIQUE — a job is only ever considered once)
         → filterForAlert: season rule → AI judge (fail-open)

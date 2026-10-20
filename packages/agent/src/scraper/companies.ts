@@ -138,9 +138,11 @@ export const COMPANIES: Company[] = [
   // Oracle Fusion recruiting pod behind higher.gs.com — see adapters/goldman.ts
   { name: "Goldman Sachs",   platform: "goldman", slug: "goldmansachs" },
 
-  // ── Workday — adapter not yet built (Playwright required) ────────────────────
+  // ── Workday — public JSON API, slug is "{tenant}.{wdN}/{site}" (adapters/workday.ts)
+  { name: "Snap",            platform: "workday", slug: "snapchat.wd1/snap" },
+
+  // ── Workday — not yet probed for their tenant/site slugs ─────────────────────
   // { name: "Netflix",      platform: "workday", slug: "Netflix" },
-  // { name: "Snap",         platform: "workday", slug: "snapchat" },
   // { name: "Zendesk",      platform: "workday", slug: "zendesk" },
   // { name: "Microsoft",    platform: "workday", slug: "microsoftcorporation" },
 
