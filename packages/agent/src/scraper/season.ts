@@ -9,6 +9,7 @@ import { JobListing } from "./types";
  */
 
 const OTHER_SEASON = /\b(fall|autumn|winter|spring)\b|\bco-?op\b/i;
+const SEASON_WORD = /\b(summer|fall|autumn|winter|spring)\b/i;
 const YEAR = /\b(20[23]\d)\b/g;
 
 // The season comes from a free-text preference field.
@@ -20,7 +21,11 @@ export function passesSeason(job: JobListing, target: string | null): boolean {
   const want = target?.trim().toLowerCase();
   if (!want) return true;
 
-  if (job.terms) return job.terms.some((t) => t.trim().toLowerCase() === want);
+  // Only a real season tag can mismatch. Untagged or "N/A" (Simplify's ~13% of
+  // listings, Palantir SWE among them) is unknown, so it falls through to the
+  // title rule below instead of being dropped.
+  const seasonTags = job.terms?.filter((t) => SEASON_WORD.test(t)) ?? [];
+  if (seasonTags.length > 0) return seasonTags.some((t) => t.trim().toLowerCase() === want);
 
   const seasonWord = want.split(/\s+/)[0];
   const seasonPattern = new RegExp(`\\b${escapeRegExp(seasonWord)}\\b`, "i");

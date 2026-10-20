@@ -14,8 +14,12 @@ const T = "Summer 2027";
 check("repo tag matches case-insensitively", passesSeason(repo(["summer 2027"]), T));
 check("repo with any matching tag passes", passesSeason(repo(["Fall 2026", "Summer 2027"]), T));
 check("repo other season fails", !passesSeason(repo(["Fall 2026"]), T));
-check("repo untagged fails", !passesSeason(repo([]), T));
-check("repo N/A fails", !passesSeason(repo(["N/A"]), T));
+// No season tag at all (empty, or Simplify's "N/A") is unknown, not a mismatch:
+// fall through to the title rule so an untagged SWE posting still reaches the judge
+check("repo untagged falls through to title (passes)", passesSeason(repo([]), T));
+check("repo N/A falls through to title (passes)", passesSeason(repo(["N/A"]), T));
+check("repo N/A with an off-season title fails",
+  !passesSeason({ title: "Software Co-op (Fall 2026)", company: "C", location: "", url: "u", terms: ["N/A"] }, T));
 
 // vanshb03-style feeds: a season word, no year (the repo itself is the year)
 const vansh = (season: string): JobListing => ({ title: "SWE Intern", company: "C", location: "", url: "u", season });

@@ -124,6 +124,22 @@ async function main() {
     check("prompt doesn't assume Charlotte when the bar doesn't", !/charlotte/i.test(system));
   }
 
+  // SWE only: quant, research, data science and the like are other roles, not "unsure"
+  {
+    const { system } = buildJudgePrompt([job(1)], BAR);
+    check("prompt restricts to software engineering roles", /only software engineering/i.test(system));
+    for (const role of ["quant", "research", "data scien", "product manage"]) {
+      check(`prompt names ${role} as a non-SWE role to skip`, system.toLowerCase().includes(role));
+    }
+  }
+
+  // US only: a posting outside the United States is skip, however good the company
+  {
+    const { system } = buildJudgePrompt([job(1)], BAR);
+    check("prompt requires the United States", /only in the United States/i.test(system));
+    check("prompt names a non-US example to skip", /London|Toronto|Canada/.test(system));
+  }
+
   console.log(pass ? "\n✓ judge-jobs test PASSED" : "\n✗ judge-jobs test FAILED");
   process.exit(pass ? 0 : 1);
 }

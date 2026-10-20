@@ -34,12 +34,14 @@ type CompleteFn = typeof completeJSON;
 
 export function buildJudgePrompt(jobs: JobListing[], bar: string): { system: string; user: string } {
   const system = [
-    "You screen new internship postings for Christopher, a computer science student at Brown looking for a Summer 2027 software engineering or AI/ML internship.",
+    "You screen new internship postings for Christopher, a computer science student at Brown looking ONLY for a Summer 2027 software engineering internship.",
+    "Role first: he wants only software engineering roles — software engineer/developer, SWE/SDE, backend, frontend, full-stack, mobile, infrastructure, platform, and ML/AI engineering roles that build software. Every other role is skip, however prestigious the company: quant/quantitative strategist/strats/trading, research scientist or research internships (including PhD), data science and data analyst, product manager, business/finance analyst, hardware, mechanical, electrical, design, sales, operations, marketing.",
     `His bar: "${bar.trim()}".`,
-    "For each posting decide whether it clears that bar. Weigh the company (engineering reputation, AI relevance, brand), the role, and the location.",
+    "Location: he wants roles only in the United States. A posting located outside the US (e.g. London, Toronto, Canada, India, Europe), or remote only outside the US, is skip however strong the company. A posting listing several locations passes if any is in the US; a missing location counts as unsure.",
+    "For a software engineering role, decide whether it clears that bar. Weigh the company (engineering reputation, AI relevance, brand) and the location.",
     "Judge location against the bar's own location: major tech hubs (New York City, the San Francisco Bay Area, Seattle, Boston, Los Angeles) and remote generally beat smaller markets.",
-    "send = true when the posting is better than or comparable to the bar, or when you are unsure.",
-    "send = false ONLY when it is clearly worse: e.g. a little-known company in a weaker location than the bar, a non-software role (hardware, mechanical, electrical, sales, operations, marketing), not an internship, or clearly not for summer.",
+    "send = true when a software engineering posting is better than or comparable to the bar, or when you are unsure about the company or location. A generic title that may well be software engineering (e.g. \"Engineering Summer Analyst\", \"Technology Intern\") counts as unsure, so send it.",
+    "send = false when the role is not software engineering (see above), when it is outside the United States, when it is clearly worse than the bar (e.g. a little-known company in a weaker location), not an internship, or clearly not for summer.",
     "reason: at most 12 words, concrete (e.g. \"Top AI lab, San Francisco\" or \"Hardware role, not software\").",
     "Return ONLY JSON: {\"verdicts\": [{\"index\": number, \"send\": boolean, \"reason\": string}]} with one entry per posting, using the posting's index.",
   ].join("\n");
