@@ -152,6 +152,10 @@ export type Preferences = {
   maxPerEmail: number;
   priorityCompanies: string[];
   watchedRepos: string[];
+  /** Repo listings must carry this season tag ("Summer 2027"); null = any season. */
+  targetSeason: string | null;
+  /** What a job must beat to be emailed — read by the AI judge. "" = send everything. */
+  alertBar: string;
 };
 
 export type MasterResume = {

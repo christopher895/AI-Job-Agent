@@ -43,8 +43,9 @@ assertEqual(
     company: "Rippling",
     location: "New York, NY, San Francisco, CA",
     url: "https://ats.rippling.com/jobs/abc123",
+    terms: ["Summer 2027"],
   },
-  "parseListingsJson: maps fields correctly, joins multiple locations"
+  "parseListingsJson: maps fields correctly, joins multiple locations, keeps season terms"
 );
 assertEqual(
   jobs[1],
@@ -53,8 +54,9 @@ assertEqual(
     company: "Acme Corp",
     location: "Remote",
     url: "https://acme.example.com/jobs/xyz",
+    season: "Summer",
   },
-  "parseListingsJson: is_visible defaults to visible when the field is missing"
+  "parseListingsJson: is_visible defaults to visible; vanshb03-style season kept, no terms → undefined"
 );
 assertEqual(
   jobs[2],

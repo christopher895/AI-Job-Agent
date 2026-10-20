@@ -303,6 +303,26 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
                 className="w-full border border-paper-border rounded-lg px-3 py-1.5 text-sm text-paper-ink focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
               />
             </div>
+            <div>
+              <Label>Season (repo listings must be tagged with it; blank = any season)</Label>
+              <input
+                type="text"
+                value={prefs.targetSeason ?? ""}
+                onChange={(e) => set("targetSeason", e.target.value || null)}
+                placeholder="Summer 2027"
+                className="w-full border border-paper-border rounded-lg px-3 py-1.5 text-sm text-paper-ink focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+              />
+            </div>
+            <div>
+              <Label>Alert bar — the AI only emails jobs that beat this (when unsure, it sends; blank = send everything)</Label>
+              <textarea
+                value={prefs.alertBar ?? ""}
+                onChange={(e) => set("alertBar", e.target.value)}
+                rows={2}
+                placeholder="Better than a Wells Fargo software engineering internship in Charlotte, NC"
+                className="w-full border border-paper-border rounded-lg px-3 py-1.5 text-sm text-paper-ink focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+              />
+            </div>
           </div>
         </div>
 

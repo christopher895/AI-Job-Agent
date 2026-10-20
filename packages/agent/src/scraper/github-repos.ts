@@ -3,6 +3,7 @@ import { hashJob, diffSnapshots } from "./diff";
 import { getOrCreateCompany, getLatestSnapshot, saveSnapshot, getPreferences, upsertJob } from "../db/queries";
 import { sendJobEmail } from "../notifications/email";
 import { scrapeGithubRepo, parseRepoUrl } from "./adapters/github-repo";
+import { filterForAlert } from "./alert-filter";
 
 function repoLabel(repoUrl: string): string {
   const parsed = parseRepoUrl(repoUrl);
@@ -94,7 +95,13 @@ export async function runWatchedRepoScrapes(): Promise<void> {
   const source =
     watchedRepos.length === 1 ? repoLabel(watchedRepos[0]) : `${watchedRepos.length} watched GitHub repos`;
 
-  console.log(`[github-repo] ${allNewJobs.length} new job(s) found — emailing all (no cap)`);
+  const { kept, reasons, skipped } = await filterForAlert(allNewJobs, prefs);
+  if (kept.length === 0) {
+    console.log(`[github-repo] ${allNewJobs.length} new job(s) found — none cleared the alert filter.`);
+    return;
+  }
 
-  await sendJobEmail(allNewJobs, source);
+  console.log(`[github-repo] ${allNewJobs.length} new job(s) found, ${kept.length} cleared the alert filter — emailing all of them`);
+
+  await sendJobEmail(kept, source, { reasons, skipped });
 }
