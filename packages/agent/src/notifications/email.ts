@@ -10,7 +10,14 @@ function getResend() {
 export const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function buildEmailHtml(jobs: JobListing[], source: string): string {
+export type JobEmailOptions = {
+  /** url → why the AI judge sent it, shown under the job. */
+  reasons?: Map<string, string>;
+  /** How many new jobs were filtered out this cycle. */
+  skipped?: number;
+};
+
+export function buildEmailHtml(jobs: JobListing[], source: string, opts: JobEmailOptions = {}): string {
   const appUrl = process.env.WEB_URL ?? process.env.APP_URL ?? "http://localhost:3000";
 
   const rows = jobs
@@ -22,7 +29,11 @@ function buildEmailHtml(jobs: JobListing[], source: string): string {
           <a href="${escapeHtml(j.url)}" style="font-size:15px; font-weight:600; color:#1a1a1a; text-decoration:none;">
             ${escapeHtml(j.title)}
           </a>
-          <div style="font-size:13px; color:#555; margin-top:4px;">${escapeHtml(j.company)}</div>
+          <div style="font-size:13px; color:#555; margin-top:4px;">${escapeHtml(j.company)}</div>${
+            opts.reasons?.get(j.url)
+              ? `\n          <div style="font-size:12px; color:#6b46c1; margin-top:4px;">${escapeHtml(opts.reasons.get(j.url)!)}</div>`
+              : ""
+          }
           <div style="margin-top:8px;">
             <a href="${escapeHtml(j.url)}" style="font-size:12px; color:#0066cc; margin-right:16px;">
               View job →
@@ -46,7 +57,11 @@ function buildEmailHtml(jobs: JobListing[], source: string): string {
       </p>
       <table style="width:100%; border-collapse:collapse;">
         ${rows}
-      </table>
+      </table>${
+        opts.skipped
+          ? `\n      <p style="color:#888; font-size:12px; margin-top:16px;">${opts.skipped} more didn't clear your bar (see the agent logs).</p>`
+          : ""
+      }
     </div>
   `;
 }
@@ -65,7 +80,7 @@ export function jobAlertsEnabled(): boolean {
   return process.env.JOB_ALERTS_ENABLED !== "false";
 }
 
-export async function sendJobEmail(jobs: JobListing[], source: string) {
+export async function sendJobEmail(jobs: JobListing[], source: string, opts: JobEmailOptions = {}) {
   if (jobs.length === 0) return;
 
   if (!jobAlertsEnabled()) {
@@ -86,7 +101,7 @@ export async function sendJobEmail(jobs: JobListing[], source: string) {
     from,
     to: toEmail,
     subject,
-    html: buildEmailHtml(jobs, source),
+    html: buildEmailHtml(jobs, source, opts),
   });
 }
 

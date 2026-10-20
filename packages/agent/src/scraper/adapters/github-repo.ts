@@ -8,6 +8,8 @@ interface ListingsJsonEntry {
   url: string;
   active: boolean;
   is_visible?: boolean;
+  terms?: unknown;
+  season?: unknown;
 }
 
 /**
@@ -47,6 +49,11 @@ export function parseListingsJson(raw: string): JobListing[] {
       company: e.company_name,
       location: Array.isArray(e.locations) ? e.locations.join(", ") : "",
       url: e.url,
+      // Feeds differ: Simplify tags "Summer 2027" in `terms`, vanshb03 tags
+      // "Summer" in `season`. Only set what the feed actually provides — an
+      // absent field must not read as "untagged" and drop the listing.
+      ...(Array.isArray(e.terms) ? { terms: e.terms.filter((t): t is string => typeof t === "string") } : {}),
+      ...(typeof e.season === "string" && e.season.trim() ? { season: e.season } : {}),
     }));
 }
 

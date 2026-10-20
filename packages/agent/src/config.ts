@@ -6,6 +6,10 @@ export type Preferences = {
   maxPerEmail: number;
   priorityCompanies: string[];
   watchedRepos: string[];
+  /** Repo listings must carry this season tag; board titles naming another season are dropped. null/"" = off. */
+  targetSeason: string | null;
+  /** What a job must beat to be emailed — read by the AI judge. "" = send everything. */
+  alertBar: string;
 };
 
 export const FILTERS: Preferences = {
@@ -44,8 +48,29 @@ export const FILTERS: Preferences = {
     "Perplexity",
     "Cursor",
   ],
-  watchedRepos: ["https://github.com/vanshb03/Summer2027-Internships"],
+  watchedRepos: [
+    "https://github.com/vanshb03/Summer2027-Internships",
+    "https://github.com/SimplifyJobs/Summer2027-Internships",
+  ],
+  targetSeason: "Summer 2027",
+  alertBar: "Better than a Wells Fargo software engineering internship in Charlotte, NC",
 };
+
+/**
+ * PUT /api/preferences validation. The two alert fields are optional so a
+ * client built before they existed can still save — getPreferences() fills
+ * missing ones from FILTERS.
+ */
+export function isValidPreferences(body: unknown): body is Preferences {
+  const b = body as Record<string, unknown> | null;
+  if (!b || typeof b !== "object") return false;
+  const arrays = ["titleKeywords", "requiredKeywords", "targetLocations", "priorityCompanies", "watchedRepos"];
+  if (!arrays.every((k) => Array.isArray(b[k]))) return false;
+  if (typeof b.maxPerEmail !== "number") return false;
+  if (b.targetSeason !== undefined && b.targetSeason !== null && typeof b.targetSeason !== "string") return false;
+  if (b.alertBar !== undefined && typeof b.alertBar !== "string") return false;
+  return true;
+}
 
 // ── Gmail ingestion tuning ───────────────────────────────────────────────────
 export const MATCH_MIN_SCORE = 0.6;      // below this → review queue

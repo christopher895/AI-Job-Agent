@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getPreferences, updatePreferences } from "../../db/queries";
-import { Preferences } from "../../config";
+import { isValidPreferences } from "../../config";
 
 const router = Router();
 
@@ -16,15 +16,8 @@ router.get("/", async (_req, res) => {
 
 router.put("/", async (req, res) => {
   try {
-    const body = req.body as Preferences;
-    if (
-      !Array.isArray(body.titleKeywords) ||
-      !Array.isArray(body.requiredKeywords) ||
-      !Array.isArray(body.targetLocations) ||
-      !Array.isArray(body.priorityCompanies) ||
-      !Array.isArray(body.watchedRepos) ||
-      typeof body.maxPerEmail !== "number"
-    ) {
+    const body: unknown = req.body;
+    if (!isValidPreferences(body)) {
       res.status(400).json({ error: "Invalid preferences shape" });
       return;
     }

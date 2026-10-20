@@ -6,7 +6,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "npm run test:grounding && npm run test:format && npm run test:tex-escape && npm run test:cancellation && npm run test:internal-secret && npm run test:filters && npm run test:ssrf && npm run test:fetch-jd && npm run test:github-repo && npm run test:match && npm run test:prefilter && npm run test:status-order && npm run test:gmail-parse && npm run test:status-email && npm run test:job-alerts-gate && npm run test:generate-answers && npm run test:duplicate && npm run test:apply-suggestions && npm run test:suggestion-rounds && npm run test:suggest-from-feedback && npm run test:filename && npm run test:grade-prompts && npm run test:grade-assemble && npm run test:grade-limit && npm run test:resume-text && npm run test:grade-request && npm run test:grade-pipeline",
+    "test": "npm run test:grounding && npm run test:format && npm run test:tex-escape && npm run test:cancellation && npm run test:internal-secret && npm run test:filters && npm run test:ssrf && npm run test:fetch-jd && npm run test:github-repo && npm run test:match && npm run test:prefilter && npm run test:status-order && npm run test:gmail-parse && npm run test:status-email && npm run test:job-alerts-gate && npm run test:generate-answers && npm run test:duplicate && npm run test:apply-suggestions && npm run test:suggestion-rounds && npm run test:suggest-from-feedback && npm run test:filename && npm run test:grade-prompts && npm run test:grade-assemble && npm run test:grade-limit && npm run test:resume-text && npm run test:grade-request && npm run test:grade-pipeline && npm run test:season && npm run test:judge-jobs && npm run test:preferences-shape && npm run test:alert-filter",
     "test:filename": "tsx src/utils/test-filename.ts",
     "test:suggestion-rounds": "tsx src/ai/test-suggestion-rounds.ts",
     "test:suggest-from-feedback": "tsx src/ai/test-suggest-from-feedback.ts",
@@ -46,7 +46,11 @@
     "test:resume-text": "tsx src/ai/grade/test-resume-text.ts",
     "test:grade-request": "tsx src/ai/grade/test-grade-request.ts",
     "test:grade-pipeline": "tsx src/ai/grade/test-grade-pipeline.ts",
-    "test:grade-live": "tsx src/ai/grade/test-grade-live.ts"
+    "test:grade-live": "tsx src/ai/grade/test-grade-live.ts",
+    "test:season": "tsx src/scraper/test-season.ts",
+    "test:judge-jobs": "tsx src/ai/test-judge-jobs.ts",
+    "test:preferences-shape": "tsx src/api/test-preferences-shape.ts",
+    "test:alert-filter": "tsx src/scraper/test-alert-filter.ts"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",

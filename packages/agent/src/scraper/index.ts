@@ -9,6 +9,7 @@ import { scrapeLever } from "./adapters/lever";
 import { scrapeAmazon } from "./adapters/amazon";
 import { scrapeGoldman } from "./adapters/goldman";
 import { matchesLocation, scoreJob, applyPreferences } from "./filters";
+import { filterForAlert } from "./alert-filter";
 import { getPreferences } from "../db/queries";
 
 async function scrapeCompany(company: Company): Promise<JobListing[]> {
@@ -90,8 +91,14 @@ export async function runAllCompanyScrapes(): Promise<void> {
     return;
   }
 
-  // Score, sort, and cap
-  const scored = allNewJobs
+  // Season rule + AI judge, then score, sort, and cap what's left.
+  const { kept, reasons, skipped } = await filterForAlert(allNewJobs, prefs);
+  if (kept.length === 0) {
+    console.log(`[scraper] ${allNewJobs.length} new job(s) found — none cleared the alert filter.`);
+    return;
+  }
+
+  const scored = kept
     .map((job) => ({ job, score: scoreJob(job) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, prefs.maxPerEmail);
@@ -99,9 +106,9 @@ export async function runAllCompanyScrapes(): Promise<void> {
   const topJobs = scored.map((s) => s.job);
 
   console.log(
-    `[scraper] ${allNewJobs.length} new job(s) found — emailing top ${topJobs.length}:\n` +
+    `[scraper] ${allNewJobs.length} new job(s) found, ${kept.length} cleared the alert filter — emailing top ${topJobs.length}:\n` +
     scored.map((s) => `  [${s.score}] ${s.job.title} @ ${s.job.company}`).join("\n")
   );
 
-  await sendJobEmail(topJobs, "company career pages");
+  await sendJobEmail(topJobs, "company career pages", { reasons, skipped });
 }

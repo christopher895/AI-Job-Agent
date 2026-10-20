@@ -12,6 +12,7 @@ Everything below is implemented and running in production, not aspirational — 
 
 - **Scraper pipeline** — Greenhouse, Ashby, Lever, Amazon, Goldman adapters (110+ companies); snapshot diffing; location filtering; keyword scoring; user-editable filter preferences
 - **Alert emails** — Resend email listing new jobs (title, company, link) with a "Tailor resume" link per job → `/tailor?jobUrl=...&title=...&company=...`
+- **Smart alert filter** — before any alert email (company boards and watched GitHub repos alike), `filterForAlert()` (`scraper/alert-filter.ts`) applies two stages. (1) The season rule (`scraper/season.ts`, `prefs.targetSeason`, default "Summer 2027"): repo listings must match it — Simplify tags `terms: ["Summer 2027"]` (untagged/"N/A" dropped), vanshb03 tags only `season: "Summer"` (the repo is the year, so the season word must match); board postings carry no season data, so they're dropped only when the title names another season/co-op or a different year. (2) The AI judge (`ai/judge-jobs.ts`, `prefs.alertBar`, default "Better than a Wells Fargo software engineering internship in Charlotte, NC"): one `completeJSON` call per ≤40 jobs on `sonnet` with one retry, sequential, verdicts mapped back by index; it skips only clearly-worse jobs and sends when unsure. **Fail-open**: a failed call, a job the model left out, anything past the 5-minute judge deadline (`JUDGE_DEADLINE_MS` — the scheduler skips ticks while one runs), or any error inside `filterForAlert` means the job is sent — jobs are already recorded by `upsertJob`, so dropping them on an error would lose them for good. Each emailed job shows the judge's reason; the footer counts what was filtered; every drop is logged as `[alert-filter] season skip` / `judge skip`. Blank season or bar turns that stage off. Watched repos default to vanshb03 + SimplifyJobs Summer2027-Internships (Simplify's feed is ~13 MB / ~17k listings, most inactive)
 - **AI tailoring pipeline** — `suggestKeywords(jd, master)` in `packages/agent/src/ai/suggest-keywords.ts`: a single pass proposes keyword-insertion suggestions (bullet rewrites and skill additions) against the fixed, one-page master resume, which is never reordered or cut. Christopher reviews, edits, and checks off suggestions in a checklist; `POST /api/resume/:id/apply-suggestions` applies only the accepted ones and renders the final one-page Markdown. (The old 3-pass generate→critique→revise loop and the JD-less "general resume" feature it backed have been removed — the suggestion-based flow is the only tailoring path.)
 - **LLM provider** — Claude by default, via the headless `claude -p` CLI (`packages/agent/src/ai/claude-cli.ts`), authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing). Runs on `--model opus` — a tier alias, so it follows new Opus releases rather than pinning a version; override with `CLAUDE_MODEL`. OpenAI/GPT-4o is a manual fallback (`LLM_PROVIDER=openai`)
 - **Master resume** — source facts live in `packages/agent/src/ai/master-resume.ts`, seeded once into the `master_resume` DB table; `/resume/master` reads and writes the DB copy directly (see Deployment below — always edit on production, not locally)
@@ -46,7 +47,7 @@ Everything below is implemented and running in production, not aspirational — 
 | `/resume/[id]` | Google Doc-style inline text editor — auto-saves, Download PDF, Email to me |
 | `/resume/master` | Edit master resume fields directly (basics, experience, projects, skills, drag-to-reorder sections) |
 | `/applied` | Application log table — mirrors Google Sheet (date applied, company, location, URL, status, resume link) |
-| `/preferences` | Edit scraper filters (title/required keywords, target locations, priority companies, max alerts per email) — backed by the `preferences` DB table and `/api/preferences` |
+| `/preferences` | Edit scraper filters (title/required keywords, target locations, priority companies, max alerts per email, watched repos, season, alert bar for the AI judge) — backed by the `preferences` DB table and `/api/preferences` |
 | `/grader` | Start a grade (resume source, target role, level, optional JD; last role/level remembered) and see past grades with scores. `?resumeId=` preselects a tailored resume — the "Grade" button on `/resume/[id]` links here |
 | `/grader/[id]` | Specialist checklist while pending (Cancel; Re-run once older than 10 min), then the score, five category bars and finding cards with Copy + groundedness badges; Re-run, Delete. Master grades: per-finding checkboxes + editable rewrites → "Apply N to master resume" (unsaved, highlighted in the editor). Uploads: "Copy fixed resume text". Tailored: "Fix N in the resume" (feedback round) |
 
@@ -93,12 +94,15 @@ agent/src/
 │   ├── browser-utils.ts    # Shared Playwright browser lifecycle helpers
 │   ├── diff.ts             # Snapshot diffing (hash sets)
 │   ├── filters.ts          # Location + keyword scoring (reads `preferences` table)
+│   ├── season.ts           # passesSeason() — deterministic season rule for alerts
+│   ├── alert-filter.ts     # filterForAlert() — season rule then AI judge, before every alert email
 │   ├── companies.ts        # Hardcoded company list (Greenhouse/Ashby/Lever/Amazon/Goldman, 110+ companies)
 │   ├── run-companies.ts    # CLI entry — `npm run scrape:companies`
 │   └── adapters/           # greenhouse.ts, ashby.ts, lever.ts, amazon.ts, goldman.ts
 ├── ai/
 │   ├── suggest-keywords.ts    # Single-pass JD keyword-suggestion call (current tailoring ENTRY POINT)
 │   ├── suggest-from-feedback.ts # Turns pasted reviewer feedback into a suggestion batch against the current resume
+│   ├── judge-jobs.ts        # AI judge for alerts: send/skip + reason per job vs prefs.alertBar, batches of 40, fail-open
 │   ├── suggestion-rounds.ts   # Stacking rounds in one `suggestions` column: undecided/appendBatch/composeAccepted, FEEDBACK_STAGE
 │   ├── apply-suggestions.ts   # Deterministic groundedness labeling + applies only accepted suggestions
 │   ├── import-master-resume.ts # Parses pasted/PDF resume text into MasterResume (LLM call + id dedup)
@@ -282,7 +286,7 @@ applied_jobs (
 
 preferences (
   id            int primary key default 1,   -- single row
-  data          jsonb,          -- Preferences JSON: titleKeywords, requiredKeywords, targetLocations, priorityCompanies, maxPerEmail
+  data          jsonb,          -- Preferences JSON: titleKeywords, requiredKeywords, targetLocations, priorityCompanies, maxPerEmail, termFilter, watchedRepos, targetSeason, alertBar
   updated_at    timestamptz
 )
 
@@ -312,8 +316,10 @@ resume_grades (
 cron (every 15 min, in-process, guarded against overlapping ticks)
   → fetch each company's ATS API/page (greenhouse/ashby/lever/amazon/goldman adapters)
     → diff.ts (new job hashes)
-      → filter by location + keyword score (reads `preferences` table)
-        → Resend email (job list + "Tailor resume" link per job)
+      → upsertJob gate (jobs.url UNIQUE — a job is only ever considered once)
+        → filterForAlert: season rule → AI judge (fail-open)
+          → keyword score + cap at maxPerEmail (company boards; repos are uncapped)
+            → Resend email (job list + judge reason + "Tailor resume" link per job)
 ```
 
 ### Tailoring (triggered from web app)
