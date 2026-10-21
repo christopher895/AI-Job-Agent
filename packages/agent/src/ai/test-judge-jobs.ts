@@ -140,6 +140,13 @@ async function main() {
     check("prompt names a non-US example to skip", /London|Toronto|Canada/.test(system));
   }
 
+  // Location and company trade off: NYC/SF lower the company bar, weaker markets raise it
+  {
+    const { system } = buildJudgePrompt([job(1)], BAR);
+    check("prompt has a lower company bar for NYC and SF", /lower company bar/i.test(system) && /New York/.test(system) && /San Francisco/.test(system));
+    check("prompt demands a clearly stronger company in weaker locations", /clearly stronger company/i.test(system));
+  }
+
   console.log(pass ? "\n✓ judge-jobs test PASSED" : "\n✗ judge-jobs test FAILED");
   process.exit(pass ? 0 : 1);
 }
