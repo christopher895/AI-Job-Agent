@@ -380,6 +380,25 @@ function check(label: string, ok: boolean, detail?: string) {
   );
 }
 
+// Case: Ashby marks hybrid roles jobLocationType TELECOMMUTE while still giving
+// the office address (Patreon "Software Engineering Intern - Summer 2027": the
+// page says San Francisco, Hybrid). The address wins; "Remote" only when there
+// is no address at all.
+{
+  const ld = (extra: string) => `<html><head><title>SWE Intern</title>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"JobPosting","title":"SWE Intern",
+      "hiringOrganization":{"@type":"Organization","name":"Patreon"},"jobLocationType":"TELECOMMUTE"${extra}}</script></head>
+    <body><main>${"Build creator tools used by millions of people every day. ".repeat(20)}</main></body></html>`;
+  const withAddress = extractFromHtml(ld(`,"jobLocation":{"@type":"Place","address":{"@type":"PostalAddress",
+      "addressLocality":"San Francisco","addressRegion":"California","addressCountry":"United States"}}`),
+    "https://jobs.ashbyhq.com/patreon/x");
+  check("telecommute-with-address", withAddress.location === "San Francisco, California, United States",
+    `location mismatch: got ${JSON.stringify(withAddress.location)}`);
+  const noAddress = extractFromHtml(ld(""), "https://jobs.ashbyhq.com/patreon/y");
+  check("telecommute-no-address", noAddress.location === "Remote",
+    `location mismatch: got ${JSON.stringify(noAddress.location)}`);
+}
+
 // Case: Jobright's anti-bot interstitial, served to Railway's datacenter IP
 // while a laptop gets the real page. Its body text cleared MIN_LENGTH and got
 // tailored against as if it were the JD — must come back empty instead.
