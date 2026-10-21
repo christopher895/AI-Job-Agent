@@ -222,20 +222,20 @@ function extractJsonLdJobPosting($: CheerioAPI): { location?: string; company?: 
         result.company = org.name.trim();
       }
 
-      if (jp.jobLocationType === "TELECOMMUTE") {
-        result.location = "Remote";
-      } else {
-        const jobLocation = Array.isArray(jp.jobLocation) ? jp.jobLocation[0] : jp.jobLocation;
-        const address = (jobLocation as Record<string, unknown> | undefined)?.address as
-          | Record<string, unknown>
-          | undefined;
-        const parts = address
-          ? [address.addressLocality, address.addressRegion, address.addressCountry].filter(
-              (p): p is string => typeof p === "string" && p.length > 0
-            )
-          : [];
-        if (parts.length) result.location = parts.join(", ");
-      }
+      // The address wins over jobLocationType: Ashby flags hybrid roles
+      // TELECOMMUTE while still giving the office (Patreon's SF hybrid intern
+      // read as "Remote"). Only a posting with no address at all is "Remote".
+      const jobLocation = Array.isArray(jp.jobLocation) ? jp.jobLocation[0] : jp.jobLocation;
+      const address = (jobLocation as Record<string, unknown> | undefined)?.address as
+        | Record<string, unknown>
+        | undefined;
+      const parts = address
+        ? [address.addressLocality, address.addressRegion, address.addressCountry].filter(
+            (p): p is string => typeof p === "string" && p.length > 0
+          )
+        : [];
+      if (parts.length) result.location = parts.join(", ");
+      else if (jp.jobLocationType === "TELECOMMUTE") result.location = "Remote";
 
       if (result.location || result.company) return result;
     }
