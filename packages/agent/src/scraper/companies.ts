@@ -63,7 +63,7 @@ export const COMPANIES: Company[] = [
   { name: "IMC Trading",     platform: "greenhouse", slug: "imc" },
   { name: "DRW",             platform: "greenhouse", slug: "drweng" },
   { name: "Akuna Capital",   platform: "greenhouse", slug: "akunacapital" },
-  { name: "Old Mission",     platform: "greenhouse", slug: "oldmissioncapital" },
+  { name: "Old Mission",     platform: "ashby",      slug: "old-mission-capital" },
   { name: "Five Rings",      platform: "greenhouse", slug: "fiveringsllc" },
   { name: "Point72",         platform: "greenhouse", slug: "point72" },
   { name: "Squarepoint",     platform: "greenhouse", slug: "squarepointcapital" },
