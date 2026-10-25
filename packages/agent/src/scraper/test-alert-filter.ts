@@ -1,4 +1,4 @@
-import { filterForAlert, companyKey } from "./alert-filter";
+import { filterForAlert, companyKey, titleKey } from "./alert-filter";
 import { buildEmailHtml } from "../notifications/email";
 import { JobListing } from "./types";
 import { Verdict } from "../ai/judge-jobs";
@@ -9,8 +9,9 @@ function check(label: string, cond: boolean, detail?: string) {
 }
 
 const j = (url: string, extra: Partial<JobListing> = {}): JobListing =>
-  ({ title: "SWE Intern", company: "Co", location: "NYC", url, ...extra });
+  ({ title: `SWE Intern ${url}`, company: "Co", location: "NYC", url, ...extra });
 const noneApplied = async () => [] as string[];
+const noneSeen = async () => [] as { company: string; title: string }[];
 const prefs = { targetSeason: "Summer 2027", alertBar: "Better than Wells Fargo in Charlotte" };
 
 async function main() {
@@ -21,7 +22,7 @@ async function main() {
       [j("a", { terms: ["Summer 2027"] }), j("b", { terms: ["Fall 2026"] }), j("c", { title: "Fall Co-op" }), j("d")],
       prefs,
       {
-        appliedCompanies: noneApplied,
+        appliedCompanies: noneApplied, seenBefore: noneSeen,
         judge: async (jobs) => {
           judged = jobs.map((x) => x.url);
           return new Map<string, Verdict>([
@@ -40,7 +41,7 @@ async function main() {
   // Everything skipped → nothing kept
   {
     const out = await filterForAlert([j("a")], prefs, {
-      appliedCompanies: noneApplied,
+      appliedCompanies: noneApplied, seenBefore: noneSeen,
       judge: async () => new Map([["a", { send: false, reason: "no" }]]),
     });
     check("all skipped → kept empty", out.kept.length === 0 && out.skipped === 1);
@@ -50,7 +51,7 @@ async function main() {
   {
     let called = false;
     const out = await filterForAlert([j("a", { terms: ["Fall 2026"] })], prefs, {
-      appliedCompanies: noneApplied,
+      appliedCompanies: noneApplied, seenBefore: noneSeen,
       judge: async () => { called = true; return new Map(); },
     });
     check("no judge call when season drops everything", !called && out.kept.length === 0);
@@ -58,7 +59,7 @@ async function main() {
 
   // The filter must never swallow a tick's alerts
   {
-    const out = await filterForAlert([j("a"), j("b")], prefs, { appliedCompanies: noneApplied, judge: async () => { throw new Error("unexpected"); } });
+    const out = await filterForAlert([j("a"), j("b")], prefs, { appliedCompanies: noneApplied, seenBefore: noneSeen, judge: async () => { throw new Error("unexpected"); } });
     check("unexpected error → everything kept", out.kept.length === 2 && out.skipped === 0);
   }
 
@@ -70,6 +71,7 @@ async function main() {
       prefs,
       {
         appliedCompanies: async () => ["Snap Inc.", "jane street"],
+        seenBefore: noneSeen,
         judge: async (jobs) => { judged = jobs.map((x) => x.url); return new Map(); },
       }
     );
@@ -83,6 +85,7 @@ async function main() {
     let judged = 0;
     const out = await filterForAlert([j("a", { company: "Snap" }), j("b", { terms: ["Fall 2026"] })], prefs, {
       appliedCompanies: async () => { throw new Error("db down"); },
+      seenBefore: noneSeen,
       judge: async (jobs) => { judged = jobs.length; return new Map(); },
     });
     check("lookup failure → nothing dropped as applied", out.kept.map((x) => x.url).join() === "a");
@@ -94,6 +97,49 @@ async function main() {
     companyKey("Two Sigma, LLC") === companyKey("Two Sigma") &&
     companyKey("AT&T") === companyKey("at and t"));
   check("companyKey keeps distinct names distinct", companyKey("Snap") !== companyKey("Snapdragon"));
+
+  // The same posting under another URL (repo short link, second Workday site,
+  // company board vs repo) is not sent twice — matched on company + title
+  {
+    let judged: string[] = [];
+    let excluded: string[] = [];
+    const out = await filterForAlert(
+      [
+        j("new1", { company: "Salesforce", title: "Summer 2027 Intern - Software Engineer" }),
+        j("new2", { company: "Anduril Industries", title: "Software Engineer Intern" }),
+        j("new3", { company: "Anduril", title: "Software Engineer Intern" }),
+        j("new4", { company: "Anduril", title: "Software Engineer Intern" }),
+      ],
+      prefs,
+      {
+        appliedCompanies: noneApplied,
+        seenBefore: async (urls) => { excluded = urls; return [{ company: "Salesforce, Inc.", title: "Software Engineer Intern" }]; },
+        judge: async (jobs) => { judged = jobs.map((x) => x.url); return new Map(); },
+      }
+    );
+    check("lookup excludes this batch's own rows", excluded.join() === "new1,new2,new3,new4", excluded.join());
+    check("earlier posting with same company+title dropped", !judged.includes("new1"), judged.join());
+    check("repeat inside one batch sent once", judged.join() === "new2,new3", judged.join());
+    check("seen-before drops counted as skipped", out.skipped === 2, String(out.skipped));
+  }
+
+  // A failed seen-before lookup still de-dupes within the batch and sends the rest
+  {
+    let judged: string[] = [];
+    await filterForAlert([j("a", { company: "X", title: "SWE Intern" }), j("b", { company: "X", title: "SWE Intern" }), j("c", { company: "Y" })], prefs, {
+      appliedCompanies: noneApplied,
+      seenBefore: async () => { throw new Error("db down"); },
+      judge: async (jobs) => { judged = jobs.map((x) => x.url); return new Map(); },
+    });
+    check("seen-before failure → batch still de-duped", judged.join() === "a,c", judged.join());
+  }
+
+  check("titleKey ignores season, year, punctuation, internship/intern",
+    titleKey("Software Engineer Intern - Summer 2027") === titleKey("Software Engineer Intern") &&
+    titleKey("Summer 2027 Intern - Software Engineer") === titleKey("Software Engineer Intern") &&
+    titleKey("Software Engineering Internship (2027)") === titleKey("software engineering intern"));
+  check("titleKey keeps different roles apart",
+    titleKey("Backend Software Engineer Intern") !== titleKey("Frontend Software Engineer Intern"));
 
   // Email rendering
   const html = buildEmailHtml([j("https://x/1", { title: "AI Intern" })], "SimplifyJobs", {

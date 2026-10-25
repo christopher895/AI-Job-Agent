@@ -61,6 +61,24 @@ export async function getActiveCompanies() {
   return rows;
 }
 
+/**
+ * Company + title of jobs recorded in the last `days` days, other than
+ * `excludeUrls` — the alert filter's "same posting under another URL" check.
+ */
+export async function listRecentJobKeys(
+  excludeUrls: string[],
+  days: number
+): Promise<{ company: string; title: string }[]> {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT company_name AS company, title FROM jobs
+     WHERE detected_at > NOW() - make_interval(days => $2)
+       AND company_name IS NOT NULL
+       AND NOT (url = ANY($1::text[]))`,
+    [excludeUrls, days]
+  );
+  return rows;
+}
+
 export async function upsertJob(
   companyId: number,
   title: string,
