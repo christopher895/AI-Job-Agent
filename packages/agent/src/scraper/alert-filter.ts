@@ -7,20 +7,49 @@ export type AlertFilterResult = {
   kept: JobListing[];
   /** url → the judge's one-line reason, for jobs that were sent. */
   reasons: Map<string, string>;
-  /** Applied-company drops + season drops + judge skips — shown as a count in the email footer. */
+  /** Applied/duplicate drops + season drops + judge skips — shown as a count in the email footer. */
   skipped: number;
 };
 
 /**
  * Runs between the upsertJob gate and the alert email in both alert paths:
- * companies already applied to are dropped, then the season rule (cheap,
+ * companies already applied to and repeats of an earlier posting are dropped,
+ * then the season rule (cheap,
  * deterministic), then the AI judge on what's left. Every drop is logged with its reason so the bar can be audited.
  */
 type FilterDeps = {
   judge?: (jobs: JobListing[], bar: string) => Promise<Map<string, Verdict>>;
   /** Company names from the application log (`applied_jobs.company`). */
   appliedCompanies?: () => Promise<string[]>;
+  /** Company + title of recently recorded jobs, other than the given URLs (this batch's own rows). */
+  seenBefore?: (excludeUrls: string[]) => Promise<{ company: string; title: string }[]>;
 };
+
+/** How far back a matching company + title counts as the same posting. */
+export const SEEN_WINDOW_DAYS = 90;
+
+/**
+ * Normalizes a title for "same posting" matching: the season, years,
+ * punctuation and Intern vs Internship don't count, nor does word order — so
+ * "Summer 2027 Intern - Software Engineer" matches "Software Engineer Intern".
+ */
+export function titleKey(title: string): string {
+  const words = title
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(" ")
+    .filter((w) => w && !/^(19|20)\d\d$/.test(w) && !/^(summer|fall|autumn|winter|spring)$/.test(w))
+    .map((w) => (w === "internship" ? "intern" : w));
+  return [...new Set(words)].sort().join(" ");
+}
+
+const postingKey = (company: string, title: string) => `${companyKey(company)}|${titleKey(title)}`;
+
+async function loadSeenBefore(excludeUrls: string[]) {
+  const { listRecentJobKeys } = await import("../db/queries");
+  return listRecentJobKeys(excludeUrls, SEEN_WINDOW_DAYS);
+}
 
 const LEGAL_SUFFIX = /\b(inc|llc|ltd|corp|corporation|co|company|plc|lp)\b\s*$/;
 
@@ -71,12 +100,30 @@ async function runFilter(
   } catch (err) {
     console.error("[alert-filter] applied-companies lookup failed — not filtering on it:", err);
   }
+  // jobs.url is the only hard gate, but one posting often arrives under several
+  // URLs (a repo's short link, a second Workday site, board vs repo), so an
+  // earlier job — or one earlier in this batch — with the same company + title
+  // counts as already sent. A failed lookup still de-dupes within the batch.
+  const seen = new Set<string>();
+  try {
+    const earlier = await (deps.seenBefore ?? loadSeenBefore)(jobs.map((j) => j.url));
+    for (const e of earlier) seen.add(postingKey(e.company, e.title));
+  } catch (err) {
+    console.error("[alert-filter] seen-before lookup failed — only de-duping within this batch:", err);
+  }
+
   const notApplied: JobListing[] = [];
   for (const job of jobs) {
-    if (!applied.has(companyKey(job.company))) notApplied.push(job);
-    else {
+    const key = postingKey(job.company, job.title);
+    if (applied.has(companyKey(job.company))) {
       skipped++;
       console.log(`[alert-filter] applied skip: ${job.title} @ ${job.company}`);
+    } else if (seen.has(key)) {
+      skipped++;
+      console.log(`[alert-filter] duplicate skip: ${job.title} @ ${job.company} (${job.url})`);
+    } else {
+      seen.add(key);
+      notApplied.push(job);
     }
   }
 
