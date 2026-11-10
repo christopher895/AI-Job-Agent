@@ -319,7 +319,7 @@ export default function PreferencesForm({ initial }: { initial: Preferences }) {
                 value={prefs.alertBar ?? ""}
                 onChange={(e) => set("alertBar", e.target.value)}
                 rows={2}
-                placeholder="Better than a Wells Fargo software engineering internship in Charlotte, NC"
+                placeholder="Beats my Wells Fargo software engineering internship offer in Charlotte, NC, which pays $48.08/hr"
                 className="w-full border border-paper-border rounded-lg px-3 py-1.5 text-sm text-paper-ink focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
               />
             </div>
