@@ -8,7 +8,7 @@ function check(label: string, cond: boolean, detail?: string) {
 
 const job = (i: number, extra: Partial<JobListing> = {}): JobListing =>
   ({ title: `SWE Intern ${i}`, company: `Co${i}`, location: "New York, NY", url: `https://x/${i}`, ...extra });
-const BAR = "Better than a Wells Fargo software engineering internship in Charlotte, NC";
+const BAR = "Beats my Wells Fargo software engineering internship offer in Charlotte, NC, which pays $48.08/hr";
 
 type Call = { system: string; user: string };
 
@@ -30,7 +30,7 @@ async function main() {
     check("index maps within the first batch", verdicts.get("https://x/0")?.send === false && verdicts.get("https://x/1")?.send === true);
     check("index maps within a later batch", verdicts.get("https://x/41")?.send === true && verdicts.get("https://x/41")?.reason === "r1");
     check("system prompt carries the bar", calls[0].system.includes(BAR));
-    check("system prompt says send when unsure", /when (you are )?unsure/i.test(calls[0].system));
+    check("system prompt still sends a generic title at a strong company", /generic title at a company that clears the bar/i.test(calls[0].system));
     check("user message lists title, company, location", calls[0].user.includes("SWE Intern 0") && calls[0].user.includes("Co0") && calls[0].user.includes("New York, NY"));
   }
 
@@ -140,11 +140,16 @@ async function main() {
     check("prompt names a non-US example to skip", /London|Toronto|Canada/.test(system));
   }
 
-  // Location and company trade off: NYC/SF lower the company bar, weaker markets raise it
+  // High bar: a clear step up in company, and at least the pay he already has
   {
     const { system } = buildJudgePrompt([job(1)], BAR);
-    check("prompt has a lower company bar for NYC and SF", /lower company bar/i.test(system) && /New York/.test(system) && /San Francisco/.test(system));
-    check("prompt demands a clearly stronger company in weaker locations", /clearly stronger company/i.test(system));
+    check("prompt still names NYC and SF", /New York/.test(system) && /San Francisco/.test(system));
+    check("prompt demands a clearly stronger company", /clearly stronger company/i.test(system));
+    check("prompt trades pay against company", /hourly pay/i.test(system) && /pay and company trade off/i.test(system));
+    check("paying under the bar needs a clearly stronger company", /Pays less than the bar's figure[^\n]*clearly stronger company/.test(system));
+    check("paying over the bar needs at least a comparable company", /Pays at or above the bar's figure[^\n]*at least comparable/.test(system));
+    check("an unrecognized company is skip, not unsure", /do not recognize the company/i.test(system));
+    check("no 'send when unsure about the company' leniency left", !/unsure about the company/i.test(system));
   }
 
   console.log(pass ? "\n✓ judge-jobs test PASSED" : "\n✗ judge-jobs test FAILED");

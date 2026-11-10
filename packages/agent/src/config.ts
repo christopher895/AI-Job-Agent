@@ -53,7 +53,7 @@ export const FILTERS: Preferences = {
     "https://github.com/SimplifyJobs/Summer2027-Internships",
   ],
   targetSeason: "Summer 2027",
-  alertBar: "Better than a Wells Fargo software engineering internship in Charlotte, NC",
+  alertBar: "Beats my Wells Fargo software engineering internship offer in Charlotte, NC, which pays $48.08/hr",
 };
 
 /**
