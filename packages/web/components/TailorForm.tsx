@@ -20,6 +20,9 @@ export default function TailorForm({
   const [company, setCompany] = useState(initialCompany);
   const [location, setLocation] = useState("");
   const [fetchStatus, setFetchStatus] = useState<"idle" | "fetching" | "done" | "failed">("idle");
+  // The URL behind the JD currently in the form. Fetching a different one means
+  // a different job, so everything tied to the old job is cleared.
+  const [fetchedUrl, setFetchedUrl] = useState<string | null>(null);
   const [questions, setQuestions] = useState("");
   const [answersResumeId, setAnswersResumeId] = useState<string | null>(null);
   const [answersState, setAnswersState] = useState<ApplicationAnswersState | null>(null);
@@ -35,6 +38,22 @@ export default function TailorForm({
   async function handleFetchJd() {
     const trimmed = jobUrl.trim();
     if (!trimmed) return;
+    // A different link than last time is a different job: its questions,
+    // drafted answers and log status belong to the old one. The first fetch
+    // keeps what's there — the email's "Tailor resume" link pre-fills
+    // title/company for this very job, and questions may be pasted first.
+    const newJob = fetchedUrl !== null && fetchedUrl !== trimmed;
+    if (newJob) {
+      setJdText("");
+      setQuestions("");
+      setAnswersResumeId(null);
+      setAnswersState(null);
+      setLogStatus("idle");
+      setTitle("");
+      setCompany("");
+      setLocation("");
+    }
+    setFetchedUrl(trimmed);
     setFetchStatus("fetching");
     setError(null);
     try {
@@ -90,6 +109,7 @@ export default function TailorForm({
     setAnswersState(null);
     setDraftingAnswers(false);
     setFetchStatus("idle");
+    setFetchedUrl(null);
     setLogStatus("idle");
     setError(null);
   }
