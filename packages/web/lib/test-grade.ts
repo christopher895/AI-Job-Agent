@@ -48,7 +48,7 @@ check("settled grade offers Re-run, not Cancel", !done.canCancel && done.canReru
 
 // Re-run bodies
 const g = (over: Partial<Grade>): Grade => ({
-  id: "g", label: "Databricks — SWE Intern", source: "tailored", resume_id: "r1", target_role: "ml",
+  id: "g", label: "Databricks — SWE Intern", source: "tailored", resume_id: "r1", profile_id: null, target_role: "ml",
   level: "intern", status: "ready", score: 80, created_at: "", updated_at: "", resume_text: "snapshot text",
   jd_text: "JD", specialists: {}, report: null, error: null, ...over,
 });
@@ -59,6 +59,9 @@ check("deleted tailored resume falls back to the snapshot",
   orphan.source === "upload" && orphan.text === "snapshot text" && orphan.label === "Databricks — SWE Intern");
 const master = rerunBody(g({ source: "master", resume_id: null, jd_text: null }));
 check("master re-run re-reads the master", master.source === "master" && master.text === undefined && master.jdText === undefined);
+const mlMaster = rerunBody(g({ source: "master", resume_id: null, profile_id: 3 }));
+check("master re-run keeps the graded profile", mlMaster.source === "master" && mlMaster.profileId === 3);
+check("main-profile re-run sends no profileId", master.profileId === undefined);
 const upload = rerunBody(g({ source: "upload", resume_id: null, label: "old.pdf" }));
 check("upload re-run resends the snapshot", upload.source === "upload" && upload.text === "snapshot text" && upload.label === "old.pdf");
 

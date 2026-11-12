@@ -16,6 +16,7 @@ Everything below is implemented and running in production, not aspirational — 
 - **AI tailoring pipeline** — `suggestKeywords(jd, master)` in `packages/agent/src/ai/suggest-keywords.ts`: a single pass proposes keyword-insertion suggestions (bullet rewrites and skill additions) against the fixed, one-page master resume, which is never reordered or cut. Christopher reviews, edits, and checks off suggestions in a checklist; `POST /api/resume/:id/apply-suggestions` applies only the accepted ones and renders the final one-page Markdown. (The old 3-pass generate→critique→revise loop and the JD-less "general resume" feature it backed have been removed — the suggestion-based flow is the only tailoring path.)
 - **LLM provider** — Claude by default, via the headless `claude -p` CLI (`packages/agent/src/ai/claude-cli.ts`), authenticated with `CLAUDE_CODE_OAUTH_TOKEN` (subscription usage, not metered API billing). Runs on `--model opus` — a tier alias, so it follows new Opus releases rather than pinning a version; override with `CLAUDE_MODEL`. OpenAI/GPT-4o is a manual fallback (`LLM_PROVIDER=openai`)
 - **Master resume** — source facts live in `packages/agent/src/ai/master-resume.ts`, seeded once into the `master_resume` DB table; `/resume/master` reads and writes the DB copy directly (see Deployment below — always edit on production, not locally)
+- **Resume profiles** — `master_resume` holds several base resumes ("profiles", e.g. Main for SWE and ML for machine-learning roles); row 1 is the main profile, can't be deleted, and is what every caller gets when it names none. `/resume/master` has a profile picker (`ProfileBar.tsx`): **+ New profile** copies the current one (copies, not a shared fact pool — a fix in one doesn't carry to the others), plus rename / job-title keywords / delete. `/tailor` shows a **Base resume** dropdown when 2+ profiles exist; **Auto** (the default, and what the server does when none is sent) runs `pickProfile()` (`ai/resume-profiles.ts`) on the job title — after a URL fetch, so a fetched title counts: the lowest-id non-main profile with a keyword in the title as a whole word wins, else Main. Title only, never the JD body, since SWE postings list "machine learning" as a nice-to-have. The chosen profile is stored on the row (`tailored_resumes.base_resume_id`) and **every later pass rebuilds from it** — apply, feedback rounds, retry, answers, PDF filename — otherwise a feedback round on an ML resume would quietly rebuild from Main. NULL (older rows, or a profile deleted since — FK `ON DELETE SET NULL`) means Main, and `getMasterResume(id)` falls back to Main for an unknown id rather than failing a run. `aboutMe` is about the person, not a resume version, so it lives only on row 1: reads overlay it, and saving any profile writes it back to row 1. Master grades take a `profileId` (`resume_grades.profile_id`), Re-run keeps it, and "Apply N to master resume" opens that profile (the hand-off carries `profileId`; the editor ignores fixes meant for another profile). `lib/resumeProfiles.ts` mirrors `pickProfile` for the dropdown's "Auto — ML" hint; `test:resume-profiles` exists in both workspaces with the same cases
 - **Master resume import** — `/resume/master` can parse pasted text or an uploaded PDF into a `MasterResume` via `importMasterResume()` (LLM-parsed, ids deduplicated deterministically after the fact); the result loads into the existing form as unsaved state for review before saving, never written to the DB directly
 - **About me notes** — `/resume/master` has an "About me" tab: free-form notes in Christopher's own words (motivations, goals, stories behind projects), stored as `aboutMe` on the `MasterResume` JSON. Never rendered into any resume; only `generateAnswers()` reads it, so "why this company?" application answers use real reasons instead of guessed ones. Imports and "Edit as text" rebuild the resume from text that never contains it, so the form carries the existing notes across (`keepAboutMe`)
 - **One-page overflow warning** — `/resume/master` shows a warning banner when the rendered preview PDF exceeds one page, since the master resume is meant to stay a fixed one-page source of truth for suggestion-based tailoring
@@ -43,9 +44,9 @@ Everything below is implemented and running in production, not aspirational — 
 | Page | Purpose |
 |---|---|
 | `/` | History dashboard — all generated resumes, listed by company/role/date, with download + edit links; the per-card ⋯ menu duplicates or deletes one |
-| `/tailor` | Paste a JD or a job URL (auto-fetched); optional title/company; Generate button |
+| `/tailor` | Paste a JD or a job URL (auto-fetched); optional title/company; Base resume picker (Auto by job title, or a named profile — shown with 2+ profiles); Generate button |
 | `/resume/[id]` | Google Doc-style inline text editor — auto-saves, Download PDF, Email to me |
-| `/resume/master` | Edit master resume fields directly (basics, experience, projects, skills, drag-to-reorder sections) |
+| `/resume/master` | Edit master resume fields directly (basics, experience, projects, skills, drag-to-reorder sections); `?profile=<id>` opens another resume profile; profile picker to switch, create (copy), rename, set auto-pick keywords, delete |
 | `/applied` | Application log table — mirrors Google Sheet (date applied, company, location, URL, status, resume link) |
 | `/preferences` | Edit scraper filters (title/required keywords, target locations, priority companies, max alerts per email, watched repos, season, alert bar for the AI judge) — backed by the `preferences` DB table and `/api/preferences` |
 | `/grader` | Start a grade (resume source, target role, level, optional JD; last role/level remembered) and see past grades with scores. `?resumeId=` preselects a tailored resume — the "Grade" button on `/resume/[id]` links here |
@@ -110,6 +111,7 @@ agent/src/
 │   ├── format.ts            # Deterministic ATS checks + Markdown renderer; renderMarkdown() reused by apply-suggestions.ts
 │   ├── fit-page.ts          # Trims tailored output to fit one page (skipWidowFix option for the suggestion-based flow)
 │   ├── render-pdf.ts        # Markdown/MasterResume → LaTeX → PDF via tectonic
+│   ├── resume-profiles.ts   # Pure: pickProfile() by job-title keywords, keyword/id parsing; DEFAULT_PROFILE_ID = 1
 │   ├── master-resume.ts     # Hardcoded seed facts — obsolete after the first master-resume import; the DB row is the real source of truth thereafter
 │   ├── types.ts             # Zod schemas for MasterResume, TailoredResume, Suggestion
 │   ├── llm.ts               # completeJSON() — dispatches to Claude CLI or OpenAI per LLM_PROVIDER; accepts an AbortSignal
@@ -174,6 +176,7 @@ web/
 │   ├── GradeView.tsx         # /grader/[id] client shell — polls, Re-run/Delete, picks progress vs report
 │   ├── GradeProgress.tsx     # Specialist checklist + Cancel while a grade is pending
 │   ├── GradeReport.tsx       # Score, category bars, finding cards, fix controls (apply to master / copy fixed text / feedback round)
+│   ├── ProfileBar.tsx        # /resume/master profile picker: switch (warns on unsaved edits), new (copy), rename/keywords, delete
 │   ├── GradeFixBanner.tsx    # /resume/master banner after a grader hand-off: applied count, to-dos, Discard, Re-grade
 │   ├── PreferencesForm.tsx   # Scraper filter settings form
 │   └── Nav.tsx                # Top navigation bar
@@ -181,6 +184,7 @@ web/
     ├── api.ts                # Typed fetch wrappers for agent API
     ├── resumeStage.ts        # Maps a raw backend stage string to the 3-segment pending-screen stepper
     ├── grade.ts              # Grader option tables, findingsToFeedback(), rerunBody(), isStalePending()
+    ├── resumeProfiles.ts     # Client mirror of pickProfile() for the /tailor "Auto — <profile>" hint
     ├── gradeFixes.ts         # Pure: match findings to master bullets, splice/apply fixes, upload text fixes, sessionStorage hand-off
     └── suggestionRounds.ts   # Client mirror of the agent's suggestion-rounds helpers (undecided, isFollowUpRound, FEEDBACK_STAGE)
 ```
@@ -259,14 +263,18 @@ tailored_resumes (
   stage         text,           -- current pipeline step while status = 'pending' (e.g. "Analyzing job description"); null otherwise
   stage_started_at timestamptz, -- when the current `stage` began; null whenever `stage` is null. Drives the pending-screen's elapsed-vs-typical progress estimate
   suggestions   jsonb,          -- every suggestion round so far; per item accepted = null (under review) | true | false (decided in an earlier round)
+  base_resume_id int references master_resume(id) on delete set null,  -- profile it was built from; null = main
   kind          text,           -- vestigial: always 'tailored' now; the 'general' path was removed (column + partial index retained)
   created_at    timestamptz,
   updated_at    timestamptz
 )
 
-master_resume (
-  id            int primary key default 1,   -- single row
-  data          jsonb,                        -- MasterResume JSON
+master_resume (                             -- one row per resume profile
+  id            int primary key,              -- 1 = main profile (seeded, undeletable); others from master_resume_id_seq (starts at 2)
+  name          text,                         -- profile name shown in pickers ('Main' by default)
+  keywords      text[],                       -- job-title keywords for /tailor's Auto pick (ignored on row 1)
+  data          jsonb,                        -- MasterResume JSON; aboutMe kept on row 1 only
+  created_at    timestamptz,
   updated_at    timestamptz
 )
 
@@ -294,6 +302,7 @@ resume_grades (
   id            uuid primary key,
   source        text,           -- 'master' | 'tailored' | 'upload'
   resume_id     uuid references tailored_resumes(id) on delete set null,  -- set when source='tailored'
+  profile_id    int references master_resume(id) on delete set null,      -- profile graded when source='master'; null = main
   label         text,           -- "Master resume", "Company — Title", uploaded filename, or "Pasted resume"
   resume_text   text,           -- snapshot of exactly what was graded
   target_role   text,           -- 'swe' | 'frontend' | 'backend' | 'fullstack' | 'mobile' | 'devops' | 'data' | 'ml'
@@ -326,8 +335,9 @@ cron (every 15 min, in-process, guarded against overlapping ticks)
 ```
 POST /api/tailor (jd text or job URL)
   → if URL: auto-fetch JD synchronously via Playwright/Cheerio + Readability (capped at 15s)
+    → resolve base profile (explicit baseResumeId, or pickProfile(title) for "auto") → stored as base_resume_id
     → create tailored_resumes row with status='pending', respond 202 immediately
-      → [background] suggestKeywords(jd, master) via Claude CLI (or OpenAI if LLM_PROVIDER=openai)
+      → [background] suggestKeywords(jd, master of base_resume_id) via Claude CLI (or OpenAI if LLM_PROVIDER=openai)
         → update row: suggestions, status='awaiting_review' (or 'failed' + error message)
   → frontend polls GET /api/resumes/:id until status leaves 'pending', shows suggestion checklist
     → user reviews/edits/checks off suggestions

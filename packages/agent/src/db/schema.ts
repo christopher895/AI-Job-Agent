@@ -228,6 +228,27 @@ export async function initSchema() {
       CHECK (status IN ('pending','awaiting_review','ready','failed','cancelled'));
   `);
 
+  // ── Resume profiles ───────────────────────────────────────────────────────
+  // master_resume used to be one row (id = 1). It now holds several base
+  // resumes ("profiles"); row 1 stays the default and can't be deleted, so
+  // existing data and every caller that never names a profile keep working.
+  // New rows draw ids from a sequence that starts after 1.
+  await pool.query(`
+    ALTER TABLE master_resume ADD COLUMN IF NOT EXISTS name TEXT NOT NULL DEFAULT 'Main';
+    ALTER TABLE master_resume ADD COLUMN IF NOT EXISTS keywords TEXT[] NOT NULL DEFAULT '{}';
+    ALTER TABLE master_resume ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    CREATE SEQUENCE IF NOT EXISTS master_resume_id_seq START WITH 2 OWNED BY master_resume.id;
+    ALTER TABLE master_resume ALTER COLUMN id SET DEFAULT nextval('master_resume_id_seq');
+  `);
+  // Which profile a tailored resume was built from. The apply pass and every
+  // feedback round regenerate from the base, so without this a feedback round
+  // on an ML resume would quietly rebuild it from the default profile.
+  // NULL (older rows, or a deleted profile) means the default profile.
+  await pool.query(`
+    ALTER TABLE tailored_resumes ADD COLUMN IF NOT EXISTS base_resume_id INT
+      REFERENCES master_resume(id) ON DELETE SET NULL;
+  `);
+
   // ── Gmail application-status ingestion ────────────────────────────────────
   await pool.query(`
     CREATE TABLE IF NOT EXISTS gmail_sync_state (
@@ -310,6 +331,12 @@ export async function initSchema() {
   `);
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_resume_grades_resume ON resume_grades(resume_id, created_at DESC)
+  `);
+  // Which resume profile a source='master' grade graded, so "Apply fixes" opens
+  // that profile in the editor. NULL = the default profile.
+  await pool.query(`
+    ALTER TABLE resume_grades ADD COLUMN IF NOT EXISTS profile_id INT
+      REFERENCES master_resume(id) ON DELETE SET NULL;
   `);
 
   await pool.query(`

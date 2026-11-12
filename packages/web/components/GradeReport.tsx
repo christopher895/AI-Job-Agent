@@ -116,7 +116,7 @@ export default function GradeReport({ grade, report }: { grade: Grade; report: R
 
   useEffect(() => {
     if (fixMode !== "master") return;
-    api.getMasterResume()
+    api.getMasterResume(grade.profile_id ?? undefined)
       .then((m) => {
         const classes = classifyFindings(m, findings);
         setMasterClasses(classes);
@@ -182,6 +182,7 @@ export default function GradeReport({ grade, report }: { grade: Grade; report: R
     try {
       writeHandoff(sessionStorage, {
         gradeId: grade.id,
+        profileId: grade.profile_id ?? undefined,
         targetRole: grade.target_role,
         level: grade.level,
         jdText: grade.jd_text,
@@ -197,7 +198,7 @@ export default function GradeReport({ grade, report }: { grade: Grade; report: R
       setApplyError("Your browser blocked session storage, so the fixes can't be handed to the editor.");
       return;
     }
-    router.push("/resume/master");
+    router.push(grade.profile_id && grade.profile_id !== 1 ? `/resume/master?profile=${grade.profile_id}` : "/resume/master");
   }
 
   const fixedText = fixMode === "upload"

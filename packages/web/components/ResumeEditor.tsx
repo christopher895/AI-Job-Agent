@@ -116,9 +116,12 @@ function RowNotice({ message, onDismiss }: { message: string; onDismiss: () => v
 export default function ResumeEditor({
   resume,
   initialView = "edit",
+  baseProfileName = null,
 }: {
   resume: Resume;
   initialView?: ViewMode;
+  /** Resume profile this was built from, when it isn't the main one. */
+  baseProfileName?: string | null;
 }) {
   const [markdown, setMarkdown] = useState(resume.markdown);
   const [jobTitle, setJobTitle] = useState(resume.job_title ?? "");
@@ -725,6 +728,7 @@ export default function ResumeEditor({
               day: "numeric",
               year: "numeric",
             })}
+            {baseProfileName && <> · Based on the {baseProfileName} resume</>}
           </p>
         </div>
 

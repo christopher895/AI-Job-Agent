@@ -1,8 +1,10 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { api, MasterResume, ExperienceEntry, ProjectEntry, EducationEntry } from "../lib/api";
+import { api, MasterResume, ExperienceEntry, ProjectEntry, EducationEntry, type ResumeProfile } from "../lib/api";
+import { DEFAULT_PROFILE_ID } from "../lib/resumeProfiles";
+import ProfileBar from "./ProfileBar";
 import { Handoff, applyFixes, readHandoff, sectionOfBullet } from "../lib/gradeFixes";
 import GradeFixBanner from "./GradeFixBanner";
 import { SortableSection, DragHandle } from "./SortableSection";
@@ -344,8 +346,21 @@ function keepAboutMe(parsed: MasterResume, prev: MasterResume): MasterResume {
   return { ...parsed, aboutMe: prev.aboutMe ?? "" };
 }
 
-export default function MasterResumeForm({ initial }: { initial: MasterResume }) {
+export default function MasterResumeForm({
+  initial,
+  profiles,
+  profileId,
+}: {
+  initial: MasterResume;
+  profiles: ResumeProfile[];
+  profileId: number;
+}) {
   const [resume, setResume] = useState<MasterResume>(initial);
+  // What's on the server for this profile — compared against the form to warn
+  // before switching profiles drops unsaved edits.
+  const [savedJson, setSavedJson] = useState(() => JSON.stringify(initial));
+  const dirty = useMemo(() => JSON.stringify(resume) !== savedJson, [resume, savedJson]);
+  const profileName = profiles.find((p) => p.id === profileId)?.name ?? "Main";
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -379,7 +394,9 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     const timer = setTimeout(() => {
       let handoff: Handoff | null = null;
       try { handoff = readHandoff(sessionStorage); } catch { /* storage unavailable */ }
-      if (!handoff) return;
+      // Fixes quote bullets of the profile that was graded; on another profile
+      // they'd either match nothing or rewrite the wrong resume's bullets.
+      if (!handoff || (handoff.profileId ?? DEFAULT_PROFILE_ID) !== profileId) return;
       const { resume: fixed, applied, skipped } = applyFixes(initial, handoff.fixes);
       setResume(fixed);
       const sections = [...new Set(applied.map((id) => sectionOfBullet(initial, id)).filter((s) => s !== null))];
@@ -387,7 +404,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       if (sections[0]) setActiveSection(sections[0]);
     }, 0);
     return () => clearTimeout(timer);
-  }, [initial]);
+  }, [initial, profileId]);
 
   function discardGradeFixes() {
     setResume(initial);
@@ -400,7 +417,7 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     setRegradeError(null);
     const { targetRole, level, jdText } = gradeFix.handoff;
     try {
-      const { id } = await api.createGrade({ source: "master", targetRole, level, jdText: jdText ?? undefined });
+      const { id } = await api.createGrade({ source: "master", profileId, targetRole, level, jdText: jdText ?? undefined });
       router.push(`/grader/${id}`);
     } catch (e) {
       setRegradeError(e instanceof Error ? e.message : "Could not start a new grade.");
@@ -413,7 +430,8 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
     setSaving(true);
     setError(null);
     try {
-      await api.putMasterResume(resume);
+      await api.putMasterResume(resume, profileId);
+      setSavedJson(JSON.stringify(resume));
       setSaved(true);
       setGradeFix((g) => (g ? { ...g, saved: true, applied: new Set() } : g));
       setTimeout(() => setSaved(false), 2500);
@@ -1062,9 +1080,13 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
       <div className="flex-1 min-w-0 flex flex-col h-full">
         <div className="flex items-start justify-between px-8 pt-8 pb-4 flex-shrink-0">
           <div>
-            <h1 className="font-serif text-2xl text-paper-ink">Master Resume</h1>
+            <h1 className="font-serif text-2xl text-paper-ink">
+              Master Resume{profiles.length > 1 ? <span className="text-paper-muted"> — {profileName}</span> : null}
+            </h1>
             <p className="text-sm text-paper-muted mt-1">
-              This is the source of truth used to generate all tailored resumes.
+              {profiles.length > 1
+                ? "Each profile is a separate base resume that tailoring can start from. About me is shared by all of them."
+                : "This is the source of truth used to generate all tailored resumes."}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -1104,6 +1126,8 @@ export default function MasterResumeForm({ initial }: { initial: MasterResume })
             </div>
           </div>
         </div>
+
+        <ProfileBar profiles={profiles} profileId={profileId} dirty={dirty} />
 
         {gradeFix && (
           <GradeFixBanner

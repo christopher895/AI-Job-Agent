@@ -8,11 +8,13 @@ import {
   getMasterResume,
   getTailoredResume,
   listGrades,
+  listResumeProfiles,
 } from "../../db/queries";
 import { abortRun } from "../../ai/cancellation";
 import { isUuid, parseGradeRequest } from "../../ai/grade/request";
 import { MAX_GRADE_TEXT_CHARS, extractPdfText, masterToText } from "../../ai/grade/resume-text";
 import { runGradePipeline } from "../../ai/grade/pipeline";
+import { DEFAULT_PROFILE_ID } from "../../ai/resume-profiles";
 
 const router = Router();
 
@@ -41,8 +43,10 @@ router.post("/", upload.single("file"), safe(async (req, res) => {
   let jdText = input.jdText;
   try {
     if (input.source === "master") {
-      resumeText = masterToText(await getMasterResume());
-      label = "Master resume";
+      const profile = (await listResumeProfiles()).find((p) => p.id === input.profileId);
+      if (!profile) { res.status(404).json({ error: "That resume profile no longer exists." }); return; }
+      resumeText = masterToText(await getMasterResume(profile.id));
+      label = profile.id === DEFAULT_PROFILE_ID ? "Master resume" : `Master resume — ${profile.name}`;
     } else if (input.source === "tailored") {
       const row = await getTailoredResume(input.resumeId!);
       if (!row) { res.status(404).json({ error: "That resume no longer exists." }); return; }
@@ -83,6 +87,7 @@ router.post("/", upload.single("file"), safe(async (req, res) => {
     ({ id } = await createGrade({
       source: input.source,
       resumeId: input.resumeId,
+      profileId: input.profileId,
       label,
       resumeText,
       targetRole: input.targetRole,

@@ -1,6 +1,19 @@
 import { Router } from "express";
 import multer from "multer";
-import { getMasterResume, updateMasterResume } from "../../db/queries";
+import {
+  createResumeProfile,
+  deleteResumeProfile,
+  getMasterResume,
+  listResumeProfiles,
+  updateMasterResume,
+  updateResumeProfileMeta,
+} from "../../db/queries";
+import {
+  DEFAULT_PROFILE_ID,
+  MAX_PROFILE_NAME,
+  normalizeKeywords,
+  parseProfileId,
+} from "../../ai/resume-profiles";
 import { MasterResumeSchema } from "../../ai/types";
 import { renderMasterResumePdf } from "../../ai/render-pdf";
 import { countPdfPages } from "../../ai/fit-page";
@@ -10,21 +23,87 @@ import { extractPdfText } from "../../ai/grade/resume-text";
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
-// GET /api/master-resume
-router.get("/", async (_req, res) => {
-  const master = await getMasterResume();
+/** `?profile=<id>`; absent means the default profile, malformed is a 400. */
+function profileFromQuery(q: unknown): number | null {
+  if (q === undefined || q === "") return DEFAULT_PROFILE_ID;
+  return parseProfileId(q);
+}
+
+// GET /api/master-resume[?profile=<id>]
+router.get("/", async (req, res) => {
+  const profileId = profileFromQuery(req.query.profile);
+  if (profileId === null) { res.status(400).json({ error: "profile must be a profile id" }); return; }
+  if (profileId !== DEFAULT_PROFILE_ID) {
+    const profiles = await listResumeProfiles();
+    if (!profiles.some((p) => p.id === profileId)) { res.status(404).json({ error: "Profile not found" }); return; }
+  }
+  const master = await getMasterResume(profileId);
   res.json(master);
 });
 
-// PUT /api/master-resume
+// PUT /api/master-resume[?profile=<id>]
 router.put("/", async (req, res) => {
+  const profileId = profileFromQuery(req.query.profile);
+  if (profileId === null) { res.status(400).json({ error: "profile must be a profile id" }); return; }
   const parsed = MasterResumeSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid resume schema", details: parsed.error.flatten() });
     return;
   }
-  await updateMasterResume(parsed.data);
+  const updated = await updateMasterResume(parsed.data, profileId);
+  if (!updated) { res.status(404).json({ error: "Profile not found" }); return; }
   res.json({ updated: true });
+});
+
+// ── Resume profiles ─────────────────────────────────────────────────────────
+
+function parseName(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const name = v.trim();
+  return name && name.length <= MAX_PROFILE_NAME ? name : null;
+}
+
+// GET /api/master-resume/profiles
+router.get("/profiles", async (_req, res) => {
+  res.json(await listResumeProfiles());
+});
+
+// POST /api/master-resume/profiles { name, keywords?, copyFrom? } — a new profile
+// starting as a copy of `copyFrom` (default profile when omitted).
+router.post("/profiles", async (req, res) => {
+  const name = parseName(req.body?.name);
+  if (!name) { res.status(400).json({ error: `name is required (max ${MAX_PROFILE_NAME} characters)` }); return; }
+  const copyFrom = req.body?.copyFrom === undefined ? DEFAULT_PROFILE_ID : parseProfileId(req.body.copyFrom);
+  if (copyFrom === null) { res.status(400).json({ error: "copyFrom must be a profile id" }); return; }
+  const created = await createResumeProfile({ name, keywords: normalizeKeywords(req.body?.keywords), copyFrom });
+  if (!created) { res.status(404).json({ error: "The profile to copy from no longer exists" }); return; }
+  res.status(201).json(created);
+});
+
+// PATCH /api/master-resume/profiles/:id { name?, keywords? }
+router.patch("/profiles/:id", async (req, res) => {
+  const id = parseProfileId(req.params.id);
+  if (id === null) { res.status(404).json({ error: "Profile not found" }); return; }
+  let name: string | undefined;
+  if (req.body?.name !== undefined) {
+    const parsed = parseName(req.body.name);
+    if (!parsed) { res.status(400).json({ error: `name must be 1–${MAX_PROFILE_NAME} characters` }); return; }
+    name = parsed;
+  }
+  const keywords = req.body?.keywords === undefined ? undefined : normalizeKeywords(req.body.keywords);
+  const updated = await updateResumeProfileMeta(id, { name, keywords });
+  if (!updated) { res.status(404).json({ error: "Profile not found" }); return; }
+  res.json(updated);
+});
+
+// DELETE /api/master-resume/profiles/:id — the default profile can't be deleted.
+router.delete("/profiles/:id", async (req, res) => {
+  const id = parseProfileId(req.params.id);
+  if (id === null) { res.status(404).json({ error: "Profile not found" }); return; }
+  if (id === DEFAULT_PROFILE_ID) { res.status(409).json({ error: "The main resume can't be deleted" }); return; }
+  const deleted = await deleteResumeProfile(id);
+  if (!deleted) { res.status(404).json({ error: "Profile not found" }); return; }
+  res.status(204).end();
 });
 
 // POST /api/master-resume/preview-pdf  — compile current form state (may be unsaved)

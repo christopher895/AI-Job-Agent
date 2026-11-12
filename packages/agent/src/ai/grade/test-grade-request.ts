@@ -25,6 +25,11 @@ check("upload with a file flag parses without text",
   ok({ source: "upload", hasFile: true, targetRole: "ml", level: "intern" }).ok);
 check("JD over 30,000 chars rejected",
   !ok({ source: "master", targetRole: "ml", level: "intern", jdText: "x".repeat(30_001) }).ok);
+check("master defaults to the main profile", master.ok && master.value.profileId === 1);
+const mlGrade = ok({ source: "master", profileId: "3", targetRole: "ml", level: "intern" });
+check("master accepts a profileId (string from multipart)", mlGrade.ok && mlGrade.value.profileId === 3);
+check("master rejects a junk profileId", !ok({ source: "master", profileId: "ml", targetRole: "ml", level: "intern" }).ok);
+check("profileId ignored for tailored", tailored.ok && tailored.value.profileId === null);
 check("non-string JD rejected", !ok({ source: "master", targetRole: "ml", level: "intern", jdText: 5 }).ok);
 
 console.log(pass ? "\n✓ grade-request test PASSED" : "\n✗ grade-request test FAILED");

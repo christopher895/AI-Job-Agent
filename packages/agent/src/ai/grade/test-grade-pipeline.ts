@@ -11,7 +11,7 @@ function check(label: string, cond: boolean) {
 
 function fakeRow(id: string): GradeRow {
   return {
-    id, source: "master", resume_id: null, label: "Master resume", resume_text: "Did 40% better",
+    id, source: "master", resume_id: null, profile_id: null, label: "Master resume", resume_text: "Did 40% better",
     target_role: "ml", level: "intern", jd_text: null, status: "pending", specialists: {},
     score: null, report: null, error: null, created_at: new Date(), updated_at: new Date(),
   };

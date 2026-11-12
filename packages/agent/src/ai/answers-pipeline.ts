@@ -11,12 +11,12 @@ import {
 export async function runAnswersPipeline(
   id: string,
   pasted: string,
-  row: { jd_text: string | null; company: string | null; job_title: string | null }
+  row: { jd_text: string | null; company: string | null; job_title: string | null; base_resume_id: number | null }
 ) {
   const runId = answersRunId(id);
   const signal = registerRun(runId);
   try {
-    const master = await getMasterResume();
+    const master = await getMasterResume(row.base_resume_id);
     const items = await generateAnswers({
       pasted,
       jd: row.jd_text ?? "",

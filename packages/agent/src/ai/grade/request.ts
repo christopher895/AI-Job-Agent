@@ -1,5 +1,6 @@
 import { LEVELS, Level, TARGET_ROLES, TargetRole, isLevel, isTargetRole } from "./rubric";
 import { MAX_GRADE_TEXT_CHARS } from "./resume-text";
+import { DEFAULT_PROFILE_ID, parseProfileId } from "../resume-profiles";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -11,6 +12,8 @@ export function isUuid(v: unknown): v is string {
 export type GradeRequest = {
   source: "master" | "tailored" | "upload";
   resumeId: string | null;
+  /** Resume profile to grade when source = 'master'; null otherwise. */
+  profileId: number | null;
   text: string | null;
   label: string | null;
   targetRole: TargetRole;
@@ -26,7 +29,7 @@ export type GradeRequest = {
 export function parseGradeRequest(
   body: Record<string, unknown>
 ): { ok: true; value: GradeRequest } | { ok: false; error: string } {
-  const { source, resumeId, text, label, targetRole, level, jdText, hasFile } = body;
+  const { source, resumeId, profileId, text, label, targetRole, level, jdText, hasFile } = body;
 
   if (source !== "master" && source !== "tailored" && source !== "upload") {
     return { ok: false, error: "source must be 'master', 'tailored' or 'upload'." };
@@ -48,6 +51,13 @@ export function parseGradeRequest(
   if (source === "tailored" && !isUuid(resumeId)) {
     return { ok: false, error: "resumeId must be a resume id." };
   }
+  // Multipart bodies carry numbers as strings; parseProfileId accepts both.
+  const profile = profileId === undefined || profileId === null || profileId === ""
+    ? DEFAULT_PROFILE_ID
+    : parseProfileId(profileId);
+  if (source === "master" && profile === null) {
+    return { ok: false, error: "profileId must be a profile id." };
+  }
   if (source === "upload" && !hasFile && typeof text !== "string") {
     return { ok: false, error: "Paste resume text or upload a PDF." };
   }
@@ -57,6 +67,7 @@ export function parseGradeRequest(
     value: {
       source,
       resumeId: source === "tailored" ? (resumeId as string) : null,
+      profileId: source === "master" ? profile : null,
       text: source === "upload" && typeof text === "string" ? text : null,
       label: typeof label === "string" && label.trim() ? label.trim().slice(0, 120) : null,
       targetRole,

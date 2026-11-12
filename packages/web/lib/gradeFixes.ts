@@ -192,6 +192,8 @@ export const HANDOFF_TTL_MS = 10 * 60 * 1000;
 
 export type Handoff = {
   gradeId: string;
+  /** Resume profile the grade graded; absent on older hand-offs = the main profile. */
+  profileId?: number;
   targetRole: TargetRole;
   level: Level;
   jdText: string | null;

@@ -1,10 +1,21 @@
-import { api } from "../../../lib/api";
+import { api, type ResumeProfile } from "../../../lib/api";
+import { DEFAULT_PROFILE_ID } from "../../../lib/resumeProfiles";
 import MasterResumeForm from "../../../components/MasterResumeForm";
 
-export default async function MasterResumePage() {
+type Props = { searchParams: Promise<{ profile?: string }> };
+
+export default async function MasterResumePage({ searchParams }: Props) {
+  const { profile } = await searchParams;
+  const requested = profile && /^\d+$/.test(profile) ? Number(profile) : DEFAULT_PROFILE_ID;
+
+  let profiles: ResumeProfile[];
   let masterResume;
+  let profileId = requested;
   try {
-    masterResume = await api.getMasterResume();
+    profiles = await api.listResumeProfiles();
+    // A stale ?profile= (deleted since, or typed by hand) opens the main resume.
+    if (!profiles.some((p) => p.id === profileId)) profileId = DEFAULT_PROFILE_ID;
+    masterResume = await api.getMasterResume(profileId);
   } catch {
     return (
       <div className="px-8 py-8">
@@ -17,7 +28,8 @@ export default async function MasterResumePage() {
 
   return (
     <div className="h-full flex flex-col">
-      <MasterResumeForm initial={masterResume} />
+      {/* Keyed by profile so switching profiles resets every piece of form state. */}
+      <MasterResumeForm key={profileId} initial={masterResume} profiles={profiles} profileId={profileId} />
     </div>
   );
 }
