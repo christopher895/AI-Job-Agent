@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { suggestKeywords } from "../../ai/suggest-keywords";
 import { labelGroundedness } from "../../ai/apply-suggestions";
-import { getMasterResume } from "../../db/queries";
+import { getMasterResume, listResumeProfiles } from "../../db/queries";
+import { parseBaseResumeChoice, pickProfile } from "../../ai/resume-profiles";
 import {
   createPendingResume,
   createReadyResume,
@@ -19,8 +20,21 @@ import { runAnswersPipeline } from "../../ai/answers-pipeline";
 
 const router = Router();
 
+/**
+ * The profile a new tailored row starts from: an explicit choice must exist;
+ * "auto" picks by the (possibly fetched) job title. Null = invalid choice.
+ */
+async function resolveBaseResume(raw: unknown, title: string | undefined): Promise<number | null> {
+  const choice = parseBaseResumeChoice(raw);
+  if (!choice.ok) return null;
+  const profiles = await listResumeProfiles();
+  if (choice.value === "auto") return pickProfile(title, profiles);
+  return profiles.some((p) => p.id === choice.value) ? choice.value : null;
+}
+
 router.post("/", async (req, res) => {
-  const { jdText, jobUrl, jobTitle, company, location, questions } = req.body as {
+  const { jdText, jobUrl, jobTitle, company, location, questions, baseResumeId } = req.body as {
+    baseResumeId?: unknown;
     jdText?: string;
     jobUrl?: string;
     jobTitle?: string;
@@ -65,12 +79,15 @@ router.post("/", async (req, res) => {
 
   let row;
   try {
+    const base = await resolveBaseResume(baseResumeId, resolvedTitle);
+    if (base === null) { res.status(400).json({ error: "That base resume no longer exists — pick another." }); return; }
     row = await createPendingResume({
       jobTitle: resolvedTitle,
       company: resolvedCompany,
       location: resolvedLocation,
       jobUrl,
       jdText: jd,
+      baseResumeId: base,
     });
   } catch (err) {
     console.error("[tailor] db error:", err);
@@ -85,7 +102,7 @@ router.post("/", async (req, res) => {
   // switches out of the pending state once it flips.
   res.status(202).json({ id: row.id, status: "pending" });
 
-  runSuggestPipeline(row.id, jd).catch((err) => {
+  runSuggestPipeline(row.id, jd, row.base_resume_id).catch((err) => {
     console.error("[tailor] background pipeline crashed:", err);
   });
 
@@ -100,11 +117,11 @@ router.post("/", async (req, res) => {
   }
 });
 
-export async function runSuggestPipeline(id: string, jd: string) {
+export async function runSuggestPipeline(id: string, jd: string, baseResumeId: number | null) {
   const signal = registerRun(id);
   try {
     await updateResumeStage(id, "Analyzing job description");
-    const master = await getMasterResume();
+    const master = await getMasterResume(baseResumeId);
     const raw = await suggestKeywords(jd, master, undefined, signal);
     const suggestions: Suggestion[] = raw.map((s) => ({
       ...s,
@@ -133,7 +150,8 @@ export async function runSuggestPipeline(id: string, jd: string) {
 // running the resume-tailoring pipeline. Creates a ready row so the editor
 // never enters 'pending', then reuses the same answers pipeline as /resume/:id.
 router.post("/answers", async (req, res) => {
-  const { jdText, jobUrl, jobTitle, company, location, text } = req.body as {
+  const { jdText, jobUrl, jobTitle, company, location, text, baseResumeId } = req.body as {
+    baseResumeId?: unknown;
     jdText?: string;
     jobUrl?: string;
     jobTitle?: string;
@@ -178,12 +196,15 @@ router.post("/answers", async (req, res) => {
 
   let row;
   try {
+    const base = await resolveBaseResume(baseResumeId, resolvedTitle);
+    if (base === null) { res.status(400).json({ error: "That base resume no longer exists — pick another." }); return; }
     row = await createReadyResume({
       jobTitle: resolvedTitle,
       company: resolvedCompany,
       location: resolvedLocation,
       jobUrl,
       jdText: jd,
+      baseResumeId: base,
     });
     await beginGeneratingAnswers(row.id, questions);
   } catch (err) {

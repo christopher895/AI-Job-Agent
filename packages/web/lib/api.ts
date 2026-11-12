@@ -60,6 +60,8 @@ export type ApplicationAnswersState = {
 };
 
 export type Resume = ResumeListItem & {
+  /** Resume profile this was built from; null = the main profile. */
+  base_resume_id: number | null;
   jd_text: string | null;
   markdown: string;
   application_answers: ApplicationAnswersState | null;
@@ -183,6 +185,15 @@ export type MasterResume = {
   aboutMe?: string;
 };
 
+/** A base resume to tailor from. Profile 1 is the main resume and can't be deleted. */
+export type ResumeProfile = {
+  id: number;
+  name: string;
+  /** Job-title keywords that make /tailor pick this profile automatically. */
+  keywords: string[];
+  updated_at: string;
+};
+
 export type TargetRole = "swe" | "frontend" | "backend" | "fullstack" | "mobile" | "devops" | "data" | "ml";
 export type Level = "intern" | "entry" | "mid" | "senior" | "staff";
 export type GradeSource = "master" | "tailored" | "upload";
@@ -218,6 +229,8 @@ export type GradeListItem = {
 };
 
 export type Grade = GradeListItem & {
+  /** Resume profile a master grade graded; null = the main profile. */
+  profile_id: number | null;
   resume_text: string;
   jd_text: string | null;
   specialists: Partial<Record<SpecialistName, SpecialistState>>;
@@ -229,6 +242,8 @@ export type Grade = GradeListItem & {
 export type CreateGradeBody = {
   source: GradeSource;
   resumeId?: string;
+  /** Resume profile to grade when source = 'master'; the main profile when omitted. */
+  profileId?: number;
   text?: string;
   label?: string;
   targetRole: TargetRole;
@@ -335,6 +350,8 @@ export const api = {
     company?: string;
     location?: string;
     questions?: string;
+    /** Profile id, or "auto" to pick by job title. */
+    baseResumeId?: number | "auto";
   }) =>
     request<{ id: string; status: "pending" }>("POST", "/tailor", body),
   applySuggestions: (id: string, accepted: Suggestion[]) =>
@@ -376,12 +393,20 @@ export const api = {
     jobTitle?: string;
     company?: string;
     location?: string;
+    baseResumeId?: number | "auto";
   }) => request<{ id: string; status: "generating" }>("POST", "/tailor/answers", body),
   patchApplicationAnswers: (id: string, items: ApplicationAnswer[]) =>
     request<ApplicationAnswersState>("PATCH", `/resume/${id}/application-answers`, { items }),
-  getMasterResume: () => request<MasterResume>("GET", "/master-resume"),
-  putMasterResume: (data: MasterResume) =>
-    request<{ updated: boolean }>("PUT", "/master-resume", data),
+  getMasterResume: (profileId?: number) =>
+    request<MasterResume>("GET", profileId ? `/master-resume?profile=${profileId}` : "/master-resume"),
+  putMasterResume: (data: MasterResume, profileId?: number) =>
+    request<{ updated: boolean }>("PUT", profileId ? `/master-resume?profile=${profileId}` : "/master-resume", data),
+  listResumeProfiles: () => request<ResumeProfile[]>("GET", "/master-resume/profiles"),
+  createResumeProfile: (body: { name: string; keywords?: string[]; copyFrom?: number }) =>
+    request<ResumeProfile>("POST", "/master-resume/profiles", body),
+  updateResumeProfile: (id: number, body: { name?: string; keywords?: string[] }) =>
+    request<ResumeProfile>("PATCH", `/master-resume/profiles/${id}`, body),
+  deleteResumeProfile: (id: number) => request<void>("DELETE", `/master-resume/profiles/${id}`),
   importMasterResumeText: (text: string) =>
     request<MasterResume>("POST", "/master-resume/import", { text }),
   importMasterResumePdf: (file: File) => {

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, Level, ResumeListItem, TargetRole } from "../lib/api";
+import { api, Level, ResumeListItem, TargetRole, type ResumeProfile } from "../lib/api";
 import { LEVEL_OPTIONS, ROLE_OPTIONS } from "../lib/grade";
 
 type Mode = "master" | "tailored" | "paste" | "pdf";
@@ -46,6 +46,13 @@ export default function GradeForm({ resumes, initialResumeId }: { resumes: Resum
   const [jd, setJd] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Master resume profiles; the picker shows only with 2+ (the main one is the default).
+  const [profiles, setProfiles] = useState<ResumeProfile[]>([]);
+  const [profileId, setProfileId] = useState(1);
+
+  useEffect(() => {
+    api.listResumeProfiles().then(setProfiles).catch(() => { /* main profile only */ });
+  }, []);
 
   // Read after mount, not in a lazy initializer: the server render has no
   // localStorage, so initializing from it would mismatch on hydration.
@@ -71,7 +78,7 @@ export default function GradeForm({ resumes, initialResumeId }: { resumes: Resum
           ? await api.createGradeFromPdf(file!, { targetRole: role, level, jdText })
           : await api.createGrade(
               mode === "master"
-                ? { source: "master", targetRole: role, level, jdText }
+                ? { source: "master", profileId, targetRole: role, level, jdText }
                 : mode === "tailored"
                 ? { source: "tailored", resumeId, targetRole: role, level, jdText }
                 : { source: "upload", text, targetRole: role, level, jdText }
@@ -103,6 +110,18 @@ export default function GradeForm({ resumes, initialResumeId }: { resumes: Resum
           value={mode}
           onChange={setMode}
         />
+        {mode === "master" && profiles.length > 1 && (
+          <select
+            aria-label="Master resume profile"
+            value={profileId}
+            onChange={(e) => setProfileId(Number(e.target.value))}
+            className="mt-3 w-full text-sm border border-paper-border rounded-lg px-3 py-2 bg-white text-paper-ink"
+          >
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}{p.id === 1 ? " (main)" : ""}</option>
+            ))}
+          </select>
+        )}
         {mode === "tailored" && (
           <select
             value={resumeId}

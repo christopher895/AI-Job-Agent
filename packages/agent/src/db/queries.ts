@@ -4,6 +4,7 @@ import { ApplicationAnswersState, MasterResume, MasterResumeSchema, Suggestion }
 import { findDuplicateInList, type AppliedJobIdentity } from "../applied/duplicate";
 import { Preferences, FILTERS } from "../config";
 import { GradeReport, Level, SPECIALISTS, SpecialistName, SpecialistState, TargetRole } from "../ai/grade/rubric";
+import { DEFAULT_PROFILE_ID, ProfileSummary } from "../ai/resume-profiles";
 
 export type TailoredResumeRow = {
   id: string;
@@ -26,11 +27,13 @@ export type TailoredResumeRow = {
   stage_started_at: Date | null;
   suggestions: Suggestion[] | null;
   application_answers: ApplicationAnswersState | null;
+  /** Resume profile this was built from; null = the default profile. */
+  base_resume_id: number | null;
   created_at: Date;
   updated_at: Date;
 };
 
-export type ResumeListItem = Omit<TailoredResumeRow, "jd_text" | "markdown" | "application_answers">;
+export type ResumeListItem = Omit<TailoredResumeRow, "jd_text" | "markdown" | "application_answers" | "base_resume_id">;
 
 export type AppliedJobRow = {
   id: string;
@@ -118,8 +121,13 @@ export async function saveSnapshot(companyId: number, jobHashes: string[]) {
 
 // ── Master resume ──────────────────────────────────────────────────────────────
 
-export async function getMasterResume(): Promise<MasterResume> {
-  const { rows } = await pool.query("SELECT data FROM master_resume WHERE id = 1");
+// Each row of master_resume is a resume profile (ai/resume-profiles.ts). Row 1
+// is the default. "About me" notes are about the person, not a resume version,
+// so they live only on row 1: every read overlays row 1's aboutMe, and saving
+// any profile writes aboutMe back to row 1.
+
+async function getDefaultMasterResume(): Promise<MasterResume> {
+  const { rows } = await pool.query("SELECT data FROM master_resume WHERE id = $1", [DEFAULT_PROFILE_ID]);
   if (rows.length === 0) {
     // Table exists but was never seeded — seed now and return the default.
     const { MASTER_RESUME } = await import("../ai/master-resume");
@@ -132,11 +140,92 @@ export async function getMasterResume(): Promise<MasterResume> {
   return MasterResumeSchema.parse(rows[0].data);
 }
 
-export async function updateMasterResume(data: MasterResume): Promise<void> {
-  await pool.query(
-    "UPDATE master_resume SET data = $1, updated_at = NOW() WHERE id = 1",
-    [JSON.stringify(data)]
+/**
+ * A profile's resume, with the shared aboutMe. A null/unknown id (an older
+ * tailored row, or a profile deleted since) falls back to the default profile
+ * rather than failing a pipeline mid-run.
+ */
+export async function getMasterResume(profileId: number | null = DEFAULT_PROFILE_ID): Promise<MasterResume> {
+  const base = await getDefaultMasterResume();
+  if (profileId === null || profileId === DEFAULT_PROFILE_ID) return base;
+  const { rows } = await pool.query("SELECT data FROM master_resume WHERE id = $1", [profileId]);
+  if (rows.length === 0) {
+    console.warn(`[queries] resume profile ${profileId} not found — using the default profile`);
+    return base;
+  }
+  return { ...MasterResumeSchema.parse(rows[0].data), aboutMe: base.aboutMe };
+}
+
+/** Saves a profile's resume. Returns false when the profile doesn't exist. */
+export async function updateMasterResume(data: MasterResume, profileId: number = DEFAULT_PROFILE_ID): Promise<boolean> {
+  if (profileId === DEFAULT_PROFILE_ID) {
+    await pool.query("UPDATE master_resume SET data = $1, updated_at = NOW() WHERE id = 1", [JSON.stringify(data)]);
+    return true;
+  }
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rowCount } = await client.query(
+      "UPDATE master_resume SET data = $1, updated_at = NOW() WHERE id = $2",
+      [JSON.stringify({ ...data, aboutMe: "" }), profileId]
+    );
+    if (rowCount === 0) { await client.query("ROLLBACK"); return false; }
+    await client.query(
+      `UPDATE master_resume SET data = jsonb_set(data, '{aboutMe}', to_jsonb($1::text)), updated_at = NOW() WHERE id = 1`,
+      [data.aboutMe ?? ""]
+    );
+    await client.query("COMMIT");
+    return true;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export type ResumeProfileRow = ProfileSummary & { updated_at: Date };
+
+export async function listResumeProfiles(): Promise<ResumeProfileRow[]> {
+  await getDefaultMasterResume(); // seeds row 1 if missing, so the list is never empty
+  const { rows } = await pool.query(
+    "SELECT id, name, keywords, updated_at FROM master_resume ORDER BY (id = 1) DESC, id ASC"
   );
+  return rows;
+}
+
+/** A new profile starting as a copy of `copyFrom` (aboutMe stays on row 1). */
+export async function createResumeProfile(
+  fields: { name: string; keywords: string[]; copyFrom: number }
+): Promise<ResumeProfileRow | null> {
+  const { rows } = await pool.query(
+    `INSERT INTO master_resume (name, keywords, data)
+     SELECT $1, $2, jsonb_set(data, '{aboutMe}', '""'::jsonb) FROM master_resume WHERE id = $3
+     RETURNING id, name, keywords, updated_at`,
+    [fields.name, fields.keywords, fields.copyFrom]
+  );
+  return rows[0] ?? null;
+}
+
+export async function updateResumeProfileMeta(
+  id: number,
+  fields: { name?: string; keywords?: string[] }
+): Promise<ResumeProfileRow | null> {
+  const { rows } = await pool.query(
+    `UPDATE master_resume
+        SET name = COALESCE($2, name), keywords = COALESCE($3, keywords), updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, name, keywords, updated_at`,
+    [id, fields.name ?? null, fields.keywords ?? null]
+  );
+  return rows[0] ?? null;
+}
+
+/** The default profile can't be deleted. Tailored rows built from it fall back to the default (FK SET NULL). */
+export async function deleteResumeProfile(id: number): Promise<boolean> {
+  if (id === DEFAULT_PROFILE_ID) return false;
+  const { rowCount } = await pool.query("DELETE FROM master_resume WHERE id = $1", [id]);
+  return rowCount === 1;
 }
 
 // ── Preferences ───────────────────────────────────────────────────────────────
@@ -163,7 +252,7 @@ export async function updatePreferences(data: Preferences): Promise<void> {
 // ── Tailored resumes ───────────────────────────────────────────────────────────
 
 const TAILORED_RESUME_COLUMNS =
-  "id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, status, error, stage, stage_started_at, suggestions, application_answers, created_at, updated_at";
+  "id, job_title, company, location, job_url, jd_text, markdown, critic_score, pdf_error, status, error, stage, stage_started_at, suggestions, application_answers, base_resume_id, created_at, updated_at";
 
 /** Inserts a placeholder row immediately so POST /api/tailor can respond before the pipeline runs. */
 export async function createPendingResume(fields: {
@@ -172,13 +261,14 @@ export async function createPendingResume(fields: {
   location?: string;
   jobUrl?: string;
   jdText?: string;
+  baseResumeId?: number | null;
 }): Promise<TailoredResumeRow> {
   const { rows } = await pool.query(
-    `INSERT INTO tailored_resumes (job_title, company, location, job_url, jd_text, markdown, status)
-     VALUES ($1, $2, $3, $4, $5, '', 'pending')
+    `INSERT INTO tailored_resumes (job_title, company, location, job_url, jd_text, markdown, status, base_resume_id)
+     VALUES ($1, $2, $3, $4, $5, '', 'pending', $6)
      RETURNING ${TAILORED_RESUME_COLUMNS}`,
     [fields.jobTitle ?? null, fields.company ?? null, fields.location ?? null, fields.jobUrl ?? null,
-     fields.jdText ?? null]
+     fields.jdText ?? null, fields.baseResumeId ?? null]
   );
   return rows[0];
 }
@@ -190,13 +280,14 @@ export async function createReadyResume(fields: {
   location?: string;
   jobUrl?: string;
   jdText?: string;
+  baseResumeId?: number | null;
 }): Promise<TailoredResumeRow> {
   const { rows } = await pool.query(
-    `INSERT INTO tailored_resumes (job_title, company, location, job_url, jd_text, markdown, status)
-     VALUES ($1, $2, $3, $4, $5, '', 'ready')
+    `INSERT INTO tailored_resumes (job_title, company, location, job_url, jd_text, markdown, status, base_resume_id)
+     VALUES ($1, $2, $3, $4, $5, '', 'ready', $6)
      RETURNING ${TAILORED_RESUME_COLUMNS}`,
     [fields.jobTitle ?? null, fields.company ?? null, fields.location ?? null, fields.jobUrl ?? null,
-     fields.jdText ?? null]
+     fields.jdText ?? null, fields.baseResumeId ?? null]
   );
   return rows[0];
 }
@@ -211,12 +302,12 @@ export async function createReadyResume(fields: {
 export async function duplicateTailoredResume(id: string): Promise<TailoredResumeRow | null> {
   const { rows } = await pool.query(
     `INSERT INTO tailored_resumes
-       (job_title, company, location, job_url, jd_text, markdown, suggestions, application_answers, pdf, status)
+       (job_title, company, location, job_url, jd_text, markdown, suggestions, application_answers, pdf, status, base_resume_id)
      SELECT
        CASE WHEN job_title IS NULL THEN NULL ELSE job_title || ' (copy)' END,
        company, location, job_url, jd_text, markdown, suggestions,
        CASE WHEN application_answers ->> 'status' = 'ready' THEN application_answers ELSE NULL END,
-       pdf, status
+       pdf, status, base_resume_id
      FROM tailored_resumes
      WHERE id = $1 AND status IN ('ready', 'awaiting_review')
      RETURNING ${TAILORED_RESUME_COLUMNS}`,
@@ -721,6 +812,8 @@ export type GradeRow = {
   id: string;
   source: "master" | "tailored" | "upload";
   resume_id: string | null;
+  /** Resume profile a source='master' grade graded; null = the default profile. */
+  profile_id: number | null;
   label: string;
   resume_text: string;
   target_role: TargetRole;
@@ -743,6 +836,7 @@ export type GradeListItem = Pick<
 export async function createGrade(fields: {
   source: GradeRow["source"];
   resumeId: string | null;
+  profileId?: number | null;
   label: string;
   resumeText: string;
   targetRole: TargetRole;
@@ -752,11 +846,11 @@ export async function createGrade(fields: {
   // Every specialist starts 'pending' so the progress checklist renders all five at once.
   const specialists = Object.fromEntries(SPECIALISTS.map((s) => [s, { status: "pending" }]));
   const { rows } = await pool.query(
-    `INSERT INTO resume_grades (source, resume_id, label, resume_text, target_role, level, jd_text, specialists)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO resume_grades (source, resume_id, label, resume_text, target_role, level, jd_text, specialists, profile_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id`,
     [fields.source, fields.resumeId, fields.label, fields.resumeText, fields.targetRole, fields.level,
-     fields.jdText, JSON.stringify(specialists)]
+     fields.jdText, JSON.stringify(specialists), fields.profileId ?? null]
   );
   return { id: rows[0].id };
 }

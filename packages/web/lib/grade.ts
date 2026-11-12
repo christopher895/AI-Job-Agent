@@ -73,7 +73,8 @@ export function isStalePending(g: Pick<Grade, "status" | "created_at">, now = Da
  */
 export function rerunBody(g: Grade): CreateGradeBody {
   const base = { targetRole: g.target_role, level: g.level, jdText: g.jd_text ?? undefined };
-  if (g.source === "master") return { ...base, source: "master" };
+  // Same profile as the original grade; a missing profile_id is the main one.
+  if (g.source === "master") return { ...base, source: "master", ...(g.profile_id ? { profileId: g.profile_id } : {}) };
   if (g.source === "tailored" && g.resume_id) return { ...base, source: "tailored", resumeId: g.resume_id };
   return { ...base, source: "upload", text: g.resume_text, label: g.label };
 }

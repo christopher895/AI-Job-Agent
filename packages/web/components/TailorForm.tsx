@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, ApplicationAnswersState } from "../lib/api";
+import { api, ApplicationAnswersState, type ResumeProfile } from "../lib/api";
+import { pickProfile } from "../lib/resumeProfiles";
 import ApplicationAnswers from "./ApplicationAnswers";
 
 export default function TailorForm({
@@ -31,7 +32,17 @@ export default function TailorForm({
   const [logging, setLogging] = useState(false);
   const [logStatus, setLogStatus] = useState<"idle" | "done" | "duplicate">("idle");
   const [error, setError] = useState<string | null>(null);
+  // Resume profiles to tailor from. The picker only appears with 2+ profiles;
+  // until they load (or if loading fails) the server's "auto" choice applies.
+  const [profiles, setProfiles] = useState<ResumeProfile[]>([]);
+  const [baseChoice, setBaseChoice] = useState<"auto" | number>("auto");
   const router = useRouter();
+
+  useEffect(() => {
+    api.listResumeProfiles().then(setProfiles).catch(() => { /* picker stays hidden; server picks */ });
+  }, []);
+
+  const autoProfile = profiles.find((p) => p.id === pickProfile(title, profiles));
 
   const isEmpty = !jobUrl && !jdText && !title && !company && !location && !questions;
 
@@ -111,6 +122,7 @@ export default function TailorForm({
     setFetchStatus("idle");
     setFetchedUrl(null);
     setLogStatus("idle");
+    setBaseChoice("auto");
     setError(null);
   }
 
@@ -136,6 +148,7 @@ export default function TailorForm({
         jobTitle: title.trim() || undefined,
         company: company.trim() || undefined,
         location: location.trim() || undefined,
+        baseResumeId: baseChoice,
       });
       setAnswersResumeId(result.id);
       setAnswersState({
@@ -172,6 +185,7 @@ export default function TailorForm({
         company: company.trim() || undefined,
         location: location.trim() || undefined,
         questions: questions.trim() || undefined,
+        baseResumeId: baseChoice,
       });
       router.push(`/resume/${result.id}`);
     } catch (e) {
@@ -280,6 +294,30 @@ export default function TailorForm({
             className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm text-paper-ink placeholder:text-paper-muted focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
           />
         </div>
+
+        {/* Base resume — only when there's more than one profile to choose from */}
+        {profiles.length > 1 && (
+          <div>
+            <label htmlFor="base-resume" className="block text-sm font-medium text-paper-ink mb-1.5">Base resume</label>
+            <select
+              id="base-resume"
+              value={baseChoice}
+              onChange={(e) => setBaseChoice(e.target.value === "auto" ? "auto" : Number(e.target.value))}
+              className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm text-paper-ink focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent bg-white"
+            >
+              <option value="auto">
+                {title.trim() ? `Auto — ${autoProfile?.name ?? "Main"}` : "Auto — picked from the job title"}
+              </option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <p className="text-xs text-paper-muted mt-1.5">
+              The profile suggestions are made against. Auto matches the job title against each profile&apos;s
+              keywords (set on <Link href="/resume/master" className="underline hover:text-paper-ink">Master Resume</Link>).
+            </p>
+          </div>
+        )}
 
         {/* Job Description */}
         <div>

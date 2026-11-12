@@ -157,16 +157,23 @@ router.post("/resume/:id/apply-suggestions", async (req, res) => {
   // in an earlier round (a feedback round builds on the JD round) must be
   // re-applied alongside this round's picks or they would silently vanish.
   const stored = row.suggestions ?? [];
-  runApplyPipeline(req.params.id, composeAccepted(stored, accepted), stored).catch((err) => {
+  runApplyPipeline(req.params.id, composeAccepted(stored, accepted), stored, row.base_resume_id).catch((err) => {
     console.error("[resume] apply-suggestions pipeline crashed:", err);
   });
 });
 
-async function runApplyPipeline(id: string, accepted: Suggestion[], originalSuggestions: Suggestion[]) {
+async function runApplyPipeline(
+  id: string,
+  accepted: Suggestion[],
+  originalSuggestions: Suggestion[],
+  baseResumeId: number | null
+) {
   const signal = registerRun(id);
   try {
     await updateResumeStage(id, "Applying your selections");
-    const master = await getMasterResume();
+    // The profile this row was built from — rebuilding from any other base
+    // would silently swap the resume's content.
+    const master = await getMasterResume(baseResumeId);
 
     // Re-label groundedness against the FINAL text — a user's hand-edit can
     // turn a "grounded" suggestion into an "extrapolated" one (or vice versa);
@@ -343,7 +350,7 @@ router.post("/resume/:id/feedback", async (req, res) => {
 
   res.status(202).json({ id: req.params.id, status: "pending" });
 
-  runFeedbackPipeline(req.params.id, feedback, row.jd_text, row.suggestions ?? []).catch((err) => {
+  runFeedbackPipeline(req.params.id, feedback, row.jd_text, row.suggestions ?? [], row.base_resume_id).catch((err) => {
     console.error("[resume] feedback pipeline crashed:", err);
   });
 });
@@ -356,10 +363,16 @@ router.post("/resume/:id/clear-error", async (req, res) => {
   res.json({ id: req.params.id, error: null });
 });
 
-async function runFeedbackPipeline(id: string, feedback: string, jd: string | null, stored: Suggestion[]) {
+async function runFeedbackPipeline(
+  id: string,
+  feedback: string,
+  jd: string | null,
+  stored: Suggestion[],
+  baseResumeId: number | null
+) {
   const signal = registerRun(id);
   try {
-    const master = await getMasterResume();
+    const master = await getMasterResume(baseResumeId);
     const priorAccepted = stored.filter((s) => s.accepted === true);
     const raw = await suggestFromFeedback(feedback, jd, master, priorAccepted, undefined, signal);
     // Labelled against the résumé the model saw (earlier rounds applied), so a
@@ -428,7 +441,7 @@ router.post("/resume/:id/retry", async (req, res) => {
 
   res.status(202).json({ id: req.params.id, status: "pending" });
 
-  runSuggestPipeline(req.params.id, row.jd_text).catch((err) => {
+  runSuggestPipeline(req.params.id, row.jd_text, row.base_resume_id).catch((err) => {
     console.error("[resume] retry pipeline crashed:", err);
   });
 });
@@ -535,7 +548,7 @@ router.get("/resume/:id/pdf", async (req, res) => {
     }
   }
 
-  const master = await getMasterResume();
+  const master = await getMasterResume(row.base_resume_id);
   const filename = buildResumeFilename(master.basics.name, row.company, row.job_title);
 
   res.setHeader("Content-Type", "application/pdf");
@@ -574,7 +587,7 @@ router.post("/resume/:id/email", async (req, res) => {
       ? `${row.company} — ${row.job_title} resume`
       : "Your tailored resume";
 
-  const master = await getMasterResume();
+  const master = await getMasterResume(row.base_resume_id);
   const filename = buildResumeFilename(master.basics.name, row.company, row.job_title);
 
   const from = process.env.EMAIL_FROM ?? "Job Agent <onboarding@resend.dev>";
