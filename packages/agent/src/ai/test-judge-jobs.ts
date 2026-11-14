@@ -131,6 +131,10 @@ async function main() {
     for (const role of ["quant", "research", "data scien", "product manage"]) {
       check(`prompt names ${role} as a non-SWE role to skip`, system.toLowerCase().includes(role));
     }
+    for (const term of ["firmware", "embedded", "fpga", "asic", "verification"]) {
+      check(`prompt names ${term} as hardware to skip`, system.toLowerCase().includes(term));
+    }
+    check("compilers still count as software", /Compilers[^\n]*still count as software engineering/.test(system));
   }
 
   // US only: a posting outside the United States is skip, however good the company
