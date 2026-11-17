@@ -213,6 +213,24 @@ export default function ResumeEditor({
     companyDebounceRef.current = setTimeout(() => autoSaveMeta({ company: value }), 800);
   }
 
+  // Manual save: flushes any pending auto-saves right away (or retries after a
+  // save error) and refreshes the preview so it shows what was just saved.
+  async function saveNow() {
+    for (const ref of [debounceRef, titleDebounceRef, companyDebounceRef]) {
+      if (ref.current) clearTimeout(ref.current);
+      ref.current = null;
+    }
+    setSaveStatus("saving");
+    try {
+      const { pdfError: renderError } = await api.patchResume(resume.id, { markdown, jobTitle, company });
+      setSaveStatus("saved");
+      setPdfRenderError(renderError);
+      if (!renderError && viewMode !== "edit") void loadPdf();
+    } catch {
+      setSaveStatus("error");
+    }
+  }
+
   function insertMarkdown(before: string, after = "") {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -672,17 +690,26 @@ export default function ResumeEditor({
           <span className="text-paper-muted/60">/</span>
           <span className="text-paper-ink font-medium truncate max-w-xs">{title || "Untitled"}</span>
         </div>
-        <span
-          className={`text-xs font-medium ${
-            saveStatus === "saved"
-              ? "text-green-600"
-              : saveStatus === "error"
-              ? "text-red-500"
-              : "text-paper-muted"
-          }`}
-        >
-          {saveLabel}
-        </span>
+        <div className="flex items-center gap-3">
+          <span
+            className={`text-xs font-medium ${
+              saveStatus === "saved"
+                ? "text-green-600"
+                : saveStatus === "error"
+                ? "text-red-500"
+                : "text-paper-muted"
+            }`}
+          >
+            {saveLabel}
+          </span>
+          <button
+            onClick={saveNow}
+            disabled={saveStatus === "saving"}
+            className="bg-violet-600 hover:bg-violet-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+          >
+            {saveStatus === "saving" ? "Saving…" : "Save"}
+          </button>
+        </div>
       </div>
 
       {pdfRenderError && (
