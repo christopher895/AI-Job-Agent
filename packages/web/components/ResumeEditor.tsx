@@ -474,7 +474,7 @@ export default function ResumeEditor({
       ? "Save error"
       : saveStatus === "unsaved"
       ? "Unsaved"
-      : "Auto-saved";
+      : "Saved";
 
   const title = [jobTitle, company].filter(Boolean).join(" – ");
   const wordCount = markdown.trim() ? markdown.trim().split(/\s+/).length : 0;
