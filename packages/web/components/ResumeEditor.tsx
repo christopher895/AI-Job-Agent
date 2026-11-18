@@ -2,14 +2,14 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { api, Resume } from "../lib/api";
+import { api, duplicateAppliedAt, Resume } from "../lib/api";
 import { STAGE_SEGMENTS, segmentIndex, estimateStageProgress } from "../lib/resumeStage";
 import { appliedAtTimestamp, todayDateInputValue } from "../lib/appliedAt";
 import SuggestionChecklist from "./SuggestionChecklist";
 import { FEEDBACK_STAGE, isFollowUpRound, undecided } from "../lib/suggestionRounds";
 import ApplicationAnswers from "./ApplicationAnswers";
 
-type ApplyForm = { status: string; appliedAt: string };
+type ApplyForm = { status: string; appliedAt: string; notes: string };
 type ViewMode = "edit" | "split" | "preview";
 
 function ToolbarDivider() {
@@ -143,7 +143,10 @@ export default function ResumeEditor({
   const [applyForm, setApplyForm] = useState<ApplyForm>({
     status: "applied",
     appliedAt: todayDateInputValue(),
+    notes: "",
   });
+  /** Set when logging hit an existing row: when that row was applied ("" if unknown). */
+  const [applyDuplicateOf, setApplyDuplicateOf] = useState<string | null>(null);
   const [applyStatus, setApplyStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [applyError, setApplyError] = useState<string | null>(null);
   const [cancelState, setCancelState] = useState<"idle" | "working" | "error">("idle");
@@ -446,7 +449,7 @@ export default function ResumeEditor({
     }
   }
 
-  async function handleApply() {
+  async function handleApply(force = false) {
     setApplyStatus("saving");
     setApplyError(null);
     try {
@@ -458,10 +461,21 @@ export default function ResumeEditor({
         status: applyForm.status,
         appliedAt: appliedAtTimestamp(applyForm.appliedAt),
         resumeId: resume.id,
+        notes: applyForm.notes.trim() || undefined,
+        force,
       });
       setApplyStatus("done");
+      setApplyDuplicateOf(null);
       setShowApplyForm(false);
     } catch (e) {
+      // Already in the log: ask instead of failing, so a reapplication (another
+      // resume, another email) can still get its own row.
+      const existing = duplicateAppliedAt(e);
+      if (existing !== null) {
+        setApplyStatus("idle");
+        setApplyDuplicateOf(existing);
+        return;
+      }
       setApplyStatus("error");
       setApplyError(e instanceof Error ? e.message : "Couldn't add to the log.");
     }
@@ -931,20 +945,48 @@ export default function ResumeEditor({
                 className="border border-paper-border rounded-lg px-2 py-1 text-xs bg-paper focus:outline-none focus:ring-1 focus:ring-violet-500"
               />
             </div>
+            {applyDuplicateOf === null && (
+              <button
+                onClick={() => handleApply()}
+                disabled={applyStatus === "saving" || applyStatus === "done"}
+                className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {applyStatus === "saving" ? "Saving…" : applyStatus === "error" ? "Failed" : "Confirm"}
+              </button>
+            )}
             <button
-              onClick={handleApply}
-              disabled={applyStatus === "saving" || applyStatus === "done"}
-              className="text-xs px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 transition-colors"
-            >
-              {applyStatus === "saving" ? "Saving…" : applyStatus === "error" ? "Failed" : "Confirm"}
-            </button>
-            <button
-              onClick={() => setShowApplyForm(false)}
+              onClick={() => {
+                setShowApplyForm(false);
+                setApplyDuplicateOf(null);
+              }}
               className="text-xs text-paper-muted hover:text-paper-muted transition-colors"
             >
               Cancel
             </button>
           </div>
+          <input
+            type="text"
+            value={applyForm.notes}
+            onChange={(e) => setApplyForm((f) => ({ ...f, notes: e.target.value }))}
+            placeholder="Note (optional) — e.g. used the ML resume, applied with my school email"
+            className="w-full max-w-xl border border-paper-border rounded-lg px-2 py-1 text-xs bg-paper focus:outline-none focus:ring-1 focus:ring-violet-500"
+          />
+          {applyDuplicateOf !== null && (
+            <div className="flex items-center gap-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+              <span>
+                This job is already in your log
+                {applyDuplicateOf ? ` (applied ${new Date(applyDuplicateOf).toLocaleDateString()})` : ""}.
+                Add it again as a new row?
+              </span>
+              <button
+                onClick={() => handleApply(true)}
+                disabled={applyStatus === "saving"}
+                className="px-2.5 py-1 bg-violet-600 hover:bg-violet-700 text-white rounded-md disabled:opacity-50 transition-colors"
+              >
+                {applyStatus === "saving" ? "Adding…" : "Add anyway"}
+              </button>
+            </div>
+          )}
           {applyError && <p className="text-xs text-red-700">{applyError}</p>}
         </div>
       )}

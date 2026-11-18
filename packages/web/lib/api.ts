@@ -78,6 +78,7 @@ export type AppliedJob = {
   created_at: string;
   resume_id: string | null;
   sheets_row: number | null;
+  notes: string | null;
   status_events?: StatusEvent[];
 };
 
@@ -251,6 +252,22 @@ export type CreateGradeBody = {
   jdText?: string;
 };
 
+/** An HTTP error from the agent API, carrying the status and the parsed JSON body. */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number, readonly body: Record<string, unknown>) {
+    super(message);
+  }
+}
+
+/**
+ * When logging an application hit an existing row, returns when that row was
+ * applied, so the form can ask "already logged on <date> — add anyway?".
+ */
+export function duplicateAppliedAt(e: unknown): string | null {
+  if (!(e instanceof ApiError) || e.status !== 409 || !e.body.existingId) return null;
+  return typeof e.body.existingAppliedAt === "string" ? e.body.existingAppliedAt : "";
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     method,
@@ -263,8 +280,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     throw new Error("unauthorized");
   }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error?: string }).error ?? res.statusText);
+    const err = (await res.json().catch(() => ({ error: res.statusText }))) as Record<string, unknown>;
+    throw new ApiError(typeof err.error === "string" ? err.error : res.statusText, res.status, err);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -423,9 +440,14 @@ export const api = {
     status?: string;
     resumeId?: string;
     appliedAt?: string;
+    notes?: string;
+    /** Log it even if it matches an existing row (after the user confirmed). */
+    force?: boolean;
   }) => request<AppliedJob>("POST", "/applied", body),
   patchApplied: (id: string, status: string) =>
     request<AppliedJob>("PATCH", `/applied/${id}`, { status }),
+  patchAppliedNotes: (id: string, notes: string) =>
+    request<AppliedJob>("PATCH", `/applied/${id}`, { notes }),
   listReviews: () => request<ReviewItem[]>("GET", "/review"),
   confirmReview: (id: string, applicationId: string) =>
     request<{ ok: true }>("POST", `/review/${id}/confirm`, { applicationId }),

@@ -139,6 +139,10 @@ export async function initSchema() {
     ALTER TABLE applied_jobs ALTER COLUMN created_at SET NOT NULL;
   `);
 
+  // Free-form note on an application ("used the ML resume", "applied with my school
+  // email"). Mirrored to column H of the Google Sheet.
+  await pool.query(`ALTER TABLE applied_jobs ADD COLUMN IF NOT EXISTS notes TEXT`);
+
   // Tracks the error from the most recent PDF render attempt, if any, so a failed
   // re-render after an edit doesn't silently leave a stale PDF with no indication.
   await pool.query(`

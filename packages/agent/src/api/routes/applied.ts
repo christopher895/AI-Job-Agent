@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { DUPLICATE_APPLIED_JOB_ERROR } from "../../applied/duplicate";
 import { createAppliedJob, findDuplicateAppliedJob, listAppliedJobs, updateAppliedJob, createStatusEvent, listStatusEventsByApplication } from "../../db/queries";
-import { appendRow, syncStatusToSheet } from "../../integrations/sheets";
+import { appendRow, syncNotesToSheet, syncStatusToSheet } from "../../integrations/sheets";
 
 const router = Router();
 
@@ -38,7 +38,7 @@ function parseAppliedAt(value: string | undefined): Date | undefined {
 
 // POST /api/applied
 router.post("/", async (req, res) => {
-  const { company, jobTitle, location, jobUrl, status, appliedAt, resumeId } = req.body as {
+  const { company, jobTitle, location, jobUrl, status, appliedAt, resumeId, notes, force } = req.body as {
     company?: string;
     jobTitle?: string;
     location?: string;
@@ -46,6 +46,9 @@ router.post("/", async (req, res) => {
     status?: string;
     appliedAt?: string;
     resumeId?: string;
+    notes?: string;
+    /** Log it even when it matches an existing row — the client asked "add anyway?" first. */
+    force?: boolean;
   };
 
   if (!company || !jobTitle) {
@@ -56,19 +59,28 @@ router.post("/", async (req, res) => {
     res.status(400).json({ error: "invalid status" });
     return;
   }
-
-  const duplicate = await findDuplicateAppliedJob({
-    company,
-    jobTitle,
-    jobUrl,
-    resumeId,
-  });
-  if (duplicate) {
-    res.status(409).json({
-      error: DUPLICATE_APPLIED_JOB_ERROR,
-      existingId: duplicate.id,
-    });
+  if (notes !== undefined && typeof notes !== "string") {
+    res.status(400).json({ error: "notes must be a string" });
     return;
+  }
+
+  // A duplicate is a question, not a hard stop: the client shows when it was logged
+  // and resends with force=true to add a second row (e.g. reapplied with another resume).
+  if (force !== true) {
+    const duplicate = await findDuplicateAppliedJob({
+      company,
+      jobTitle,
+      jobUrl,
+      resumeId,
+    });
+    if (duplicate) {
+      res.status(409).json({
+        error: DUPLICATE_APPLIED_JOB_ERROR,
+        existingId: duplicate.id,
+        existingAppliedAt: duplicate.applied_at,
+      });
+      return;
+    }
   }
 
   const row = await createAppliedJob({
@@ -79,6 +91,7 @@ router.post("/", async (req, res) => {
     status,
     appliedAt: parseAppliedAt(appliedAt),
     resumeId,
+    notes: notes?.trim() || undefined,
   });
 
   res.status(201).json(row);
@@ -98,6 +111,7 @@ router.post("/", async (req, res) => {
     jobUrl: row.job_url,
     status: row.status ?? "",
     resumeLink: row.resume_id ? `${appUrl}/resume/${row.resume_id}` : "",
+    notes: row.notes,
   })
     .then((sheetsRow) => {
       if (sheetsRow) return updateAppliedJob(row.id, { sheetsRow });
@@ -113,12 +127,16 @@ router.get("/", async (_req, res) => {
 
 // PATCH /api/applied/:id
 router.patch("/:id", async (req, res) => {
-  const { status, sheetsRow } = req.body as { status?: string; sheetsRow?: number };
+  const { status, sheetsRow, notes } = req.body as { status?: string; sheetsRow?: number; notes?: string };
   if (!isAllowedStatus(status, true)) {
     res.status(400).json({ error: "invalid status" });
     return;
   }
-  const row = await updateAppliedJob(req.params.id, { status, sheetsRow });
+  if (notes !== undefined && typeof notes !== "string") {
+    res.status(400).json({ error: "notes must be a string" });
+    return;
+  }
+  const row = await updateAppliedJob(req.params.id, { status, sheetsRow, notes });
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   res.json(row);
 
@@ -131,6 +149,10 @@ router.patch("/:id", async (req, res) => {
   if (status && row.sheets_row) {
     syncStatusToSheet(row.sheets_row, status)
       .catch((err) => console.error("[sheets] syncStatus failed:", err));
+  }
+  if (notes !== undefined && row.sheets_row) {
+    syncNotesToSheet(row.sheets_row, row.notes ?? "")
+      .catch((err) => console.error("[sheets] syncNotes failed:", err));
   }
 });
 
