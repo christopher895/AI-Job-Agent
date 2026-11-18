@@ -77,6 +77,44 @@ function StatusBadge({
   );
 }
 
+/** Inline-editable note; saves on blur or Enter, only when the text changed. */
+function NoteCell({ job, onSaved }: { job: AppliedJob; onSaved: (notes: string | null) => void }) {
+  const [value, setValue] = useState(job.notes ?? "");
+  const [state, setState] = useState<"idle" | "saving" | "error">("idle");
+
+  async function save() {
+    if (value.trim() === (job.notes ?? "")) return;
+    setState("saving");
+    try {
+      const updated = await api.patchAppliedNotes(job.id, value);
+      onSaved(updated.notes);
+      setValue(updated.notes ?? "");
+      setState("idle");
+    } catch {
+      setState("error");
+    }
+  }
+
+  return (
+    <div className="min-w-[12rem]">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+        placeholder="Add a note"
+        title={value || undefined}
+        className="w-full text-xs text-paper-ink bg-transparent border border-transparent hover:border-paper-border focus:border-paper-border rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-violet-300 placeholder:text-paper-muted/60"
+      />
+      {state === "saving" && <p className="text-[10px] text-paper-muted px-1.5">Saving…</p>}
+      {state === "error" && <p className="text-[10px] text-red-600 px-1.5">Couldn&apos;t save</p>}
+    </div>
+  );
+}
+
 export default function AppliedTable({ initial }: { initial: AppliedJob[] }) {
   const [jobs, setJobs] = useState<AppliedJob[]>(initial);
   const [updating, setUpdating] = useState<string | null>(null);
@@ -115,6 +153,7 @@ export default function AppliedTable({ initial }: { initial: AppliedJob[] }) {
             <th className="py-3 px-4 font-medium">Role</th>
             <th className="py-3 px-4 font-medium">Date Applied</th>
             <th className="py-3 px-4 font-medium">Status</th>
+            <th className="py-3 px-4 font-medium">Notes</th>
             <th className="py-3 px-4 font-medium">Source</th>
             <th className="py-3 px-4 font-medium">Actions</th>
             <th className="py-3 px-4 font-medium">History</th>
@@ -144,6 +183,12 @@ export default function AppliedTable({ initial }: { initial: AppliedJob[] }) {
                     id={job.id}
                     updating={updating === job.id}
                     onChange={(s) => handleStatusChange(job.id, s)}
+                  />
+                </td>
+                <td className="py-3 px-4">
+                  <NoteCell
+                    job={job}
+                    onSaved={(notes) => setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, notes } : j)))}
                   />
                 </td>
                 <td className="py-3 px-4 text-paper-muted text-xs">

@@ -1,16 +1,16 @@
 import { google } from "googleapis";
 
 /**
- * Column layout in the Google Sheet (A–G):
+ * Column layout in the Google Sheet (A–H):
  * A: Company  B: Role  C: Location  D: Link
- * E: Date     F: Status              G: Resume
+ * E: Date     F: Status              G: Resume  H: Notes
  *
  * Set up row 1 as a header manually before first use.
  * Requires GOOGLE_SHEETS_SPREADSHEET_ID and GOOGLE_SERVICE_ACCOUNT_JSON env vars.
  * The service account must have Editor access to the spreadsheet.
  */
 
-const COLUMNS = "A:G";
+const COLUMNS = "A:H";
 
 // Cached on first successful API call — avoids an extra round-trip on every append
 let resolvedSheetName: string | null = null;
@@ -30,6 +30,7 @@ export type SheetRowData = {
   jobUrl?: string | null;
   status: string;
   resumeLink?: string | null;
+  notes?: string | null;
 };
 
 function getClient() {
@@ -61,6 +62,7 @@ function toRow(data: SheetRowData): string[] {
     data.appliedAt.toLocaleDateString("en-US"),
     data.status,
     data.resumeLink ?? "",
+    data.notes ?? "",
   ];
 }
 
@@ -99,5 +101,22 @@ export async function syncStatusToSheet(sheetsRow: number, status: string): Prom
     range: `${sheetName}!F${sheetsRow}`,
     valueInputOption: "RAW",
     requestBody: { values: [[status]] },
+  });
+}
+
+/** Updates only the notes cell (column H) for an existing row. */
+export async function syncNotesToSheet(sheetsRow: number, notes: string): Promise<void> {
+  const client = getClient();
+  if (!client) {
+    console.warn("[sheets] env vars not configured — skipping sync");
+    return;
+  }
+
+  const sheetName = await getSheetName(client.sheets, client.sheetId);
+  await client.sheets.spreadsheets.values.update({
+    spreadsheetId: client.sheetId,
+    range: `${sheetName}!H${sheetsRow}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[notes]] },
   });
 }

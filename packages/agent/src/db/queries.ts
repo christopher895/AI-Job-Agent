@@ -46,6 +46,7 @@ export type AppliedJobRow = {
   created_at: Date;
   resume_id: string | null;
   sheets_row: number | null;
+  notes: string | null;
 };
 
 export async function getOrCreateCompany(name: string, careersUrl: string, scrapeType: string) {
@@ -594,14 +595,16 @@ export async function createAppliedJob(fields: {
   status?: string;
   appliedAt?: Date;
   resumeId?: string;
+  notes?: string;
 }): Promise<AppliedJobRow> {
   const { rows } = await pool.query(
-    `INSERT INTO applied_jobs (company, job_title, location, job_url, status, applied_at, resume_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO applied_jobs (company, job_title, location, job_url, status, applied_at, resume_id, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
     [
       fields.company, fields.jobTitle, fields.location ?? null, fields.jobUrl ?? null,
       fields.status ?? "applied", fields.appliedAt ?? new Date(), fields.resumeId ?? null,
+      fields.notes || null,
     ]
   );
   return rows[0];
@@ -624,17 +627,21 @@ export async function listAppliedJobs(): Promise<AppliedJobRow[]> {
 
 export async function updateAppliedJob(
   id: string,
-  fields: { status?: string; sheetsRow?: number }
+  fields: { status?: string; sheetsRow?: number; notes?: string }
 ): Promise<AppliedJobRow | null> {
-  // status is nullable, so an explicit "" (clear status) must be distinguished from
-  // "field omitted" (leave status untouched) — a plain COALESCE can't tell those apart.
+  // status and notes are nullable, so an explicit "" (clear it) must be distinguished
+  // from "field omitted" (leave it untouched) — a plain COALESCE can't tell those apart.
   const { rows } = await pool.query(
     `UPDATE applied_jobs
      SET status     = CASE WHEN $1::boolean THEN $2 ELSE status END,
-         sheets_row = COALESCE($3, sheets_row)
+         sheets_row = COALESCE($3, sheets_row),
+         notes      = CASE WHEN $5::boolean THEN $6 ELSE notes END
      WHERE id = $4
      RETURNING *`,
-    [fields.status !== undefined, fields.status || null, fields.sheetsRow ?? null, id]
+    [
+      fields.status !== undefined, fields.status || null, fields.sheetsRow ?? null, id,
+      fields.notes !== undefined, fields.notes?.trim() || null,
+    ]
   );
   return rows[0] ?? null;
 }

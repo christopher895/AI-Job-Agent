@@ -70,7 +70,9 @@ Non-Latin-1 characters an LLM emits into a bullet (`→ ← ↔ ⇒ − ≤ ≥ 
 
 ### Google Sheets sync
 When Christopher marks a job as "applied" (from `/applied` or the resume editor), a row is written/updated in his Google Sheet:
-- Date applied, company, location, job URL, status, link to tailored resume
+- Date applied, company, location, job URL, status, link to tailored resume, notes (columns A–H; H is Notes — the header was added by hand)
+
+Logging a job that matches an existing row (same resume, same normalized URL, or same company + title — `applied/duplicate.ts`) returns 409 with the existing row's `applied_at`. The resume editor and `/tailor` turn that into an "already in your log (applied <date>) — add anyway?" prompt; confirming resends with `force: true`, which skips the check and adds a separate row (a reapplication with another resume or email). Each row carries an optional free-form `notes`, entered when logging and editable inline on `/applied` (`PATCH /api/applied/:id { notes }`, synced to column H).
 
 ## Repository Structure
 
@@ -289,7 +291,8 @@ applied_jobs (
                                 -- timestamp so same-day entries can be ordered newest-first
   created_at    timestamptz,    -- when the row was logged; tiebreaker for same-day applied_at
   resume_id     uuid references tailored_resumes(id),
-  sheets_row    int             -- row number in Google Sheet for updates
+  sheets_row    int,            -- row number in Google Sheet for updates
+  notes         text            -- optional free-form note ("used the ML resume"); Sheet column H
 )
 
 preferences (
@@ -401,10 +404,12 @@ POST /api/grades/:id/cancel  (409 unless 'pending') → abortRun, writes 'cancel
 
 ### Apply → Google Sheets
 ```
-POST /api/applied (resume_id, status, applied_at)
-  → upsert applied_jobs row
-    → Google Sheets API: append or update row
-      (date, company, location, job_url, status, resume link)
+POST /api/applied (resume_id, status, applied_at, notes?, force?)
+  → duplicate check (409 + existingAppliedAt unless force=true)
+    → insert applied_jobs row
+      → Google Sheets API: append row
+        (company, role, location, job_url, date, status, resume link, notes)
+PATCH /api/applied/:id (status?, notes?) → update the row, sync column F / H
 ```
 
 ### Gmail status ingestion (opt-in, `GMAIL_INGEST_ENABLED=true`)

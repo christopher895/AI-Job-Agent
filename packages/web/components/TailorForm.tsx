@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { api, ApplicationAnswersState, type ResumeProfile } from "../lib/api";
+import { api, ApplicationAnswersState, duplicateAppliedAt, type ResumeProfile } from "../lib/api";
 import { pickProfile } from "../lib/resumeProfiles";
 import ApplicationAnswers from "./ApplicationAnswers";
 
@@ -31,6 +31,9 @@ export default function TailorForm({
   const [generating, setGenerating] = useState(false);
   const [logging, setLogging] = useState(false);
   const [logStatus, setLogStatus] = useState<"idle" | "done" | "duplicate">("idle");
+  /** When logStatus is "duplicate": when the existing row was applied ("" if unknown). */
+  const [duplicateOf, setDuplicateOf] = useState("");
+  const [logNote, setLogNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   // Resume profiles to tailor from. The picker only appears with 2+ profiles;
   // until they load (or if loading fails) the server's "auto" choice applies.
@@ -81,7 +84,7 @@ export default function TailorForm({
     }
   }
 
-  async function handleAddToLog() {
+  async function handleAddToLog(force = false) {
     if (!company.trim() || !title.trim()) {
       setError("Enter a job title and company before adding to the log.");
       return;
@@ -95,15 +98,21 @@ export default function TailorForm({
         location: location.trim() || undefined,
         jobUrl: jobUrl.trim() || undefined,
         appliedAt: new Date().toISOString(),
+        notes: logNote.trim() || undefined,
+        force,
       });
       setLogStatus("done");
+      setLogNote("");
       setTimeout(() => setLogStatus("idle"), 3000);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Couldn't add to the log. Try again.";
-      setError(message);
-      if (message === "This job is already in your applied log.") {
+      // Already logged: ask "add anyway?" (with an optional note) instead of failing.
+      const existing = duplicateAppliedAt(e);
+      if (existing !== null) {
+        setDuplicateOf(existing);
         setLogStatus("duplicate");
+        return;
       }
+      setError(e instanceof Error ? e.message : "Couldn't add to the log. Try again.");
     } finally {
       setLogging(false);
     }
@@ -122,6 +131,7 @@ export default function TailorForm({
     setFetchStatus("idle");
     setFetchedUrl(null);
     setLogStatus("idle");
+    setLogNote("");
     setBaseChoice("auto");
     setError(null);
   }
@@ -366,6 +376,38 @@ export default function TailorForm({
           </div>
         )}
 
+        {logStatus === "duplicate" && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2.5 text-sm flex flex-col gap-2">
+            <p>
+              This job is already in your log
+              {duplicateOf ? ` (applied ${new Date(duplicateOf).toLocaleDateString()})` : ""}. Add it again as a
+              new row?
+            </p>
+            <input
+              type="text"
+              value={logNote}
+              onChange={(e) => setLogNote(e.target.value)}
+              placeholder="Note (optional) — e.g. used a different resume, applied with my school email"
+              className="w-full border border-amber-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-violet-500"
+            />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => handleAddToLog(true)}
+                disabled={logging}
+                className="text-sm px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {logging ? "Adding…" : "Add anyway"}
+              </button>
+              <button
+                onClick={() => setLogStatus("idle")}
+                className="text-sm text-amber-900/70 hover:text-amber-900 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="bg-red-100 border border-red-300 text-red-800 rounded-lg px-3 py-2.5 text-sm">
             {error}
@@ -375,7 +417,7 @@ export default function TailorForm({
         <div className="flex flex-col sm:flex-row gap-3">
           {/* Add to Log — logs the application to Google Sheets without generating a resume */}
           <button
-            onClick={handleAddToLog}
+            onClick={() => handleAddToLog()}
             disabled={logging || logStatus === "done" || logStatus === "duplicate"}
             title="Log this application to Google Sheets without generating a resume"
             className="flex-1 border border-paper-border hover:bg-black/5 text-paper-ink font-medium py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors bg-white"
