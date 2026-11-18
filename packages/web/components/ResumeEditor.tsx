@@ -165,15 +165,18 @@ export default function ResumeEditor({
   const companyInputRef = useRef<HTMLInputElement>(null);
   const hasAttemptedLoadRef = useRef(false);
 
+  /** Returns true when the save also re-rendered the PDF cleanly. */
   const autoSave = useCallback(
-    async (value: string) => {
+    async (value: string): Promise<boolean> => {
       setSaveStatus("saving");
       try {
         const { pdfError: renderError } = await api.patchResume(resume.id, { markdown: value });
         setSaveStatus("saved");
         setPdfRenderError(renderError);
+        return !renderError;
       } catch {
         setSaveStatus("error");
+        return false;
       }
     },
     [resume.id]
@@ -183,7 +186,12 @@ export default function ResumeEditor({
     setMarkdown(value);
     setSaveStatus("unsaved");
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => autoSave(value), 1000);
+    // The PATCH re-renders and stores the PDF, so reload the preview after it —
+    // otherwise the preview sat on the old render until a manual Refresh and
+    // edits looked like they never reached the PDF.
+    debounceRef.current = setTimeout(async () => {
+      if ((await autoSave(value)) && viewMode !== "edit") void loadPdf();
+    }, 1000);
   }
 
   const autoSaveMeta = useCallback(
