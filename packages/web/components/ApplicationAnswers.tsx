@@ -121,13 +121,17 @@ export default function ApplicationAnswers({
               : state?.items.length
                 ? `${state.items.length} draft${state.items.length === 1 ? "" : "s"}`
                 : "Paste questions"}
-            <span className="ml-2">{open ? "▴" : "▾"}</span>
+            <span className="ml-3 inline-flex items-center gap-1 text-violet-700 font-medium border border-violet-200 rounded-md px-2 py-0.5">
+              {open ? "Hide" : "Show"} {open ? "▴" : "▾"}
+            </span>
           </span>
         </button>
       )}
 
       {(open || isCard) && (
-        <div className={isCard ? "flex flex-col gap-3" : "px-6 pb-4 flex flex-col gap-3"}>
+        // In the editor bar, cap the height and scroll inside it so long drafts
+        // never push the resume itself off screen.
+        <div className={isCard ? "flex flex-col gap-3" : "px-6 pb-4 flex flex-col gap-3 max-h-[40vh] overflow-y-auto"}>
           {!hideComposer && (
             <>
               <p className="text-[11px] text-paper-muted">
