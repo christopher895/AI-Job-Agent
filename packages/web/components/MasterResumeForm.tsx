@@ -7,6 +7,7 @@ import { DEFAULT_PROFILE_ID } from "../lib/resumeProfiles";
 import ProfileBar from "./ProfileBar";
 import { Handoff, applyFixes, readHandoff, sectionOfBullet } from "../lib/gradeFixes";
 import GradeFixBanner from "./GradeFixBanner";
+import { masterToMarkdown, parseMasterMarkdown, type ParseError } from "../lib/masterMarkdown";
 import { SortableSection, DragHandle } from "./SortableSection";
 
 const SECTIONS = ["Basics", "Experience", "Projects", "Skills", "Education", "Extracurriculars", "About me"] as const;
@@ -204,69 +205,6 @@ function BulletList<B extends { id: string; text: string }>({
   );
 }
 
-/**
- * Plain readable rendition of the master resume for Text edit mode. Doesn't
- * need to be losslessly parseable — "Apply text" re-parses it via the same
- * LLM import path as the Import panel, not a bespoke deterministic parser.
- */
-function masterResumeToText(mr: MasterResume): string {
-  // "Start - End", or whichever end exists — never a dangling " - " for an
-  // entry with no dates at all (projects, typically).
-  const dates = (start: string, end: string) =>
-    [start?.trim(), end?.trim()].filter(Boolean).join(" - ");
-  // Header segments joined with " · ", empties dropped.
-  const seg = (...parts: string[]) => parts.filter((p) => p && p.trim()).join(" · ");
-  const b = mr.basics;
-  const lines: string[] = [];
-  lines.push(b.name);
-  lines.push([b.location, b.email, b.phone, b.github, b.linkedin, b.portfolio].filter(Boolean).join(" · "));
-  if (b.summary) lines.push("", b.summary);
-
-  if (mr.education.length) {
-    lines.push("", "EDUCATION");
-    for (const ed of mr.education) {
-      lines.push(`${ed.school} — ${ed.degrees.join(", ")} · ${ed.location} · ${ed.graduation}`);
-      if (ed.gpa) lines.push(`GPA: ${ed.gpa}`);
-      if (ed.coursework.length) lines.push(`Coursework: ${ed.coursework.join(", ")}`);
-      if (ed.notes.length) lines.push(`Notes: ${ed.notes.join(", ")}`);
-    }
-  }
-
-  if (mr.experience.length) {
-    lines.push("", "EXPERIENCE");
-    for (const exp of mr.experience) {
-      lines.push("", `${exp.company} — ${seg(exp.title, exp.location, dates(exp.start, exp.end))}`);
-      for (const bullet of exp.bullets) lines.push(`- ${bullet.text}`);
-    }
-  }
-
-  if (mr.projects.length) {
-    lines.push("", "PROJECTS");
-    for (const p of mr.projects) {
-      lines.push("", `${p.name} · ${seg(p.tech.join(", "), dates(p.start, p.end))}`);
-      if (p.link) lines.push(p.link);
-      for (const bullet of p.bullets) lines.push(`- ${bullet.text}`);
-    }
-  }
-
-  if (mr.extracurriculars.length) {
-    lines.push("", "EXTRACURRICULARS");
-    for (const ex of mr.extracurriculars) {
-      lines.push("", `${ex.company} — ${seg(ex.title, ex.location, dates(ex.start, ex.end))}`);
-      for (const bullet of ex.bullets) lines.push(`- ${bullet.text}`);
-    }
-  }
-
-  const skillLines: string[] = [];
-  if (mr.skills.languages.length) skillLines.push(`Languages: ${mr.skills.languages.join(", ")}`);
-  if (mr.skills.frameworks.length) skillLines.push(`Frameworks & Libraries: ${mr.skills.frameworks.join(", ")}`);
-  if (mr.skills.tools.length) skillLines.push(`Tools & Technologies: ${mr.skills.tools.join(", ")}`);
-  if (mr.skills.interests.length) skillLines.push(`Interests: ${mr.skills.interests.join(", ")}`);
-  if (skillLines.length) lines.push("", "SKILLS", ...skillLines);
-
-  return lines.join("\n").trim();
-}
-
 function PdfPreviewPane({
   blobUrl,
   loading,
@@ -367,8 +305,7 @@ export default function MasterResumeForm({
   const [activeSection, setActiveSection] = useState<Section>("Basics");
   const [editMode, setEditMode] = useState<"structured" | "text">("structured");
   const [textDraft, setTextDraft] = useState("");
-  const [textApplying, setTextApplying] = useState(false);
-  const [textApplyError, setTextApplyError] = useState<string | null>(null);
+  const [textErrors, setTextErrors] = useState<ParseError[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("edit");
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -407,7 +344,7 @@ export default function MasterResumeForm({
   }, [initial, profileId]);
 
   function discardGradeFixes() {
-    setResume(initial);
+    replaceResume(initial);
     setGradeFix(null);
   }
 
@@ -427,20 +364,18 @@ export default function MasterResumeForm({
   const hasAttemptedPreviewRef = useRef(false);
   const previewSeqRef = useRef(0);
   const renderedJsonRef = useRef<string | null>(null);
-  const appliedTextRef = useRef("");
 
   async function save() {
     setSaving(true);
     setError(null);
     try {
-      // In text mode, typing only changes the draft; it reaches the resume via
-      // Apply. Saving without applying used to silently drop the text edits.
-      let toSave = resume;
-      if (editMode === "text" && textDraft !== appliedTextRef.current) {
-        const parsed = await applyText();
-        if (!parsed) return;
-        toSave = parsed;
+      // Text mode applies every edit as it's typed; a draft with unreadable
+      // lines hasn't reached `resume`, so saving now would drop those edits.
+      if (editMode === "text" && textErrors.length) {
+        setError("Fix the flagged lines in the text before saving.");
+        return;
       }
+      const toSave = resume;
       await api.putMasterResume(toSave, profileId);
       setSavedJson(JSON.stringify(toSave));
       setSaved(true);
@@ -465,8 +400,7 @@ export default function MasterResumeForm({
     setImporting(true);
     setImportError(null);
     try {
-      const parsed = await api.importMasterResumeText(importText);
-      setResume((prev) => keepAboutMe(parsed, prev));
+      replaceResume(keepAboutMe(await api.importMasterResumeText(importText), resume));
       setShowImport(false);
       setImportText("");
     } catch (e) {
@@ -480,8 +414,7 @@ export default function MasterResumeForm({
     setImporting(true);
     setImportError(null);
     try {
-      const parsed = await api.importMasterResumePdf(file);
-      setResume((prev) => keepAboutMe(parsed, prev));
+      replaceResume(keepAboutMe(await api.importMasterResumePdf(file), resume));
       setShowImport(false);
     } catch (e) {
       setImportError(e instanceof Error ? e.message : "Import failed");
@@ -491,27 +424,31 @@ export default function MasterResumeForm({
   }
 
   function switchToTextMode() {
-    const text = masterResumeToText(resume);
-    setTextDraft(text);
-    appliedTextRef.current = text;
-    setTextApplyError(null);
+    setTextDraft(masterToMarkdown(resume));
+    setTextErrors([]);
     setEditMode("text");
   }
 
-  /** Parses the text draft into the form. Returns the new resume, or null on failure. */
-  async function applyText(): Promise<MasterResume | null> {
-    setTextApplying(true);
-    setTextApplyError(null);
-    try {
-      const parsed = keepAboutMe(await api.importMasterResumeText(textDraft), resume);
-      appliedTextRef.current = textDraft;
-      setResume(parsed);
-      return parsed;
-    } catch (e) {
-      setTextApplyError(e instanceof Error ? e.message : "Failed to parse text");
-      return null;
-    } finally {
-      setTextApplying(false);
+  /** Swaps in a whole new resume (import, discard) and keeps the text draft in step. */
+  function replaceResume(next: MasterResume) {
+    setResume(next);
+    if (editMode === "text") {
+      setTextDraft(masterToMarkdown(next));
+      setTextErrors([]);
+    }
+  }
+
+  // Same Markdown as the tailored-resume editor, read back deterministically on
+  // every keystroke — no LLM pass, so nothing gets reworded and the preview keeps
+  // up. Lines it can't read are listed and the last good version stays in place.
+  function onTextChange(value: string) {
+    setTextDraft(value);
+    const parsed = parseMasterMarkdown(value, resume);
+    if (parsed.ok) {
+      setTextErrors([]);
+      setResume(parsed.resume);
+    } else {
+      setTextErrors(parsed.errors);
     }
   }
 
@@ -796,25 +733,29 @@ export default function MasterResumeForm({
         <div>
           <SectionHeader title="Edit as text" />
           <p className="text-sm text-paper-muted mb-3">
-            Edit your resume as plain text, then click Apply to re-parse it into the structured
-            fields. Nothing is saved until you click Save Changes.
+            Same Markdown as a tailored resume. Edits apply as you type. Nothing is saved until you
+            click Save Changes.
           </p>
           <textarea
             value={textDraft}
-            onChange={(e) => setTextDraft(e.target.value)}
+            onChange={(e) => onTextChange(e.target.value)}
             rows={28}
-            className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-violet-500 bg-paper resize-none"
+            spellCheck={false}
+            className="w-full border border-paper-border rounded-lg px-3 py-2 text-sm font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-violet-500 bg-paper resize-y"
           />
-          <div className="flex items-center gap-3 mt-3">
-            <button
-              onClick={applyText}
-              disabled={textApplying}
-              className="text-sm px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 transition-colors"
-            >
-              {textApplying ? "Applying…" : "Apply text"}
-            </button>
-            {textApplyError && <span className="text-xs text-red-600">{textApplyError}</span>}
-          </div>
+          {textErrors.length > 0 && (
+            <div className="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <p className="font-medium mb-1">
+                Can&apos;t read {textErrors.length === 1 ? "this line" : "these lines"} yet. The preview shows your
+                last readable version.
+              </p>
+              <ul className="space-y-0.5">
+                {textErrors.slice(0, 5).map((err) => (
+                  <li key={`${err.line}-${err.message}`}>Line {err.line}: {err.message}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -1133,7 +1074,7 @@ export default function MasterResumeForm({
             </button>
             <button
               onClick={save}
-              disabled={saving || textApplying}
+              disabled={saving}
               className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 transition-colors"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1141,7 +1082,7 @@ export default function MasterResumeForm({
                 <polyline points="17 21 17 13 7 13 7 21" />
                 <polyline points="7 3 7 8 15 8" />
               </svg>
-              {saving && textApplying ? "Reading your text…" : saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
+              {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
             </button>
             <div className="flex items-center border border-paper-border rounded-lg overflow-hidden">
               {(["edit", "split", "preview"] as ViewMode[]).map((mode) => (
