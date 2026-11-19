@@ -425,22 +425,33 @@ export default function MasterResumeForm({
     }
   }
   const hasAttemptedPreviewRef = useRef(false);
+  const previewSeqRef = useRef(0);
+  const renderedJsonRef = useRef<string | null>(null);
+  const appliedTextRef = useRef("");
 
   async function save() {
     setSaving(true);
     setError(null);
     try {
-      await api.putMasterResume(resume, profileId);
-      setSavedJson(JSON.stringify(resume));
+      // In text mode, typing only changes the draft; it reaches the resume via
+      // Apply. Saving without applying used to silently drop the text edits.
+      let toSave = resume;
+      if (editMode === "text" && textDraft !== appliedTextRef.current) {
+        const parsed = await applyText();
+        if (!parsed) return;
+        toSave = parsed;
+      }
+      await api.putMasterResume(toSave, profileId);
+      setSavedJson(JSON.stringify(toSave));
       setSaved(true);
       setGradeFix((g) => (g ? { ...g, saved: true, applied: new Set() } : g));
       setTimeout(() => setSaved(false), 2500);
       // The preview is a render of what was just saved, so re-render it rather
       // than leaving a stale PDF next to the edits that produced it. Skipped in
       // edit mode, where no preview is on screen and compiling one would be waste.
-      if (viewMode !== "edit" || previewBlobUrl) {
+      if ((viewMode !== "edit" || previewBlobUrl) && JSON.stringify(toSave) !== renderedJsonRef.current) {
         hasAttemptedPreviewRef.current = true;
-        generatePreview();
+        generatePreview(toSave);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed");
@@ -480,40 +491,63 @@ export default function MasterResumeForm({
   }
 
   function switchToTextMode() {
-    setTextDraft(masterResumeToText(resume));
+    const text = masterResumeToText(resume);
+    setTextDraft(text);
+    appliedTextRef.current = text;
     setTextApplyError(null);
     setEditMode("text");
   }
 
-  async function applyText() {
+  /** Parses the text draft into the form. Returns the new resume, or null on failure. */
+  async function applyText(): Promise<MasterResume | null> {
     setTextApplying(true);
     setTextApplyError(null);
     try {
-      const parsed = await api.importMasterResumeText(textDraft);
-      setResume((prev) => keepAboutMe(parsed, prev));
+      const parsed = keepAboutMe(await api.importMasterResumeText(textDraft), resume);
+      appliedTextRef.current = textDraft;
+      setResume(parsed);
+      return parsed;
     } catch (e) {
       setTextApplyError(e instanceof Error ? e.message : "Failed to parse text");
+      return null;
     } finally {
       setTextApplying(false);
     }
   }
 
-  async function generatePreview() {
+  async function generatePreview(data: MasterResume = resume) {
+    const seq = ++previewSeqRef.current;
+    renderedJsonRef.current = JSON.stringify(data);
     setPreviewLoading(true);
     setPreviewError(null);
     try {
-      const { blob, pageCount: pages } = await api.previewMasterResumePdf(resume);
+      const { blob, pageCount: pages } = await api.previewMasterResumePdf(data);
+      // A newer render started while this one compiled; drop the stale PDF.
+      if (seq !== previewSeqRef.current) return;
       const url = URL.createObjectURL(blob);
       if (prevBlobRef.current) URL.revokeObjectURL(prevBlobRef.current);
       prevBlobRef.current = url;
       setPreviewBlobUrl(url);
       setPageCount(pages);
     } catch (e) {
+      if (seq !== previewSeqRef.current) return;
       setPreviewError(e instanceof Error ? e.message : "PDF generation failed.");
     } finally {
-      setPreviewLoading(false);
+      if (seq === previewSeqRef.current) setPreviewLoading(false);
     }
   }
+
+  // Re-render the preview a moment after edits stop while it's on screen —
+  // otherwise it only changed on Save or Refresh and looked broken. The render
+  // uses the unsaved form state, so nothing is written to the DB here.
+  useEffect(() => {
+    if (viewMode === "edit") return;
+    const timer = setTimeout(() => {
+      if (JSON.stringify(resume) !== renderedJsonRef.current) generatePreview();
+    }, 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resume, viewMode]);
 
   // Lazy-load the PDF only when the user switches into a mode that shows it —
   // matches ResumeEditor's behavior; avoids compiling a PDF on every page load.
@@ -1099,7 +1133,7 @@ export default function MasterResumeForm({
             </button>
             <button
               onClick={save}
-              disabled={saving}
+              disabled={saving || textApplying}
               className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50 transition-colors"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1107,7 +1141,7 @@ export default function MasterResumeForm({
                 <polyline points="17 21 17 13 7 13 7 21" />
                 <polyline points="7 3 7 8 15 8" />
               </svg>
-              {saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
+              {saving && textApplying ? "Reading your text…" : saving ? "Saving…" : saved ? "Saved ✓" : "Save Changes"}
             </button>
             <div className="flex items-center border border-paper-border rounded-lg overflow-hidden">
               {(["edit", "split", "preview"] as ViewMode[]).map((mode) => (
@@ -1197,7 +1231,7 @@ export default function MasterResumeForm({
                 loading={previewLoading}
                 error={previewError}
                 pageCount={pageCount}
-                onRefresh={generatePreview}
+                onRefresh={() => generatePreview()}
                 className="h-full"
               />
             </Panel>
@@ -1211,7 +1245,7 @@ export default function MasterResumeForm({
                 loading={previewLoading}
                 error={previewError}
                 pageCount={pageCount}
-                onRefresh={generatePreview}
+                onRefresh={() => generatePreview()}
                 className="flex-1"
               />
             )}
